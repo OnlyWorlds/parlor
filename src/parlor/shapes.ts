@@ -14,7 +14,15 @@
  *
  * Who made a thing is `created_by` (a membership id, null for the world's owner),
  * never a name in its text.
+ *
+ * The room mark (schema-dist profiles/room.md): every room element the parlor
+ * makes carries `x_room_of` in its first write, and the room reads only room
+ * elements (the pair and the mark), so a world's own lore Messages, Votes or
+ * Sittings never show as the room. The charter is lore: read without the mark,
+ * never written with one.
  */
+
+import { isRoomElement, simpleCaseFold } from '@onlyworlds/sdk';
 
 export interface El {
   id: string;
@@ -50,11 +58,29 @@ export const SUPERTYPE = {
   member: 'Member',
 } as const;
 
-/** The room's supertypes: what a tool that shows a world whole leaves out (sheet §1). */
-export const ROOM_SUPERTYPES: readonly string[] = Object.values(SUPERTYPE);
+/** The room profile's mark: the world's id for a world's parlor, the sitting's for a workshop. */
+export const ROOM_MARK = 'x_room_of';
 
+const fold = (s: unknown): string => (typeof s === 'string' ? simpleCaseFold(s.trim()) : '');
+
+/** The pair alone, folded as the profile folds it: what the charter (lore) is read by. */
+function isPair(el: El, type: string, supertype: string): boolean {
+  return fold(el.type) === type && fold(el.supertype) === fold(supertype);
+}
+
+/**
+ * The elements one room scope marked as its own: a sitting's id in a workshop, the world's id
+ * before the first sitting. Specs, hearts and votes are a sitting's, read by this.
+ */
+export function ofRoom(els: Iterable<El>, roomOf: string): El[] {
+  const out: El[] = [];
+  for (const el of els) if (el[ROOM_MARK] === roomOf) out.push(el);
+  return out;
+}
+
+/** A room element of this pair: the SDK's isRoomElement (pair and mark), and this shape's own pair. */
 function isA(el: El, type: string, supertype: string): boolean {
-  return el.type === type && (el.supertype ?? '').trim().toLowerCase() === supertype.toLowerCase();
+  return isRoomElement(el as Parameters<typeof isRoomElement>[0]) && isPair(el, type, supertype);
 }
 
 function links(el: El, field: string): string[] {
@@ -107,11 +133,12 @@ export function lineName(text: string): string {
   return one.length <= 60 ? one : one.slice(0, 59).trimEnd() + '…';
 }
 
-export function newLine(text: string, narrator: string | null, parent: string | null = null): Record<string, unknown> {
+export function newLine(text: string, narrator: string | null, parent: string | null, roomOf: string): Record<string, unknown> {
   const body: Record<string, unknown> = {
     name: lineName(text),
     description: text,
     supertype: SUPERTYPE.line,
+    [ROOM_MARK]: roomOf,
   };
   if (narrator) body.narrator = narrator;
   if (parent) body.parent_narrative = parent;
@@ -182,15 +209,16 @@ export function readSpecs(els: Iterable<El>, hearts: readonly Heart[]): Spec[] {
   return out.sort((a, b) => Number(b.star) - Number(a.star) || b.hearts - a.hearts || a.at.localeCompare(b.at));
 }
 
-export function newSpec(title: string, text: string): Record<string, unknown> {
-  return { name: title.trim(), description: text, supertype: SUPERTYPE.spec };
+export function newSpec(title: string, text: string, roomOf: string): Record<string, unknown> {
+  return { name: title.trim(), description: text, supertype: SUPERTYPE.spec, [ROOM_MARK]: roomOf };
 }
 
-export function newHeart(target: string, targetName: string, actor: string | null): Record<string, unknown> {
+export function newHeart(target: string, targetName: string, actor: string | null, roomOf: string): Record<string, unknown> {
   const body: Record<string, unknown> = {
     name: `Heart for ${targetName}`.slice(0, 200),
     supertype: SUPERTYPE.heart,
     constructs: [target],
+    [ROOM_MARK]: roomOf,
   };
   if (actor) body.actor = actor;
   return body;
@@ -229,11 +257,12 @@ export function tally(votes: readonly Vote[]): Map<string, number> {
   return score;
 }
 
-export function newVote(picks: readonly string[], actor: string | null): Record<string, unknown> {
+export function newVote(picks: readonly string[], actor: string | null, roomOf: string): Record<string, unknown> {
   const body: Record<string, unknown> = {
     name: 'Vote',
     supertype: SUPERTYPE.vote,
     constructs: [...new Set(picks)].slice(0, 3),
+    [ROOM_MARK]: roomOf,
   };
   if (actor) body.actor = actor;
   return body;
@@ -289,11 +318,13 @@ export function readSittings(els: Iterable<El>): Sitting[] {
   return out.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
 }
 
-export function newSitting(name: string, feedStart: number): Record<string, unknown> {
+/** A sitting belongs to the workshop's world: its mark is the world's id. */
+export function newSitting(name: string, feedStart: number, worldId: string): Record<string, unknown> {
   const lobby = PHASES[0];
   return {
     name,
     supertype: SUPERTYPE.sitting,
+    [ROOM_MARK]: worldId,
     subtype: lobby.name,
     [SWITCH_FIELDS.hearts]: lobby.hearts,
     [SWITCH_FIELDS.specs]: lobby.specs,
@@ -338,7 +369,7 @@ export interface Charter {
 
 export function readCharter(els: Iterable<El>): Charter | null {
   for (const el of els) {
-    if (isA(el, 'law', SUPERTYPE.charter)) {
+    if (isPair(el, 'law', SUPERTYPE.charter)) {
       return { id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() };
     }
   }
@@ -360,6 +391,7 @@ export function readMemberCharacters(els: Iterable<El>): Map<string, { id: strin
   return new Map([...out].map(([k, v]) => [k, { id: v.id, name: v.name }]));
 }
 
-export function newMember(name: string): Record<string, unknown> {
-  return { name: name.trim(), supertype: SUPERTYPE.member };
+/** A member's card spans sittings: its mark is the world's id. */
+export function newMember(name: string, worldId: string): Record<string, unknown> {
+  return { name: name.trim(), supertype: SUPERTYPE.member, [ROOM_MARK]: worldId };
 }

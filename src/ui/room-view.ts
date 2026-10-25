@@ -59,7 +59,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
       e.preventDefault();
       if (!specTitle.value.trim()) return;
       try {
-        await room.saveSpec(specTitle.value, specText.value, mySpec()?.id);
+        await room.saveSpec(specTitle.value, specText.value);
         specOpen = false;
         specForm.hidden = true;
         draw();
@@ -183,6 +183,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
   function drawHost(): void {
     if (!room.isHost) { clear(host); return; }
     const s = room.sitting();
+    const reading = room.browsing;
     const start = h('button', { class: 'btn std', type: 'button', onclick: async () => {
       const when = new Date().toLocaleDateString([], { day: 'numeric', month: 'long' });
       try { await room.startSitting(`Sitting, ${when}`); } catch (err) { notice(problemLine(err, 'starting the sitting'), true); }
@@ -193,11 +194,12 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     }, `${label}: ${s[which] ? 'on' : 'off'}`);
     clear(host, h('div', { class: 'hostbar' },
       h('h3', null, 'Host'),
-      s ? h('div', { class: 'phases', role: 'group', 'aria-label': 'Phase' }, PHASES.map(p => h('button', {
+      s && reading ? h('div', { class: 'phases', 'aria-label': 'Phase' }, PHASES.map(p => h('span', { class: p.name === s.phase ? 'pp now' : 'pp' }, p.name))) : null,
+      s && !reading ? h('div', { class: 'phases', role: 'group', 'aria-label': 'Phase' }, PHASES.map(p => h('button', {
         class: p.name === s.phase ? 'pp now' : 'pp', type: 'button', 'aria-pressed': String(p.name === s.phase),
         onclick: async () => { try { await room.setPhase(p.name); } catch (err) { notice(problemLine(err, 'moving the phase'), true); } },
       }, p.name))) : null,
-      s ? h('div', { class: 'sw' }, sw('hearts', 'Hearts'), sw('specs', 'Specs shown'), sw('voting', 'Voting')) : null,
+      s && !reading ? h('div', { class: 'sw' }, sw('hearts', 'Hearts'), sw('specs', 'Specs shown'), sw('voting', 'Voting')) : null,
       h('div', { class: 'btns' }, start),
       h('div', { class: 'ph', style: 'margin-top:12px' }, `Seats · ${room.seats().length}`),
       h('ul', { class: 'seatlist' }, room.seats().map(x => h('li', null,
@@ -213,7 +215,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     const mine = mySpec();
     const hearts = room.hearts();
     const score = room.tally();
-    const voting = !!s?.voting;
+    // An earlier sitting is a record: read it, change nothing in it.
+    const live = room.canWrite && !room.browsing;
+    if (!live && specOpen) { specOpen = false; specForm.hidden = true; }
+    const voting = !!s?.voting && !room.browsing;
     if (voting && !picks.length) picks = room.myVote()?.picks ?? [];
 
     const card = (spec: (typeof specs)[number]) => {
@@ -224,14 +229,14 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
         h('div', { class: 'm' }, `${room.name(spec.by)} · ♡ ${spec.hearts}${room.isHost && score.has(spec.id) ? ` · ${score.get(spec.id)} points` : ''}`),
         spec.text ? h('p', null, spec.text) : null,
         h('div', { class: 'btns' },
-          room.canWrite && s?.hearts ? h('button', { class: 'btn std', type: 'button', 'aria-pressed': String(iHearted), onclick: async () => {
+          live && s?.hearts ? h('button', { class: 'btn std', type: 'button', 'aria-pressed': String(iHearted), onclick: async () => {
             try { await room.toggleHeart(spec.id, spec.title); } catch (err) { notice(problemLine(err, 'leaving a heart'), true); }
           } }, iHearted ? '♥ Hearted' : '♡ Heart') : null,
-          room.canWrite && voting ? h('button', { class: 'btn std', type: 'button', 'aria-pressed': String(pickAt >= 0), onclick: () => {
+          live && voting ? h('button', { class: 'btn std', type: 'button', 'aria-pressed': String(pickAt >= 0), onclick: () => {
             picks = pickAt >= 0 ? picks.filter(id => id !== spec.id) : [...picks, spec.id].slice(0, 3);
             draw();
           } }, pickAt >= 0 ? `Pick ${pickAt + 1}` : 'Pick') : null,
-          room.isHost ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
+          room.isHost && !room.browsing ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
             try { await room.star(spec.id); } catch (err) { notice(problemLine(err, 'choosing the winner'), true); }
           } }, spec.star ? 'The winner' : 'Make it the winner') : null,
         ));
@@ -245,14 +250,14 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
         h('span', { class: s.hearts ? 'chip on' : 'chip' }, `Hearts: ${s.hearts ? 'on' : 'off'}`),
         h('span', { class: s.specs ? 'chip on' : 'chip' }, `Specs shown: ${s.specs ? 'on' : 'off'}`),
         h('span', { class: s.voting ? 'chip on' : 'chip' }, `Voting: ${s.voting ? 'open' : 'closed'}`)) : null,
-      voting && room.canWrite ? h('div', { class: 'hostbar' },
+      voting && live ? h('div', { class: 'hostbar' },
         h('div', null, picks.length ? `Your picks: ${picks.map((id, i) => `${i + 1}. ${specs.find(x => x.id === id)?.title ?? '?'}`).join('  ')}` : 'Pick up to three, in order.'),
         h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'button', disabled: !picks.length, onclick: async () => {
           try { await room.vote(picks); notice('Your vote is in. You can change it while voting is open.'); } catch (err) { notice(problemLine(err, 'sending your vote'), true); }
         } }, room.myVote() ? 'Change my vote' : 'Send my vote'))) : null,
       h('div', { class: 'ph' }, `Specs · ${shown.length}${!s?.specs && !room.isHost && specs.length > shown.length ? ' shown (the others show when the host turns specs on)' : ''}`),
       shown.map(card),
-      room.canWrite && !specOpen ? h('button', { class: 'btn entry', type: 'button', onclick: () => {
+      live && !specOpen ? h('button', { class: 'btn entry', type: 'button', onclick: () => {
         specOpen = true;
         specTitle.value = mine?.title ?? '';
         specText.value = mine?.text ?? '';

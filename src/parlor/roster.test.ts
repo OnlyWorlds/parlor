@@ -12,8 +12,8 @@ const roster: OwMember[] = [
 
 const els = new Map<string, El>([
   ['c-owner', { id: 'c-owner', type: 'character', name: 'Titus' }],
-  ['c-own', { id: 'c-own', type: 'character', supertype: 'Member', name: 'Samantha', created_by: 'm-person', created_at: '2026-10-22T10:00:00Z' }],
-  ['c-own2', { id: 'c-own2', type: 'character', supertype: 'Member', name: 'Sam (double)', created_by: 'm-person', created_at: '2026-10-22T10:00:01Z' }],
+  ['c-own', { id: 'c-own', type: 'character', supertype: 'Member', name: 'Samantha', created_by: 'm-person', created_at: '2026-10-22T10:00:00Z', x_room_of: 'w1' }],
+  ['c-own2', { id: 'c-own2', type: 'character', supertype: 'Member', name: 'Sam (double)', created_by: 'm-person', created_at: '2026-10-22T10:00:01Z', x_room_of: 'w1' }],
 ]);
 const members = readMemberCharacters(els.values());
 

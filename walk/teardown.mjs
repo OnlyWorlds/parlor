@@ -1,6 +1,6 @@
-// Takes back what the walks minted, and reads it back. Only what carries the
-// walk's names ("Parlor walk S450", and "Parlor in <browser>", which the parlor
-// names every token and key it makes): never another row on these accounts.
+// Takes back what the walks minted, and reads it back. Only rows the seed and
+// the walk recorded (an id, or a last four the walk read from its own browsers,
+// beside the parlor's own names): never another row on these accounts.
 //   WALK_STATE=<scratch file> node walk/teardown.mjs
 import { OwV2Client } from '@onlyworlds/sdk';
 import { account, readState, writeState, accountCall, API } from './accounts.mjs';
@@ -9,6 +9,18 @@ const s = readState();
 const ours = name => /^Parlor (walk S450|in )/.test(name ?? '');
 const c = s.tokens['crew-walk-c']?.token;
 if (!c) throw new Error('no host token');
+
+// The lore decoys the seed and the walk made, by their recorded ids only (410 or 404 is gone already).
+if (s.hostKey && s.decoys?.length) {
+  const host = new OwV2Client({ apiKey: s.hostKey.key, apiPin: account('crew-walk-c').pin, baseUrl: API });
+  let gone = 0;
+  for (const d of s.decoys) {
+    try { await host.delete(d.type, d.id); gone++; } catch (e) { if (e?.status === 404 || e?.status === 410) gone++; else throw e; }
+  }
+  console.log(`decoys deleted: ${gone} of ${s.decoys.length}`);
+  s.decoys = [];
+  writeState(s);
+}
 
 // The links the seeds minted (a used one answers the same).
 for (const m of s.minted.filter(x => x.kind === 'link')) {
@@ -19,10 +31,17 @@ console.log(`links revoked: ${s.minted.filter(x => x.kind === 'link').length}`);
 // Every world key on the test world that the walk or the parlor named: the owner sees them all.
 const keys = (await accountCall(c, 'GET', `/account/worlds/${s.worldId}/keys`)).data;
 let keyCount = 0;
-// The owner key keel mints with a new world carries no name: match it by the last four the seed kept.
+// Only keys this walk recorded: the seed's (the owner key keel mints with a new world carries no
+// name, so by its last four) and those the walk's browsers held, by last four and our name both.
 const madeWith = new Set(s.minted.filter(m => m.kind === 'world-key').map(m => m.last4));
-for (const k of keys.filter(k => (ours(k.name) || madeWith.has(k.last4)) && !k.revoked)) {
+const browserKeys = new Set(s.minted.filter(m => m.kind === 'browser-key').map(m => m.last4));
+for (const k of keys.filter(k => (madeWith.has(k.last4) || (ours(k.name) && browserKeys.has(k.last4))) && !k.revoked)) {
   await accountCall(c, 'DELETE', `/account/worlds/${s.worldId}/keys/${k.id}`);
+  keyCount++;
+}
+// The seed's own host key, by the id it recorded (it is neither the world's first key nor a browser's).
+if (s.hostKey?.id) {
+  await accountCall(c, 'DELETE', `/account/worlds/${s.worldId}/keys/${s.hostKey.id}`).catch(() => {});
   keyCount++;
 }
 const left = (await accountCall(c, 'GET', `/account/worlds/${s.worldId}/keys`)).data.filter(k => ours(k.name) && !k.revoked);
@@ -44,7 +63,8 @@ for (const [label, t] of Object.entries(s.tokens)) {
   const rows = await accountCall(t.token, 'GET', '/account/tokens');
   const list = Array.isArray(rows) ? rows : rows.data ?? rows.tokens ?? [];
   let n = 0;
-  for (const r of list.filter(r => ours(r.name) && r.id !== t.id && !r.revoked)) {
+  const minted = new Set(s.minted.filter(m => m.kind === 'browser-token' && m.label === label).map(m => m.last4));
+  for (const r of list.filter(r => ours(r.name) && minted.has(r.last4) && r.id !== t.id && !r.revoked)) {
     await accountCall(t.token, 'DELETE', `/account/tokens/${r.id}`);
     n++;
   }

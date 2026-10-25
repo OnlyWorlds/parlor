@@ -7,13 +7,17 @@
 import { OwApiError, OwNetworkError, type OwMe, type OwMember, type OwV2Client } from '@onlyworlds/sdk';
 import { RoomFeed } from './feed';
 import { serialQueue } from './serial';
-import { apiBase, session, type AccountWorld } from './session';
+import { session, type AccountWorld } from './session';
 import {
   OWNER, type El, type Switches, readLines, readHearts, readSpecs, readVotes, readSittings, readCharter,
   readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart, newVote, newSitting,
-  newMember, phasePatch, switchPatch,
+  newMember, phasePatch, switchPatch, ofRoom,
 } from './shapes';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
+
+function newestOf<T extends { at: string }>(xs: T[]): T | null {
+  return [...xs].sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
+}
 
 /** A refusal in the person's words. Never keel's raw text. */
 export function problemLine(err: unknown, doing: string): string {
@@ -149,26 +153,42 @@ export class Room {
     return (this.showSitting ? all.find(s => s.id === this.showSitting) : undefined) ?? all[all.length - 1] ?? null;
   }
 
+  /** True while the room shows an earlier sitting: a record to read, nothing in it to change. */
+  get browsing(): boolean {
+    const all = this.sittings();
+    return !!this.showSitting && this.showSitting !== all[all.length - 1]?.id;
+  }
+
+  /** Lines stay by time: a line written while a new sitting is still on its way keeps its place. */
   lines() {
     const all = this.sittings();
     return linesOfSitting(readLines(this.els.values()), all, this.sitting()?.id ?? null);
   }
 
+  /** The shown sitting's own specs, hearts and votes, by the mark (the world's before any sitting). */
+  private shown(): El[] {
+    return ofRoom(this.els.values(), this.sitting()?.id ?? this.world.id);
+  }
+
+  /** The newest sitting's: what every write reads and changes, whatever the room shows. */
+  private live(): El[] {
+    return ofRoom(this.els.values(), this.roomOfNow());
+  }
+
   hearts() {
-    return readHearts(this.els.values());
+    return readHearts(this.shown());
   }
 
   specs() {
-    return readSpecs(this.els.values(), this.hearts());
+    return readSpecs(this.shown(), this.hearts());
   }
 
   myVote() {
-    const mine = readVotes(this.els.values()).filter(v => v.by === this.meBy);
-    return mine.sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
+    return newestOf(readVotes(this.shown()).filter(v => v.by === this.meBy));
   }
 
   tally() {
-    return tally(readVotes(this.els.values()));
+    return tally(readVotes(this.shown()));
   }
 
   charter() {
@@ -180,6 +200,15 @@ export class Room {
   /** Every write, one at a time in the order asked; each reads the room when its turn comes. */
   private serial = serialQueue();
 
+  /**
+   * The mark for a line, spec, heart or vote: the newest sitting when the
+   * write's turn comes (never the one a host is browsing), else the world.
+   */
+  private roomOfNow(): string {
+    const all = this.sittings();
+    return all[all.length - 1]?.id ?? this.world.id;
+  }
+
   private landed(el: unknown): void {
     this.feed.applyLocal(el as El);
     this.feed.poke();
@@ -187,27 +216,29 @@ export class Room {
 
   setMyName(name: string): Promise<void> {
     return this.serial(async () => {
-      this.landed(await this.client.create('character', newMember(name)));
+      this.landed(await this.client.create('character', newMember(name, this.world.id)));
     });
   }
 
   post(text: string, parent: string | null = null): Promise<void> {
     return this.serial(async () => {
-      this.landed(await this.client.create('narrative', newLine(text, this.myCharacter(), parent)));
+      this.landed(await this.client.create('narrative', newLine(text, this.myCharacter(), parent, this.roomOfNow())));
     });
   }
 
-  saveSpec(title: string, text: string, id?: string): Promise<void> {
+  /** My spec in the newest sitting is edited; in a new sitting I start a new one. */
+  saveSpec(title: string, text: string): Promise<void> {
     return this.serial(async () => {
-      const body = newSpec(title, text);
-      this.landed(id ? await this.client.patch('construct', id, { name: body.name, description: body.description })
+      const body = newSpec(title, text, this.roomOfNow());
+      const had = readSpecs(this.live(), []).find(s => s.by === this.meBy);
+      this.landed(had ? await this.client.patch('construct', had.id, { name: body.name, description: body.description })
         : await this.client.create('construct', body));
     });
   }
 
   toggleHeart(specId: string, specTitle: string): Promise<void> {
     return this.serial(async () => {
-      const mine = myHearts(this.hearts(), this.meBy, specId);
+      const mine = myHearts(readHearts(this.live()), this.meBy, specId);
       if (mine.length) {
         for (const h of mine) {
           await this.client.delete('relation', h.id);
@@ -216,14 +247,14 @@ export class Room {
         this.feed.poke();
         return;
       }
-      this.landed(await this.client.create('relation', newHeart(specId, specTitle, this.myCharacter())));
+      this.landed(await this.client.create('relation', newHeart(specId, specTitle, this.myCharacter(), this.roomOfNow())));
     });
   }
 
   vote(picks: string[]): Promise<void> {
     return this.serial(async () => {
-      const had = this.myVote();
-      const body = newVote(picks, this.myCharacter());
+      const had = newestOf(readVotes(this.live()).filter(v => v.by === this.meBy));
+      const body = newVote(picks, this.myCharacter(), this.roomOfNow());
       this.landed(had ? await this.client.patch('relation', had.id, { constructs: body.constructs })
         : await this.client.create('relation', body));
     });
@@ -234,15 +265,21 @@ export class Room {
   startSitting(name: string): Promise<void> {
     return this.serial(async () => {
       const { head } = await this.client.changesHead();
-      const made = await this.client.create('event', newSitting(name, head));
+      const made = await this.client.create('event', newSitting(name, head, this.world.id));
       this.showSitting = null;
       this.landed(made);
     });
   }
 
+  /** The phase and switches move the newest sitting, never one a host is reading back. */
+  private newestSitting() {
+    const all = this.sittings();
+    return all[all.length - 1] ?? null;
+  }
+
   setPhase(phase: string): Promise<void> {
     return this.serial(async () => {
-      const s = this.sitting();
+      const s = this.newestSitting();
       if (!s) return;
       this.landed(await this.client.patch('event', s.id, phasePatch(phase)));
     });
@@ -250,16 +287,16 @@ export class Room {
 
   setSwitch(which: keyof Switches, on: boolean): Promise<void> {
     return this.serial(async () => {
-      const s = this.sitting();
+      const s = this.newestSitting();
       if (!s) return;
       this.landed(await this.client.patch('event', s.id, switchPatch(which, on)));
     });
   }
 
-  /** The winner: one star in the room. */
+  /** The winner: one star in the newest sitting. */
   star(specId: string): Promise<void> {
     return this.serial(async () => {
-      for (const spec of this.specs()) {
+      for (const spec of readSpecs(this.live(), [])) {
         if (spec.star && spec.id !== specId) this.landed(await this.client.patch('construct', spec.id, { subtype: '' }));
       }
       this.landed(await this.client.patch('construct', specId, { subtype: 'star' }));
@@ -268,7 +305,7 @@ export class Room {
 
   /**
    * Hide a line from the room (keel's hidden mark: owner and co-builders; the
-   * poster and the hosts still see it, so the host's room marks it). SDK 4.45's
+   * poster and the hosts still see it, so the host's room marks it). The SDK's
    * hide and unhide (Kael h66 #9737).
    */
   hide(type: string, id: string, hidden = true): Promise<void> {
@@ -281,24 +318,14 @@ export class Room {
     });
   }
 
-  /** What is hidden, for a host's room (GET /world/hidden is a host's read). */
+  /** What is hidden, for a host's room (GET /world/hidden is a host's read, the SDK's listHidden). */
   async loadHidden(): Promise<void> {
     if (!this.isHost) return;
     try {
-      const raw = await this.hiddenList() as { data?: Array<{ id: string }> };
-      const next = new Set((raw?.data ?? []).map(r => r.id));
+      const next = new Set((await this.client.listHidden()).map(r => r.id));
       const moved = next.size !== this.hidden.size || [...next].some(id => !this.hidden.has(id));
       this.hidden = next;
       if (moved) this.feed.changed();
     } catch { /* the room still works; the marks show after the next look */ }
-  }
-
-  /** GET /world/hidden, the one route the SDK does not carry yet: a read, so no PIN. */
-  private async hiddenList(): Promise<unknown> {
-    const cred = session.credentials(this.world.id);
-    if (!cred) throw new Error('no key');
-    const res = await fetch(`${apiBase()}/world/hidden`, { headers: { 'API-Key': cred.key } });
-    if (!res.ok) throw Object.assign(new Error(`hidden list ${res.status}`), { status: res.status });
-    return res.json();
   }
 }

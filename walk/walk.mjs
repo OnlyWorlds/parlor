@@ -7,7 +7,8 @@
 // winner, then hides the member's line, which must leave the member's room.
 import { chromium, firefox } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { account, readState, writeState } from './accounts.mjs';
+import { OwV2Client } from '@onlyworlds/sdk';
+import { account, readState, writeState, API } from './accounts.mjs';
 
 const engine = process.argv[2] === 'firefox' ? firefox : chromium;
 const engineName = process.argv[2] === 'firefox' ? 'firefox' : 'chromium';
@@ -54,12 +55,35 @@ async function withToken(ctx, label, pin) {
   }, [t.token, label, pin]);
 }
 
+/** The keys and token a page's parlor holds, recorded by their last four for teardown (never the secrets). */
+async function recordMinted(page, label) {
+  const sess = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('parlor.session.v1') ?? 'null'); } catch { return null; } }).catch(() => null);
+  if (!sess) return;
+  for (const k of [...Object.values(sess.keys ?? {}), ...Object.values(sess.readKeys ?? {})]) {
+    if (typeof k === 'string') s.minted.push({ kind: 'browser-key', label, last4: k.slice(-4) });
+  }
+  if (typeof sess.token === 'string' && sess.token !== s.tokens[label]?.token) s.minted.push({ kind: 'browser-token', label, last4: sess.token.slice(-4) });
+  writeState(s);
+}
+
+const api = new OwV2Client({ apiKey: s.hostKey.key, apiPin: account('crew-walk-c').pin, baseUrl: API });
+s.decoys ??= [];
+/** A lore decoy made by the host's own key, in the room's words, without the mark; recorded by id. */
+async function decoy(type, body) {
+  const made = await api.create(type, body);
+  s.decoys.push({ type, id: made.id });
+  writeState(s);
+  return made;
+}
+
 const browser = await engine.launch();
+const pages = [];
 try {
   // ---------------------------------------------------------------- the host
   const hostCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await withToken(hostCtx, 'crew-walk-c', account('crew-walk-c').pin);
   const host = await hostCtx.newPage();
+  pages.push([host, 'crew-walk-c']);
   await host.goto(`${BASE}#/w/${s.worldId}`);
   check('host: the room opens on the host\'s own seat', await until(() => host.getByText('You: host').isVisible()));
   check('host: the charter is on the work surface', await until(() => host.getByText('House rules').isVisible()));
@@ -74,6 +98,14 @@ try {
     await host.getByRole('button', { name: 'Start a new sitting' }).click();
   }
   check('host: a sitting starts in the Lobby', await until(() => host.locator('.hostbar .pp.now', { hasText: 'Lobby' }).isVisible()));
+  // Lore in the room's words, made after the room's sitting began: a Sitting already in Voting, then
+  // a letter (inside both sittings' time windows, so a reader by pair alone shows it whichever it
+  // takes). Neither may show as the room or take its phase.
+  await decoy('event', { name: 'Decoy sitting', supertype: 'Sitting', subtype: 'Voting', x_hearts_on: true, x_specs_shown: true, x_voting_open: true });
+  await decoy('narrative', { name: 'Decoy letter', supertype: 'Message', description: 'DECOY: a letter in the world\'s lore, never a line in the room' });
+  await host.waitForTimeout(4500);
+  check('host: a lore letter is not a line in the room', !(await host.getByText('DECOY: a letter').count()));
+  check('host: a newer lore Sitting does not take the room (still Lobby, after the feed)', await host.locator('.hostbar .pp.now', { hasText: 'Lobby' }).isVisible());
   await shot(host, 'host-lobby');
 
   // ---------------------------------------------------------------- d: the PIN-less door
@@ -92,6 +124,7 @@ try {
     check('host: the new seat shows without a reload', await until(() => host.locator('.seatlist li').count().then(n => n >= 2), 40000));
     s.dJoined = true;
     writeState(s);
+    await recordMinted(d, 'crew-walk-d');
     await dCtx.close();
   }
 
@@ -101,6 +134,7 @@ try {
   const mCtx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, ...(phone && engineName === 'chromium' ? { isMobile: true, hasTouch: true } : {}) });
   await withToken(mCtx, memberLabel, account(memberLabel).pin);
   const m = await mCtx.newPage();
+  pages.push([m, memberLabel]);
   await m.goto(`${BASE}#/join/${s.invites.member.code}`);
   check('member: the join lands in the room', await until(() => m.getByText('You: member').isVisible(), 20000));
   const named = await m.locator('#my-name').isVisible().catch(() => false);
@@ -130,14 +164,20 @@ try {
   await host.locator('.hostbar .pp', { hasText: 'Design' }).click();
   await tab('Work');
   check('member: the phase reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Design' }).isVisible(), 8000));
-  const specTitle = `A ${engineName} map that draws itself`;
+  // Unique per run: a read-back by name must never meet an earlier run's spec (10-22's were left starred).
+  const specTitle = `A ${engineName} map that draws itself, ${new Date().toISOString().slice(11, 19)}`;
   await m.getByRole('button', { name: /Add your spec|Edit your spec/ }).click();
   await m.fill('#spec-title', specTitle);
   await m.fill('#spec-text', 'A spec with "quotes" and <b>tags</b> stays text.');
   await m.getByRole('button', { name: 'Save your spec' }).click();
   check('host: the member\'s spec arrives', await until(() => host.getByRole('heading', { name: specTitle }).isVisible(), 8000));
   check('host: markup in a spec stays text', await until(() => host.getByText('<b>tags</b>', { exact: false }).isVisible()));
+  // A lore Heart by the host's own key on the member's spec: never counted, never the host's to toggle.
+  const specRow = await until(async () => { for await (const e of api.listAll('construct')) if (e.name === specTitle) { s.specId = e.id; return true; } return false; }, 8000);
+  if (specRow) await decoy('relation', { name: 'Decoy heart', supertype: 'Heart', constructs: [s.specId] });
+  await host.waitForTimeout(4500);
   const hostCard = host.locator('.card', { has: host.getByRole('heading', { name: specTitle }) });
+  check('host: a lore Heart is not counted on the spec (♡ 0 before anyone hearts)', specRow && (await hostCard.locator('.m').innerText()).includes('♡ 0'), await hostCard.locator('.m').innerText().catch(() => ''));
   await hostCard.getByRole('button', { name: '♡ Heart' }).click();
   const memberCard = m.locator('.card', { has: m.getByRole('heading', { name: specTitle }) });
   check('member: the host\'s heart reaches them', await until(async () => (await memberCard.locator('.m').innerText()).includes('♡ 1'), 8000));
@@ -149,7 +189,16 @@ try {
   await memberCard.getByRole('button', { name: 'Pick' }).click();
   await m.getByRole('button', { name: /Send my vote|Change my vote/ }).click();
   check('host: the vote counts', await until(async () => (await hostCard.locator('.m').innerText()).includes('points'), 8000));
+  // Change my vote patches this sitting's vote (one row, the mark kept), never a new one.
+  await m.getByRole('button', { name: 'Change my vote' }).click();
+  await m.waitForTimeout(2000);
   await shot(m, 'member-voting');
+
+  // Edit your spec patches this sitting's spec.
+  await m.getByRole('button', { name: 'Edit your spec' }).click();
+  await m.fill('#spec-text', 'An edited spec, the same element.');
+  await m.getByRole('button', { name: 'Save your spec' }).click();
+  check('host: the edited spec arrives', await until(() => host.getByText('An edited spec, the same element.').isVisible(), 8000));
 
   // The winner, then Build and Showcase.
   await hostCard.getByRole('button', { name: 'Make it the winner' }).click();
@@ -158,6 +207,36 @@ try {
   await host.locator('.hostbar .pp', { hasText: 'Showcase' }).click();
   check('member: the Showcase reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Showcase' }).isVisible(), 8000));
   await shot(m, 'member-showcase');
+
+  // The room mark (schema-dist profiles/room.md), read back from keel: every room thing this
+  // run made carries x_room_of from its first write, and kept it through the phase patches
+  // and the star; the charter (lore) carries none.
+  {
+    const all = async type => { const out = []; for await (const el of api.listAll(type)) out.push(el); return out; };
+    const sup = (el, w) => (el.supertype ?? '').trim().toLowerCase() === w;
+    const sittings = (await all('event')).filter(e => sup(e, 'sitting') && e.x_room_of).sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+    const sitting = sittings[sittings.length - 1];
+    const line = (await all('narrative')).find(e => e.description === lineText);
+    const spec = (await all('construct')).find(e => e.name === specTitle);
+    const rels = await all('relation');
+    const heart = rels.find(e => sup(e, 'heart') && e.x_room_of && (e.constructs ?? []).includes(spec?.id));
+    const votes = rels.filter(e => sup(e, 'vote') && (e.constructs ?? []).includes(spec?.id));
+    const vote = votes[0];
+    check('mark: Change my vote patched the one vote (one row for the spec)', votes.length === 1, String(votes.length));
+    check('mark: Edit your spec patched the one spec, its mark kept', spec?.description === 'An edited spec, the same element.' && spec?.x_room_of === sitting?.id);
+    check('the lore heart still stands (the host\'s toggle never took it)', rels.some(e => e.name === 'Decoy heart'));
+    const charter = (await all('law')).find(e => sup(e, 'charter'));
+    check('mark: the sitting is the world\'s, kept through every phase change', sitting?.x_room_of === s.worldId && sitting?.subtype === 'Showcase', `${sitting?.x_room_of} ${sitting?.subtype}`);
+    check('mark: the member\'s line is the sitting\'s', !!line && line.x_room_of === sitting?.id, String(line?.x_room_of));
+    check('mark: the spec is the sitting\'s, kept through the star', !!spec && spec.x_room_of === sitting?.id && spec.subtype === 'star', `${spec?.x_room_of} ${spec?.subtype}`);
+    check('mark: the heart is the sitting\'s', !!heart && heart.x_room_of === sitting?.id, String(heart?.x_room_of));
+    check('mark: the vote is the sitting\'s', !!vote && vote.x_room_of === sitting?.id, String(vote?.x_room_of));
+    check('mark: the charter is lore, unmarked', !!charter && !('x_room_of' in charter), String(charter?.x_room_of));
+    // Made this run, or in an earlier run of a marked build (an unmarked card from before asks again).
+    // The member's seat is the line's maker: its marked card, by whatever name an earlier run gave it.
+    const card = (await all('character')).find(e => sup(e, 'member') && e.x_room_of && e.created_by === line?.created_by);
+    check(`mark: the member's card is the world's (${named ? 'made this run' : 'made before'})`, !!card && card.x_room_of === s.worldId, String(card?.x_room_of));
+  }
 
   // Hide: present before, gone after, in the member's room... except the poster sees their own.
   // So the hidden line is the HOST's own line, read from the member's room.
@@ -178,6 +257,7 @@ try {
   await host.waitForTimeout(4000);
   check('member: the poster still sees their own hidden line (keel: a creator sees what it made)', await m.getByText(lineText).isVisible());
 } finally {
+  for (const [p, label] of pages) await recordMinted(p, label);
   await browser.close();
   const failed = results.filter(r => !r.ok).length;
   console.log(`${engineName}: ${results.length - failed} of ${results.length} passed`);

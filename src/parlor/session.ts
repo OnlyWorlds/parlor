@@ -197,12 +197,6 @@ class Session {
     return minted.key;
   }
 
-  /** The key and PIN behind a world client, for the one route the SDK does not carry yet (GET /world/hidden). */
-  credentials(worldId: string): { key: string; pin: string } | null {
-    const key = this.s?.keys[worldId] ?? this.s?.readKeys?.[worldId];
-    return key ? { key, pin: this.s?.pin ?? '' } : null;
-  }
-
   /** A key that stopped working (revoked, or the seat removed): forget it so the next open mints anew. */
   forgetKey(worldId: string): void {
     if (!this.s) return;

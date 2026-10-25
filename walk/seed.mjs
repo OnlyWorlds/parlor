@@ -51,17 +51,10 @@ if (!laws.some(l => (l.supertype ?? '').toLowerCase() === 'charter')) {
   console.log('wrote the charter');
 }
 
-// Each run starts from no specs, hearts or votes, so every check can fail:
-// a heart or a star left by the last run would answer before this run acts.
-let cleared = 0;
-for (const [type, supertypes] of [['construct', ['spec']], ['relation', ['heart', 'vote']]]) {
-  const doomed = [];
-  for await (const el of host.listAll(type)) {
-    if (supertypes.includes((el.supertype ?? '').toLowerCase())) doomed.push(el.id);
-  }
-  for (const id of doomed) { await host.delete(type, id); cleared++; }
-}
-console.log(`cleared ${cleared} specs, hearts and votes from earlier runs`);
+// Each run starts a new sitting, and a sitting's specs, hearts and votes are those it marked,
+// so nothing from an earlier run answers before this run acts: nothing is deleted here.
+// The walk plants lore decoys (the room's words, no mark) once its sitting stands, and records
+// their ids; teardown deletes those ids only.
 
 // A person's link is spent by its first join: one fresh link per joiner per run
 // (crew-walk-d's door and the member's), each recorded so teardown revokes it.
