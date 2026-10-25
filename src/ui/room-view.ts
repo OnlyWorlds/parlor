@@ -518,17 +518,21 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       w, can: room.canRetire(w.by), hidden: room.hidden.has(w.id) || (!room.isHost && w.el.hidden === true),
       who: w.forWho ? room.characterName(w.forWho) : 'anyone', by: room.name(w.by), answers: room.answers(w.id).length,
       els: w.elements.map(x => ({ ...x, name: w.otherWorld ? null : room.elementName(x.id) })),
+      // One name per taker: a double take from two tabs is one person (the Take gate's T2-G1).
+      takers: [...new Set(w.takes.map(t => t.by))].map(by => room.name(by)), mine: room.hasTaken(w.id),
     }));
-    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.by, v.answers, v.els]),
-      room.canWrite, room.isHost, workOpen, deleting]);
+    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.by, v.answers, v.els, v.takers, v.mine]),
+      room.canWrite, room.isHost, room.needsName(), workOpen, deleting]);
     if (key === workKey) return;
     workKey = key;
     clear(workList,
       h('p', { class: 'sys' }, 'Work on this world: each item says what it is about, and opens in the room when you answer it.'),
-      view.length ? view.map(({ w, can, hidden, who, by, answers, els }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
+      view.length ? view.map(({ w, can, hidden, who, by, answers, els, takers, mine }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
         h('div', { class: 'ttl' }, h('span', { class: `chip s-${w.state}` }, STATE_WORD[w.state]), w.proposed ? h('span', { class: 'chip prop' }, 'Proposed') : null,
           h('h3', null, w.title || 'Untitled')),
         h('div', { class: 'm' }, `For ${who} · made by ${by}`),
+        // Who took it, by the takes' makers (contract T2); Done wins over a take.
+        takers.length && w.state !== 'done' ? h('div', { class: 'm', 'data-part': 'taken-by' }, `Taken by ${takers.join(', ')}`) : null,
         w.text ? h('p', null, w.text) : null,
         els.length ? h('ul', { class: 'about' }, els.map(x => h('li', null,
           h('span', { class: 'chip el' }, w.otherWorld ? `In another world · ${typeWord(x.type)}` : x.name === null ? `Missing · ${typeWord(x.type)}` : `${x.name} · ${typeWord(x.type)}`),
@@ -550,6 +554,13 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
               if (mq.matches) phoneTab('room');
               text.focus();
             } }, 'Answer') : null,
+            room.canWrite && w.state !== 'done' && !room.needsName() ? h('button', { class: 'btn std', type: 'button', onclick: async (e: Event) => {
+              (e.currentTarget as HTMLButtonElement).disabled = true;
+              try { await (mine ? room.release(w.id) : room.take(w.id)); } catch (err) { notice(problemLine(err, mine ? 'releasing the work item' : 'taking the work item'), true); }
+              // Rebuilt even when nothing moved, so a failed press gives its button back (the Take gate's T4-G1).
+              workKey = '';
+              draw();
+            } }, mine ? 'Release' : 'Take') : null,
             can ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
               try { await room.setWorkState(w.id, w.state === 'done' ? 'open' : 'done'); } catch (err) { notice(problemLine(err, 'changing the work item'), true); }
             } }, w.state === 'done' ? 'Reopen' : 'Mark done') : null,

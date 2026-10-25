@@ -12,7 +12,7 @@ import {
   OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readHearts, readSpecs, readVotes,
   readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
-  readWork, newWorkItem, isPickable, readChanges,
+  readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK,
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
@@ -237,7 +237,23 @@ export class Room {
 
   /** Every room work item in the world, whatever sitting made it. */
   work() {
-    return readWork(this.els.values(), this.world.id);
+    return readWork(this.els.values(), this.world.id, by => this.liveTaker(by));
+  }
+
+  /** A take counts while its maker holds a seat that can write (contract T2); with no roster to read, every take counts. */
+  private liveTaker(by: string): boolean {
+    if (!this.roster) return true;
+    const seat = this.seats().find(s => s.by === by);
+    return !!seat && seat.role !== 'watcher';
+  }
+
+  /** Takes on this item made by me, whatever the roster says (Release finds them all, a double take too). */
+  private myTakes(itemId: string): string[] {
+    return deletableTakes(this.els.values(), itemId, this.meBy);
+  }
+
+  hasTaken(itemId: string): boolean {
+    return this.myTakes(itemId).length > 0;
   }
 
   /** Whom a work item can be for: a seat that can write, with a Character (a guest never reads a Relation by actor). */
@@ -316,13 +332,45 @@ export class Room {
     });
   }
 
-  /** Delete one work item, by its id: its maker, the host or a co-host. */
+  /** Take a work item that is not done, once (contract T4: the queue reads the room when its turn comes). */
+  take(id: string): Promise<void> {
+    return this.serial(async () => {
+      const item = this.work().find(w => w.id === id);
+      if (!item || item.state === 'done' || !this.canWrite || this.hasTaken(id)) return;
+      const roomOf = typeof item.el[ROOM_MARK] === 'string' ? item.el[ROOM_MARK] as string : this.world.id;
+      this.landed(await this.client.create('relation', newTake({ id: item.id, title: item.title, roomOf }, this.myCharacter())));
+    });
+  }
+
+  /** Release: my own takes on the item, each by its id (T5). */
+  release(id: string): Promise<void> {
+    return this.serial(async () => {
+      for (const takeId of this.myTakes(id)) {
+        await this.client.delete('relation', takeId);
+        this.feed.removeLocal(takeId);
+      }
+      this.feed.poke();
+    });
+  }
+
+  /**
+   * Delete one work item, by its id: its maker, the host or a co-host. The item goes first; then its
+   * takes, where the deleter may delete them (a host: all; anyone else: their own), each on its own,
+   * since a take left behind is an orphan no reader counts (T6; the Take gate's T6-G1).
+   */
   deleteWork(id: string): Promise<void> {
     return this.serial(async () => {
       const item = this.work().find(w => w.id === id);
       if (!item || !this.canRetire(item.by)) return;
+      const takes = deletableTakes(this.els.values(), item.id, this.meBy, this.isHost);
       await this.client.delete('relation', item.id);
       this.feed.removeLocal(item.id);
+      for (const takeId of takes) {
+        try {
+          await this.client.delete('relation', takeId);
+          this.feed.removeLocal(takeId);
+        } catch { /* an orphan take: read by no one */ }
+      }
       this.feed.poke();
     });
   }

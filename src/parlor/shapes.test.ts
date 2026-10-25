@@ -4,9 +4,9 @@ import {
   readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, readCharter, PHASES, phaseOf,
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
-  readWork, newWorkItem, isPickable, readChanges,
+  readWork, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
 } from './shapes';
-// schema-dist's room profile (v0.33.0-dist.65, profiles/room.fixture.json, copied whole).
+// schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
 
 /** A room element as the parlor makes it: the pair and the mark. */
@@ -295,6 +295,49 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     expect(Object.keys(body).some(k => k.startsWith('x_packet_'))).toBe(false);
     expect('laws' in body).toBe(false);
     expect('actor' in newWorkItem('A', '', null, [], 'w1')).toBe(false);
+  });
+
+  describe('Take (profiles/room.md serial 66, contract S474)', () => {
+    const take = (o: Partial<El> & { id: string }) => el({ type: 'relation', supertype: 'Take', subtype: 'taken', ...o });
+    it('a take: the pair, the item by x_room_item, the item\'s own scope, the taker as actor; the item untouched', () => {
+      const body = newTake({ id: 'i1', title: 'Tie the guild in', roomOf: 's1' }, 'c1');
+      expect(body).toEqual({ name: 'Take: Tie the guild in', supertype: 'Take', subtype: 'taken', [ROOM_MARK]: 's1', [ROOM_ITEM]: 'i1', actor: 'c1' });
+      expect('actor' in newTake({ id: 'i1', title: 't', roomOf: 's1' }, null)).toBe(false);
+    });
+    it('taken by a live take, by its maker; done wins; lore, unmarked, removed and orphan takes never count', () => {
+      const els = [
+        item({ id: 'a', subtype: 'open' }),
+        item({ id: 'b', subtype: 'done' }),
+        item({ id: 'c', subtype: 'open' }),
+        take({ id: 't1', [ROOM_ITEM]: 'a', created_by: 'm2', actor: 'c-someone-else', created_at: '2026-10-25T10:00:00Z' }),
+        take({ id: 't0', [ROOM_ITEM]: 'a', created_by: 'm1', created_at: '2026-10-25T09:00:00Z' }),
+        take({ id: 't2', [ROOM_ITEM]: 'b', created_by: 'm1' }),
+        take({ id: 't3', [ROOM_ITEM]: 'c', created_by: 'gone' }),
+        take({ id: 't4', [ROOM_ITEM]: 'c', created_by: 'm1', [ROOM_MARK]: undefined }),
+        el({ id: 't5', type: 'relation', supertype: 'Heart', [ROOM_ITEM]: 'c', created_by: 'm1' }),
+        take({ id: 't6', [ROOM_ITEM]: 'deleted-item', created_by: 'm1' }),
+      ];
+      const live = (by: string) => by !== 'gone';
+      const w = new Map(readWork(els, 'w1', live).map(x => [x.id, x]));
+      expect(w.get('a')!.state).toBe('taken');
+      expect(w.get('a')!.takes.map(t => t.by)).toEqual(['m1', 'm2']);
+      expect(w.get('b')!.state).toBe('done');
+      expect(w.get('c')!.state).toBe('open');
+      expect(w.get('c')!.takes).toEqual([]);
+      expect([...readTakes(els, live).keys()].sort()).toEqual(['a', 'b', 'deleted-item']);
+    });
+    it('Release finds only my takes, a double take whole; a host deleting the item finds every one (T5, T6)', () => {
+      const els = [
+        item({ id: 'a', subtype: 'open' }),
+        take({ id: 'm1-x', [ROOM_ITEM]: 'a', created_by: 'm1' }),
+        take({ id: 'm1-y', [ROOM_ITEM]: 'a', created_by: 'm1' }),
+        take({ id: 'm2-x', [ROOM_ITEM]: 'a', created_by: 'm2' }),
+        lore({ id: 'lore', type: 'relation', supertype: 'Take', [ROOM_ITEM]: 'a', created_by: 'm1' }),
+      ];
+      expect(deletableTakes(els, 'a', 'm1').sort()).toEqual(['m1-x', 'm1-y']);
+      expect(deletableTakes(els, 'a', 'm3')).toEqual([]);
+      expect(deletableTakes(els, 'a', 'm3', true).sort()).toEqual(['m1-x', 'm1-y', 'm2-x']);
+    });
   });
 
   it('reads the state by the folded subtype, done last, and the typed links as its elements', () => {

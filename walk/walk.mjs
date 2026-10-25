@@ -349,7 +349,34 @@ try {
     (await host.locator('.line', { hasText: workAnswer }).locator('.meta').innerText()).includes(`answering ${workTitle}`), 8000));
   const memberItem = m.locator('.witem', { hasText: workTitle });
   check('member: the item counts the answer', await until(() => memberItem.getByText('1 answer in the room').isVisible(), 10000));
+
+  // Take (profiles/room.md serial 66; contract Forge/Notes/2026-10-25-s474-parlor-take-contract.md).
+  // A lore Take on this very item (the pair and x_room_item, no mark) never counts.
+  let itemId = null;
+  for await (const e of api.listAll('relation')) if (e.name === workTitle) itemId = e.id;
+  await decoy('relation', { name: `DECOY take ${engineName}`, supertype: 'Take', subtype: 'taken', x_room_item: itemId });
+  await host.waitForTimeout(2500);
+  check('member: a lore Take on the item does not take it', await memberItem.locator('.chip.s-open').isVisible() && !(await memberItem.locator('[data-part="taken-by"]').count()));
+  await hostItem.getByRole('button', { name: 'Take', exact: true }).click();
+  check('member: the host\'s take reaches them, named by its maker', await until(async () =>
+    (await memberItem.locator('[data-part="taken-by"]').innerText().catch(() => '')) === 'Taken by Host C' && await memberItem.locator('.chip.s-taken').isVisible(), 10000));
+  check('host: the host sees Release on their own take', await until(() => hostItem.getByRole('button', { name: 'Release' }).isVisible()));
+  await hostItem.getByRole('button', { name: 'Release' }).click();
+  check('member: Release reaches them, the item open again', await until(async () => !(await memberItem.locator('[data-part="taken-by"]').count()) && await memberItem.locator('.chip.s-open').isVisible(), 10000));
+  await memberItem.getByRole('button', { name: 'Take', exact: true }).click();
+  check('host: the member\'s take reaches the host', await until(async () => (await hostItem.locator('[data-part="taken-by"]').innerText().catch(() => '')).startsWith('Taken by Walker'), 10000));
+  let takeEl = null;
+  for await (const e of api.listAll('relation')) if ((e.supertype ?? '') === 'Take' && e.x_room_item === itemId && e.x_room_of) takeEl = e;
+  {
+    let item = null;
+    for await (const e of api.listAll('relation')) if (e.id === itemId) item = e;
+    check('take: reads back Take, taken, x_room_item the item, the item\'s mark, made by the member, the item untouched',
+      takeEl?.subtype === 'taken' && takeEl?.x_room_of === item?.x_room_of && !!takeEl?.created_by && item?.subtype === 'open',
+      `${takeEl?.supertype} ${takeEl?.subtype} ${takeEl?.x_room_of === item?.x_room_of} item ${item?.subtype}`);
+  }
+  await shot(host, 'host-taken');
   await hostItem.getByRole('button', { name: 'Mark done' }).click();
+  check('member: done wins over the take', await until(async () => await memberItem.locator('.chip.s-done').isVisible() && !(await memberItem.locator('[data-part="taken-by"]').count()), 10000));
   check('member: Done reaches them', await until(() => memberItem.locator('.chip.s-done').isVisible(), 10000));
   await shot(host, 'host-work-item');
   {
@@ -364,9 +391,17 @@ try {
     check('work: no packet keys written', !!item && !Object.keys(item).some(k => k.startsWith('x_packet_')));
     check('work: the answer is a Message pointing at the item by relations', answer?.supertype === 'Message' && JSON.stringify(answer?.relations) === JSON.stringify([item?.id]) && !answer?.parent_narrative);
   }
-  await memberItem.getByRole('button', { name: 'Delete', exact: true }).click();
-  await memberItem.getByRole('button', { name: 'Delete it' }).click();
-  check('host: Delete takes the item away', await until(() => hostItem.isHidden(), 10000));
+  // Reopen: the take still stands, so the item reads taken again.
+  await hostItem.getByRole('button', { name: 'Reopen' }).click();
+  check('host: reopened, the take stands again', await until(() => hostItem.locator('.chip.s-taken').isVisible(), 10000));
+  await hostItem.getByRole('button', { name: 'Delete', exact: true }).click();
+  await hostItem.getByRole('button', { name: 'Delete it' }).click();
+  check('member: the host\'s Delete takes the item away', await until(() => memberItem.isHidden(), 10000));
+  {
+    // The host deletes an item the member made and took: the host may delete another's take, so it goes too (T6).
+    const gone = takeEl ? await fetch(`${API}/relation/${takeEl.id}`, { headers: { 'API-Key': s.hostKey.key, 'API-Pin': account('crew-walk-c').pin } }).then(r => r.status) : 'no take';
+    check('take: the item\'s delete took the member\'s take with it (keel answers 404 or 410)', gone === 404 || gone === 410, String(gone));
+  }
   await shot(host, 'host-work');
 
   // Changes (sheet §2): the lore Character the walk made shows, who and which door; the room's own

@@ -63,10 +63,14 @@ export const SUPERTYPE = {
   charter: 'Charter',
   /** A person's own Character, made on first entry when their seat has none (h66 #9720). */
   member: 'Member',
+  /** One member's take on a work item (the room profile's ninth pair, schema-dist serial 66). */
+  take: 'Take',
 } as const;
 
 /** The room profile's mark: the world's id for a world's parlor, the sitting's for a workshop. */
 export const ROOM_MARK = 'x_room_of';
+/** The room profile's second field, on a Take only: the work item's id (no Relation field links a Relation). */
+export const ROOM_ITEM = 'x_room_item';
 
 const fold = (s: unknown): string => (typeof s === 'string' ? simpleCaseFold(s.trim()) : '');
 
@@ -516,7 +520,55 @@ export interface WorkItem {
   otherWorld: boolean;
   /** An agent's write waiting for review (schema-dist profiles/review.md: x_review_proposed set). */
   proposed: boolean;
+  /** The live takes on it, first taken first (who by `created_by`, never `actor`). */
+  takes: Take[];
   el: El;
+}
+
+export interface Take {
+  id: string;
+  by: string;
+  at: string;
+}
+
+/**
+ * The room's takes by the item they are on: room Takes only (pair and mark), each naming its item by
+ * `x_room_item`, and only those whose maker `live` counts (a removed seat's take is no take).
+ */
+export function readTakes(els: Iterable<El>, live: (by: string) => boolean = () => true): Map<string, Take[]> {
+  const out = new Map<string, Take[]>();
+  for (const el of els) {
+    if (!isA(el, 'relation', SUPERTYPE.take)) continue;
+    const item = link(el, ROOM_ITEM);
+    const by = whoMade(el);
+    if (!item || !live(by)) continue;
+    const list = out.get(item) ?? [];
+    list.push({ id: el.id, by, at: el.created_at ?? '' });
+    out.set(item, list);
+  }
+  for (const list of out.values()) list.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  return out;
+}
+
+/**
+ * The takes on an item a person may delete, by id: their own (Release, contract T5), or every one
+ * for a host deleting the item (T6). Read roster-blind, so a double take is found whole.
+ */
+export function deletableTakes(els: Iterable<El>, itemId: string, me: string, isHost = false): string[] {
+  return (readTakes(els).get(itemId) ?? []).filter(t => isHost || t.by === me).map(t => t.id);
+}
+
+/** My take on a work item: the taker's own Relation, in the item's own scope; the item is never edited by it. */
+export function newTake(item: { id: string; title: string; roomOf: string }, character: string | null): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    name: `Take: ${item.title}`.slice(0, 200),
+    supertype: SUPERTYPE.take,
+    subtype: 'taken',
+    [ROOM_MARK]: item.roomOf,
+    [ROOM_ITEM]: item.id,
+  };
+  if (character) body.actor = character;
+  return body;
 }
 
 /** The packet's valid entries (each of type, id and reason a string), or null when it has none. */
@@ -533,11 +585,14 @@ function packetElements(el: El): WorkElement[] | null {
 }
 
 /** Every room work item in the world, whatever sitting made it: open and taken first, done last, newest first within. */
-export function readWork(els: Iterable<El>, worldId: string): WorkItem[] {
+export function readWork(els: Iterable<El>, worldId: string, live: (by: string) => boolean = () => true): WorkItem[] {
+  const all = [...els];
+  const takes = readTakes(all, live);
   const out: WorkItem[] = [];
-  for (const el of els) {
+  for (const el of all) {
     if (!isA(el, 'relation', SUPERTYPE.workItem)) continue;
     const word = fold(el.subtype);
+    const taken = takes.get(el.id) ?? [];
     const packet = packetElements(el);
     const source = el.x_packet_source as { world?: unknown } | null | undefined;
     const elements = packet ?? Object.entries(LINK_FIELDS).flatMap(([type, field]) => links(el, field).map(id => ({ type, id, reason: null })));
@@ -545,13 +600,15 @@ export function readWork(els: Iterable<El>, worldId: string): WorkItem[] {
       id: el.id,
       title: (el.name ?? '').toString(),
       text: (el.description ?? '').toString(),
-      state: word === 'done' ? 'done' : word === 'taken' ? 'taken' : 'open',
+      // Done wins; then taken, by a live take or the item's own word (a packet's reader may set it).
+      state: word === 'done' ? 'done' : word === 'taken' || taken.length ? 'taken' : 'open',
       forWho: link(el, 'actor'),
       by: whoMade(el),
       at: el.created_at ?? '',
       elements,
       otherWorld: !!packet && !!source && typeof source.world === 'string' && source.world !== worldId,
       proposed: el.x_review_proposed !== undefined && el.x_review_proposed !== null,
+      takes: taken,
       el,
     });
   }
