@@ -220,7 +220,9 @@ export class Room {
     });
   }
 
+  /** A line goes to the newest sitting, so writing one brings the room back to now, where it shows. */
   post(text: string, parent: string | null = null): Promise<void> {
+    this.showSitting = null;
     return this.serial(async () => {
       this.landed(await this.client.create('narrative', newLine(text, this.myCharacter(), parent, this.roomOfNow())));
     });

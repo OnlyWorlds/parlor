@@ -284,16 +284,31 @@ export interface Sitting extends Switches {
   by: string;
 }
 
-/** The old tool's seven, each a set of switches, never a position in a list (sheet §2). */
+/**
+ * The six, named by what a member does there, each a set of switches, never a position in a
+ * list (sheet §2 and §6 point 10: the Captain folded February's Parsing into Pitch, h28 #10285;
+ * the names h66 #10317).
+ */
 export const PHASES: ReadonlyArray<{ name: string } & Switches> = [
-  { name: 'Lobby', hearts: false, specs: false, voting: false },
+  { name: 'Arrive', hearts: false, specs: false, voting: false },
   { name: 'Welcome', hearts: false, specs: false, voting: false },
-  { name: 'Parsing', hearts: true, specs: false, voting: false },
-  { name: 'Design', hearts: true, specs: true, voting: false },
-  { name: 'Voting', hearts: true, specs: true, voting: true },
+  { name: 'Pitch', hearts: true, specs: true, voting: false },
+  { name: 'Vote', hearts: true, specs: true, voting: true },
   { name: 'Build', hearts: true, specs: true, voting: false },
-  { name: 'Showcase', hearts: true, specs: true, voting: false },
+  { name: 'Show', hearts: true, specs: true, voting: false },
 ];
+
+/** February's names, read as today's: a sitting is never rewritten for it. */
+const OLD_PHASES: Readonly<Record<string, string>> = {
+  lobby: 'Arrive', parsing: 'Pitch', design: 'Pitch', voting: 'Vote', showcase: 'Show',
+};
+
+/** A sitting's phase by its subtype: today's name, February's read as today's, none as Arrive. */
+export function phaseOf(subtype: unknown): string {
+  const word = typeof subtype === 'string' ? subtype.trim() : '';
+  if (!word) return PHASES[0].name;
+  return PHASES.find(p => p.name.toLowerCase() === word.toLowerCase())?.name ?? OLD_PHASES[word.toLowerCase()] ?? word;
+}
 
 export const SWITCH_FIELDS = { hearts: 'x_hearts_on', specs: 'x_specs_shown', voting: 'x_voting_open' } as const;
 export const FEED_START_FIELD = 'x_feed_start';
@@ -306,7 +321,7 @@ export function readSittings(els: Iterable<El>): Sitting[] {
     const start = el[FEED_START_FIELD];
     out.push({
       id: el.id,
-      phase: (el.subtype ?? '').toString() || 'Lobby',
+      phase: phaseOf(el.subtype),
       hearts: bool(el, SWITCH_FIELDS.hearts),
       specs: bool(el, SWITCH_FIELDS.specs),
       voting: bool(el, SWITCH_FIELDS.voting),

@@ -97,7 +97,7 @@ try {
   } else {
     await host.getByRole('button', { name: 'Start a new sitting' }).click();
   }
-  check('host: a sitting starts in the Lobby', await until(() => host.locator('.hostbar .pp.now', { hasText: 'Lobby' }).isVisible()));
+  check('host: a sitting starts in Arrive', await until(() => host.locator('.hostbar .pp.now', { hasText: 'Arrive' }).isVisible()));
   // Lore in the room's words, made after the room's sitting began: a Sitting already in Voting, then
   // a letter (inside both sittings' time windows, so a reader by pair alone shows it whichever it
   // takes). Neither may show as the room or take its phase.
@@ -105,7 +105,7 @@ try {
   await decoy('narrative', { name: 'Decoy letter', supertype: 'Message', description: 'DECOY: a letter in the world\'s lore, never a line in the room' });
   await host.waitForTimeout(4500);
   check('host: a lore letter is not a line in the room', !(await host.getByText('DECOY: a letter').count()));
-  check('host: a newer lore Sitting does not take the room (still Lobby, after the feed)', await host.locator('.hostbar .pp.now', { hasText: 'Lobby' }).isVisible());
+  check('host: a newer lore Sitting does not take the room (still Arrive, after the feed)', await host.locator('.hostbar .pp.now', { hasText: 'Arrive' }).isVisible());
   await shot(host, 'host-lobby');
 
   // ---------------------------------------------------------------- d: the PIN-less door
@@ -160,10 +160,10 @@ try {
   check('host: the line carries the member\'s name, not an AI mark', await until(async () => (await hostLine.locator('.who').innerText()).startsWith('Walker') && !(await hostLine.getAttribute('class')).includes('ai')));
   await shot(m, 'member-line');
 
-  // Design: specs shown, hearts on.
-  await host.locator('.hostbar .pp', { hasText: 'Design' }).click();
+  // Pitch: specs shown, hearts on.
+  await host.locator('.hostbar .pp', { hasText: 'Pitch' }).click();
   await tab('Work');
-  check('member: the phase reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Design' }).isVisible(), 8000));
+  check('member: the phase reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Pitch' }).isVisible(), 8000));
   // Unique per run: a read-back by name must never meet an earlier run's spec (10-22's were left starred).
   const specTitle = `A ${engineName} map that draws itself, ${new Date().toISOString().slice(11, 19)}`;
   await m.getByRole('button', { name: /Add your spec|Edit your spec/ }).click();
@@ -183,8 +183,8 @@ try {
   check('member: the host\'s heart reaches them', await until(async () => (await memberCard.locator('.m').innerText()).includes('♡ 1'), 8000));
   await shot(host, 'host-design');
 
-  // Voting.
-  await host.locator('.hostbar .pp', { hasText: 'Voting' }).click();
+  // Vote.
+  await host.locator('.hostbar .pp', { hasText: 'Vote' }).click();
   check('member: voting opens for them', await until(() => m.getByText('Pick up to three, in order.').isVisible(), 8000));
   await memberCard.getByRole('button', { name: 'Pick' }).click();
   await m.getByRole('button', { name: /Send my vote|Change my vote/ }).click();
@@ -200,12 +200,12 @@ try {
   await m.getByRole('button', { name: 'Save your spec' }).click();
   check('host: the edited spec arrives', await until(() => host.getByText('An edited spec, the same element.').isVisible(), 8000));
 
-  // The winner, then Build and Showcase.
+  // The winner, then Build and Show.
   await hostCard.getByRole('button', { name: 'Make it the winner' }).click();
   check('member: the winner is starred for them', await until(() => m.locator('.card.star', { hasText: specTitle }).isVisible(), 8000));
   await host.locator('.hostbar .pp', { hasText: 'Build' }).click();
-  await host.locator('.hostbar .pp', { hasText: 'Showcase' }).click();
-  check('member: the Showcase reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Showcase' }).isVisible(), 8000));
+  await host.locator('.hostbar .pp', { hasText: 'Show' }).click();
+  check('member: Show reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Show' }).isVisible(), 8000));
   await shot(m, 'member-showcase');
 
   // The room mark (schema-dist profiles/room.md), read back from keel: every room thing this
@@ -226,7 +226,7 @@ try {
     check('mark: Edit your spec patched the one spec, its mark kept', spec?.description === 'An edited spec, the same element.' && spec?.x_room_of === sitting?.id);
     check('the lore heart still stands (the host\'s toggle never took it)', rels.some(e => e.name === 'Decoy heart'));
     const charter = (await all('law')).find(e => sup(e, 'charter'));
-    check('mark: the sitting is the world\'s, kept through every phase change', sitting?.x_room_of === s.worldId && sitting?.subtype === 'Showcase', `${sitting?.x_room_of} ${sitting?.subtype}`);
+    check('mark: the sitting is the world\'s, kept through every phase change', sitting?.x_room_of === s.worldId && sitting?.subtype === 'Show', `${sitting?.x_room_of} ${sitting?.subtype}`);
     check('mark: the member\'s line is the sitting\'s', !!line && line.x_room_of === sitting?.id, String(line?.x_room_of));
     check('mark: the spec is the sitting\'s, kept through the star', !!spec && spec.x_room_of === sitting?.id && spec.subtype === 'star', `${spec?.x_room_of} ${spec?.subtype}`);
     check('mark: the heart is the sitting\'s', !!heart && heart.x_room_of === sitting?.id, String(heart?.x_room_of));
@@ -256,6 +256,22 @@ try {
   check('host: the member\'s line is marked hidden', await until(() => host.locator('.line.hidden', { hasText: lineText }).isVisible(), 5000));
   await host.waitForTimeout(4000);
   check('member: the poster still sees their own hidden line (keel: a creator sees what it made)', await m.getByText(lineText).isVisible());
+
+  // An earlier sitting is a record: the host reads it back with nothing in it to change, then returns.
+  await host.getByRole('button', { name: 'Show earlier' }).click();
+  check('host: an earlier sitting offers no phase, switch or winner to change', await until(async () =>
+    await host.getByText('An earlier sitting.').isVisible()
+    && await host.locator('.hostbar [role="group"][aria-label="Phase"]').count() === 0
+    && await host.getByRole('button', { name: /^Hearts:|^Voting:/ }).count() === 0
+    && await host.getByRole('button', { name: 'Make it the winner' }).count() === 0, 5000));
+  await shot(host, 'host-earlier');
+  // A line written while reading back goes to the newest sitting, and the room comes back to show it.
+  const backLine = `Written from an earlier sitting, ${engineName}, ${new Date().toISOString().slice(11, 19)}`;
+  await host.fill('textarea[aria-label="Write a line"]', backLine);
+  await host.keyboard.press('Enter');
+  check('host: a line written while reading back shows, the room back to now', await until(async () =>
+    await host.getByText(backLine).isVisible() && !(await host.getByText('An earlier sitting.').count()), 6000));
+  check('host: back to now, the phases are the host\'s again', await until(() => host.locator('.hostbar [role="group"][aria-label="Phase"]').isVisible(), 5000));
 } finally {
   for (const [p, label] of pages) await recordMinted(p, label);
   await browser.close();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   OWNER, type El, readLines, lineName, newLine, readHearts, heartCounts, myHearts, readSpecs,
-  readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, readCharter, PHASES,
+  readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, readCharter, PHASES, phaseOf,
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.65, profiles/room.fixture.json, copied whole).
@@ -151,18 +151,26 @@ describe('votes', () => {
 });
 
 describe('sittings', () => {
-  it('a new sitting starts in the Lobby with the lobby switches and its feed start', () => {
+  it('six phases by what a member does; February\'s names read as today\'s, never rewritten', () => {
+    expect(PHASES.map(p => p.name)).toEqual(['Arrive', 'Welcome', 'Pitch', 'Vote', 'Build', 'Show']);
+    expect(['Lobby', 'Parsing', 'Design', 'Voting', 'Showcase', 'Build', '', ' vote '].map(phaseOf))
+      .toEqual(['Arrive', 'Pitch', 'Pitch', 'Vote', 'Show', 'Build', 'Arrive', 'Vote']);
+    const [s] = readSittings([el({ id: 's', type: 'event', supertype: 'Sitting', subtype: 'Voting', x_voting_open: true })]);
+    expect([s.phase, s.voting]).toEqual(['Vote', true]);
+  });
+
+  it('a new sitting starts in Arrive with its switches and its feed start', () => {
     const body = newSitting('Workshop, 22 October', 4711, 'w1');
     const [s] = readSittings([lore({ id: 's', type: 'event', ...body } as El)]);
-    expect(s.phase).toBe('Lobby');
+    expect(s.phase).toBe('Arrive');
     expect([s.hearts, s.specs, s.voting]).toEqual([false, false, false]);
     expect(s.feedStart).toBe(4711);
   });
 
   it('a phase moves its name and all three switches together', () => {
-    const voting = PHASES.find(p => p.name === 'Voting')!;
-    const [s] = readSittings([el({ id: 's', type: 'event', supertype: 'Sitting', ...phasePatch('Voting') } as El)]);
-    expect([s.phase, s.hearts, s.specs, s.voting]).toEqual(['Voting', voting.hearts, voting.specs, voting.voting]);
+    const voting = PHASES.find(p => p.name === 'Vote')!;
+    const [s] = readSittings([el({ id: 's', type: 'event', supertype: 'Sitting', ...phasePatch('Vote') } as El)]);
+    expect([s.phase, s.hearts, s.specs, s.voting]).toEqual(['Vote', voting.hearts, voting.specs, voting.voting]);
     expect(() => phasePatch('Nap')).toThrow();
   });
 
