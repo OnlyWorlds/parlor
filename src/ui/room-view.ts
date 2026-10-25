@@ -180,10 +180,19 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     }
   }
 
+  /**
+   * The host bar is rebuilt only when what it shows moved: a press that straddles a rebuild
+   * lands on a node that is gone, so a feed tick from someone else's line must not cost a
+   * host's click (the S472 walk lost a phase press that way).
+   */
+  let hostKey = '';
   function drawHost(): void {
-    if (!room.isHost) { clear(host); return; }
+    if (!room.isHost) { hostKey = ''; clear(host); return; }
     const s = room.sitting();
     const reading = room.browsing;
+    const key = JSON.stringify([s?.id, s?.phase, s?.hearts, s?.specs, s?.voting, reading, room.seats()]);
+    if (key === hostKey) return;
+    hostKey = key;
     const start = h('button', { class: 'btn std', type: 'button', onclick: async () => {
       const when = new Date().toLocaleDateString([], { day: 'numeric', month: 'long' });
       try { await room.startSitting(`Sitting, ${when}`); } catch (err) { notice(problemLine(err, 'starting the sitting'), true); }
@@ -201,7 +210,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
       }, p.name))) : null,
       s && !reading ? h('div', { class: 'sw' }, sw('hearts', 'Hearts'), sw('specs', 'Specs shown'), sw('voting', 'Voting')) : null,
       h('div', { class: 'btns' }, start),
-      h('div', { class: 'ph', style: 'margin-top:12px' }, `Seats · ${room.seats().length}`),
+      h('div', { class: 'ph seats-head' }, `Seats · ${room.seats().length}`),
       h('ul', { class: 'seatlist' }, room.seats().map(x => h('li', null,
         h('span', { class: x.ai ? 'bdg a' : 'bdg' }, x.ai ? 'AI' : initial(x.name)), x.name, h('span', { class: 'r' }, x.ai ? `AI ${x.role}` : x.role)))),
     ));

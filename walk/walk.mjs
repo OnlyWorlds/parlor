@@ -76,11 +76,20 @@ async function decoy(type, body) {
   return made;
 }
 
+/** Every policy violation a page meets, kept on the page: on a host serving public/_headers, the walk counts them. */
+const watchPolicy = ctx => ctx.addInitScript(() => {
+  window.__policy = [];
+  document.addEventListener('securitypolicyviolation', e => window.__policy.push(`${e.violatedDirective} ${e.blockedURI}`));
+});
+const policyOf = page => page.evaluate(() => window.__policy ?? []).catch(() => []);
+const violations = [];
+
 const browser = await engine.launch();
 const pages = [];
 try {
   // ---------------------------------------------------------------- the host
   const hostCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await watchPolicy(hostCtx);
   await withToken(hostCtx, 'crew-walk-c', account('crew-walk-c').pin);
   const host = await hostCtx.newPage();
   pages.push([host, 'crew-walk-c']);
@@ -111,6 +120,7 @@ try {
   // ---------------------------------------------------------------- d: the PIN-less door
   if (engineName === 'chromium') {
     const dCtx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await watchPolicy(dCtx);
     const d = await dCtx.newPage();
     await d.goto(`${BASE}#/join/${s.invites['crew-walk-d'].code}`);
     check('d: the landing names the world it invites to', await until(() => d.getByRole('heading', { name: 'Join Parlor ground (crew test)' }).isVisible()));
@@ -125,6 +135,7 @@ try {
     s.dJoined = true;
     writeState(s);
     await recordMinted(d, 'crew-walk-d');
+    violations.push(...await policyOf(d));
     await dCtx.close();
   }
 
@@ -132,6 +143,7 @@ try {
   // PHONE=1: the member on a 390 px phone, one pane at a time, switching tabs as a person would.
   const phone = process.env.PHONE === '1';
   const mCtx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, ...(phone && engineName === 'chromium' ? { isMobile: true, hasTouch: true } : {}) });
+  await watchPolicy(mCtx);
   await withToken(mCtx, memberLabel, account(memberLabel).pin);
   const m = await mCtx.newPage();
   pages.push([m, memberLabel]);
@@ -204,6 +216,9 @@ try {
   await hostCard.getByRole('button', { name: 'Make it the winner' }).click();
   check('member: the winner is starred for them', await until(() => m.locator('.card.star', { hasText: specTitle }).isVisible(), 8000));
   await host.locator('.hostbar .pp', { hasText: 'Build' }).click();
+  // At a person's pace: the host sees Build lit before pressing Show (a press inside the bar's
+  // own redraw, a few milliseconds after the last, is a robot's).
+  check('host: Build is lit', await until(() => host.locator('.hostbar .pp.now', { hasText: 'Build' }).isVisible(), 8000));
   await host.locator('.hostbar .pp', { hasText: 'Show' }).click();
   check('member: Show reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Show' }).isVisible(), 8000));
   await shot(m, 'member-showcase');
@@ -273,7 +288,8 @@ try {
     await host.getByText(backLine).isVisible() && !(await host.getByText('An earlier sitting.').count()), 6000));
   check('host: back to now, the phases are the host\'s again', await until(() => host.locator('.hostbar [role="group"][aria-label="Phase"]').isVisible(), 5000));
 } finally {
-  for (const [p, label] of pages) await recordMinted(p, label);
+  for (const [p, label] of pages) { await recordMinted(p, label); violations.push(...await policyOf(p)); }
+  check('no page met a policy violation', violations.length === 0, violations.slice(0, 3).join('; '));
   await browser.close();
   const failed = results.filter(r => !r.ok).length;
   console.log(`${engineName}: ${results.length - failed} of ${results.length} passed`);

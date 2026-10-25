@@ -16,6 +16,9 @@ export function h<K extends keyof HTMLElementTagNameMap>(
     if (v === undefined || v === null || v === false) continue;
     if (k.startsWith('on') && typeof v === 'function') {
       el.addEventListener(k.slice(2).toLowerCase(), v as EventListener);
+    } else if (k === 'style') {
+      // The host's policy allows no inline style (public/_headers, style-src 'self'): a class does it.
+      throw new Error(`h(${tag}): no style attribute, use a class`);
     } else if (k === 'class') {
       el.className = String(v);
     } else if (k === 'value' || k === 'disabled' || k === 'checked' || k === 'hidden') {
