@@ -21,6 +21,7 @@ npm run build     # dist/, a static app with no server and no key in it
 - **Joining**: an invite link, as `#/join/<code>` on the parlor, or keel's own link pasted on the parlors page. A person's link is spent by its first join.
 - **The room follows the world's feed**: `GET /changes?head=true` every 2 s (15 s with the tab hidden), a walk only when the head or the view's epoch moved (`src/parlor/feed.ts`).
 - **What each thing is** (`src/parlor/shapes.ts`): a line is a Narrative (supertype Message), a spec a Construct (Spec; the winner subtype star), a heart and a vote are Relations made by the hearter or voter, a sitting is an Event whose subtype is the phase and whose switches are `x_hearts_on`, `x_specs_shown`, `x_voting_open`, the charter a Law (Charter). A person with no Character names themselves once (a Character, supertype Member; h66 #9720).
+- **The room mark** (schema-dist `profiles/room.md`): everything the room makes carries `x_room_of` from its first write (a line, spec, heart or vote the newest sitting's id; a sitting and a member's card the world's), and the room reads only elements with the pair and the mark (the SDK's `isRoomElement`), so a world's own lore in the same words never shows as the room. A sitting's specs, hearts and votes are those it marked: each new sitting starts clean, and an earlier sitting is read, never changed. Lines stay grouped by time.
 - **Who wrote it** is `created_by`, never text. The AI mark reads the roster's kind, the door only as a fallback.
 - **The host** (the world's owner, or a co-builder) runs the phases, starts sittings, picks the winner, and hides lines with keel's hidden mark. Writes go one at a time, in order.
 
@@ -30,14 +31,14 @@ npm run build     # dist/, a static app with no server and no key in it
 
 ```bash
 export WALK_STATE=<a file outside the repo>
-node walk/seed.mjs crew-walk-b     # the test world, its charter, fresh invite links, a clean slate
+node walk/seed.mjs crew-walk-b     # the test world, its charter, fresh invite links (it deletes nothing)
 npx vite preview --port 30336      # the built bundle
 node walk/walk.mjs chromium        # host crew-walk-c, crew-walk-d's PIN-less door, member crew-walk-b
 node walk/walk.mjs firefox
-node walk/teardown.mjs             # revokes every link, key and token the walk made, read back 401
+node walk/teardown.mjs             # takes back only what the state recorded, read back 401
 ```
 
-The test world is "Parlor ground (crew test)", owned by crew-walk-c; it stays between walks.
+The test world is "Parlor ground (crew test)", owned by crew-walk-c; it stays between walks, and each walk starts a new sitting, which is its clean slate. The walk plants lore decoys (the room's words, no mark) and reads the mark back from keel; every key, token and decoy it makes is recorded in `WALK_STATE` by id or last four, and teardown touches nothing else. A control: serve an older build on another port and pass `PARLOR_URL`.
 
 ## Records
 
