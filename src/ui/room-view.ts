@@ -33,7 +33,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
 
   // -------------------------------------------------- the composer (built once)
   const text = h('textarea', { rows: 1, 'aria-label': 'Write a line', placeholder: 'Write a line' });
-  const sendBtn = h('button', { class: 'btn entry', type: 'submit' }, 'Send');
+  const sendBtn = h('button', { class: 'btn std', type: 'submit' }, 'Send');
   const send = h('form', {
     class: 'send',
     onsubmit: async (e: Event) => {
@@ -227,6 +227,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
   workPane.classList.remove('off');
   const mq = window.matchMedia('(max-width: 820px)');
   if (mq.matches) phoneTab('room');
+  const onWidth = (): void => {
+    if (mq.matches) phoneTab('room');
+    else { roomPane.classList.remove('off'); workPane.classList.remove('off'); }
+  };
+  mq.addEventListener('change', onWidth);
   clear(root, h('div', { class: 'app' }, top, h('nav', { class: 'mtabs' }, tabRoom, tabWork), h('main', { class: 'main' }, roomPane, workPane)));
 
   // -------------------------------------------------- what redraws
@@ -339,7 +344,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
         }
       },
     }, h('label', { for: 'my-name' }, 'What should the room call you? You choose it once; it is saved in this world as your own Character.'),
-      h('div', { class: 'row' }, input, h('button', { class: 'btn entry', type: 'submit' }, 'Save')));
+      h('div', { class: 'row' }, input, h('button', { class: 'btn std', type: 'submit' }, 'Save')));
   }
 
   async function hide(id: string, on: boolean, type = 'narrative') {
@@ -439,7 +444,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
         } }, room.myVote() ? 'Change my vote' : 'Send my vote'))) : null,
       h('div', { class: 'ph' }, `Specs · ${shown.length}${!s?.specs && !room.isHost && specs.length > shown.length ? ' shown (the others show when the host turns specs on)' : ''}`),
       shown.map(card),
-      live && !specOpen ? h('button', { class: 'btn entry', type: 'button', onclick: () => {
+      // While voting, the vote is the screen's one Entry.
+      live && !specOpen ? h('button', { class: voting ? 'btn std' : 'btn entry', type: 'button', onclick: () => {
         specOpen = true;
         specTitle.value = mine?.title ?? '';
         specText.value = mine?.text ?? '';
@@ -563,5 +569,5 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
 
   const off = room.feed.subscribe(draw);
   draw();
-  return () => { off(); room.close(); };
+  return () => { off(); mq.removeEventListener('change', onWidth); room.close(); };
 }

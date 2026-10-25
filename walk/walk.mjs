@@ -158,6 +158,11 @@ try {
     await m.getByRole('button', { name: 'Save', exact: true }).click();
   }
   check('member: the room knows their name', await until(() => m.locator('#my-name').isHidden()), named ? 'named just now' : 'named before');
+  // One Entry per screen (Seethe h66 #12914): Send and the name's Save are Standard.
+  {
+    const entries = await m.locator('.btn.entry').evaluateAll(els => els.filter(e => e.offsetParent !== null).map(e => e.textContent));
+    check('member: at most one Entry button on the screen', entries.length <= 1, entries.join(', '));
+  }
   const tab = async name => { if (phone) await m.locator('.mtabs').getByRole('button', { name }).click(); };
   if (phone) {
     const panes = async () => m.locator('section.pane').evaluateAll(els => els.map(e => getComputedStyle(e).display !== 'none'));
@@ -419,10 +424,9 @@ try {
   check('host: the member\'s line is marked hidden', await until(() => host.locator('.line.hidden', { hasText: lineText }).isVisible(), 5000));
   await host.waitForTimeout(4000);
   check('member: the poster still sees their own hidden line (keel: a creator sees what it made)', await m.getByText(lineText).isVisible());
-  // keel #537 promises the maker an upsert row with hidden: true; on 10-25 a hide moved the head and
-  // served no row (h29), so this is said, not counted, until keel answers. Make it a check then.
-  const told = await until(() => m.locator('.line', { hasText: lineText }).getByText('Hidden by the host').isVisible(), 20000);
-  console.log(`WAIT member told the host hid their line (keel #537, h29): ${told ? 'yes' : 'not yet'}`);
+  // keel #682 (PR 243, live 2026-10-25 09:23): a hide gives the member who made the element an upsert
+  // row with hidden: true, so the poster is told.
+  check('member: told the host hid their own line (keel #682)', await until(() => m.locator('.line', { hasText: lineText }).getByText('Hidden by the host').isVisible(), 20000));
 
   // An earlier sitting is a record: the host reads it back with nothing in it to change, then returns.
   await host.getByRole('button', { name: 'Show earlier' }).click();
@@ -439,6 +443,14 @@ try {
   check('host: a line written while reading back shows, the room back to now', await until(async () =>
     await host.getByText(backLine).isVisible() && !(await host.getByText('An earlier sitting.').count()), 6000));
   check('host: back to now, the phases are the host\'s again', await until(() => host.locator('.hostbar [role="group"][aria-label="Phase"]').isVisible(), 5000));
+  // A window narrowed to a phone after load keeps one pane at a time (Seethe h66 #12914), and both come back when wide.
+  {
+    const panes = () => host.locator('section.pane').evaluateAll(els => els.map(e => getComputedStyle(e).display !== 'none'));
+    await host.setViewportSize({ width: 390, height: 844 });
+    check('host: narrowed to a phone after load, one pane, the room', await until(async () => JSON.stringify(await panes()) === '[true,false]', 3000));
+    await host.setViewportSize({ width: 1440, height: 900 });
+    check('host: wide again, both panes', await until(async () => JSON.stringify(await panes()) === '[true,true]', 3000));
+  }
 } finally {
   for (const [p, label] of pages) { await recordMinted(p, label); violations.push(...await policyOf(p)); }
   check('no page met a policy violation', violations.length === 0, violations.slice(0, 3).join('; '));
