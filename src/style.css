@@ -112,3 +112,9 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .chip.prop{border-style:dashed;color:var(--text)}
 .card.witem.done h3,.card.witem.done p{color:var(--muted)}
 .card.witem.hidden h3,.card.witem.hidden p{color:var(--muted)}
+.changes{list-style:none;margin:0;padding:0}
+.changes li{display:grid;grid-template-columns:28px 1fr;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.changes li:first-child{border-top:0}
+.changes .nm{font-weight:600;overflow-wrap:anywhere}
+.changes .t{color:var(--muted);font-size:12px}
+.changes li.ai .nm{color:var(--ai)}

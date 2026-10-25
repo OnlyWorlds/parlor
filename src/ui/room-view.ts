@@ -22,7 +22,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
   let specOpen = false;
   let boardOpen = false;
   // A workshop opens on its specs; a world's parlor (no sitting yet) on its work.
-  let workTab: 'work' | 'specs' | 'board' = room.sittings().length ? 'specs' : 'work';
+  let workTab: 'work' | 'changes' | 'specs' | 'board' = room.sittings().length ? 'specs' : 'work';
+  // What changed since this browser last opened the room (a per-viewer convenience; nothing breaks without it).
+  const seenKey = `parlor.seen.${room.world.id}`;
+  let seenBefore = '';
+  try { seenBefore = localStorage.getItem(seenKey) ?? ''; localStorage.setItem(seenKey, new Date().toISOString()); } catch { /* private window */ }
   let workOpen = false;
   let replyTo: { id: string; title: string; kind: 'board' | 'work' } | null = null;
   let stickToEnd = true;
@@ -202,14 +206,16 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
 
   // -------------------------------------------------- the work tabs (built once)
   const tabWorkItems = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'work'; draw(); } }, 'Work');
+  const tabChanges = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'changes'; draw(); } }, 'Changes');
   const tabSpecs = h('button', { type: 'button', role: 'tab', 'aria-selected': 'true', onclick: () => { workTab = 'specs'; draw(); } }, 'Specs');
   const tabBoard = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'board'; draw(); } }, 'Board');
-  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Work' }, tabWorkItems, tabSpecs, tabBoard);
+  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Work' }, tabWorkItems, tabChanges, tabSpecs, tabBoard);
   const board = h('div');
   const workList = h('div');
+  const changeList = h('div');
   // -------------------------------------------------- the layout
   const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? send : null);
-  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, work, specForm, board, boardForm);
+  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
   function phoneTab(which: 'room' | 'work') {
@@ -231,6 +237,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     drawWork();
     drawBoard();
     drawWorkItems();
+    drawChanges();
     drawTabs();
   }
 
@@ -242,6 +249,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     if (tabSpecs.textContent !== specsLabel) tabSpecs.textContent = specsLabel;
     if (tabBoard.textContent !== boardLabel) tabBoard.textContent = boardLabel;
     tabWorkItems.setAttribute('aria-selected', String(workTab === 'work'));
+    tabChanges.setAttribute('aria-selected', String(workTab === 'changes'));
+    changeList.hidden = workTab !== 'changes';
     tabSpecs.setAttribute('aria-selected', String(workTab === 'specs'));
     tabBoard.setAttribute('aria-selected', String(workTab === 'board'));
     workList.hidden = workTab !== 'work';
@@ -531,6 +540,24 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
           )))
         : h('div', { class: 'empty' }, h('h3', null, 'No work yet'), h('p', null, 'A work item names what needs doing and the elements it is about, so anyone in the room can pick it up.')),
       room.canWrite && !workOpen ? h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'button', onclick: openWorkForm }, 'Add a work item')) : null,
+    );
+  }
+
+  /** The world's recent changes: who, which door, an AI's rows marked (sheet §2). Drawn only when the list moved. */
+  let changesKey = '';
+  function drawChanges(): void {
+    const rows = room.changes().map(c => ({ c, who: room.name(c.by), ai: room.isAi(c.by, c.el.changed_via), door: doorLine(c.el), fresh: !!seenBefore && c.at > seenBefore }));
+    const key = JSON.stringify(rows.map(r => [r.c.id, r.c.name, r.c.at, r.who, r.ai, r.door, r.fresh]));
+    if (key === changesKey) return;
+    changesKey = key;
+    clear(changeList,
+      h('p', { class: 'sys' }, seenBefore ? 'What changed in the world, newest first; new since you last opened the room are marked.' : 'What changed in the world, newest first.'),
+      rows.length ? h('ul', { class: 'changes' }, rows.map(({ c, who, ai, door, fresh }) => h('li', { class: ai ? 'ai' : '' },
+        h('span', { class: ai ? 'bdg a' : 'bdg' }, ai ? 'AI' : initial(who)),
+        h('div', null,
+          h('div', null, h('span', { class: 'nm' }, c.name), ' ', h('span', { class: 't' }, c.type.charAt(0).toUpperCase() + c.type.slice(1)), fresh ? h('span', { class: 'chip on' }, 'New') : null),
+          h('div', { class: 't' }, [`${c.made ? 'made' : 'changed'} by ${who}`, ai ? 'an AI' : '', door ?? '', hhmm(c.at)].filter(Boolean).join(' · '))))))
+        : h('div', { class: 'empty' }, h('h3', null, 'Nothing yet'), h('p', null, 'When someone adds to the world or changes it, it shows here.')),
     );
   }
 

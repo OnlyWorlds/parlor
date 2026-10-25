@@ -4,7 +4,7 @@ import {
   readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, readCharter, PHASES, phaseOf,
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
-  readWork, newWorkItem, isPickable,
+  readWork, newWorkItem, isPickable, readChanges,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.65, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -337,5 +337,18 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     expect(body.relations).toEqual(['wi']);
     expect('parent_narrative' in body).toBe(false);
     expect(readLines([el({ id: 'l', type: 'narrative', supertype: 'Message', relations: ['wi'] })])[0].about).toBe('wi');
+  });
+});
+
+describe('recent changes (sheet §2)', () => {
+  it("the world's own elements, newest change first; room elements are not changes; who from changed_by, else the maker", () => {
+    const c = readChanges([
+      lore({ id: 'a', type: 'Character', name: 'Ana', created_at: '2026-10-25T08:00:00Z', updated_at: '2026-10-25T09:00:00Z', changed_by: 'm2', created_by: 'm1' }),
+      lore({ id: 'b', type: 'location', name: '', created_at: '2026-10-25T08:30:00Z', updated_at: '2026-10-25T08:30:00Z', created_by: 'm1' }),
+      lore({ id: 'o', type: 'object', created_at: '2026-10-25T07:00:00Z', updated_at: '2026-10-25T07:00:00Z', changed_by: null }),
+      el({ id: 'line', type: 'narrative', supertype: 'Message', updated_at: '2026-10-25T10:00:00Z' }),
+    ]);
+    expect(c.map(x => [x.id, x.type, x.by, x.made])).toEqual([['a', 'character', 'm2', false], ['b', 'location', 'm1', true], ['o', 'object', OWNER, true]]);
+    expect(c[1].name).toBe('Untitled');
   });
 });

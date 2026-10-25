@@ -585,6 +585,36 @@ export function isPickable(el: El): boolean {
   return !!LINK_FIELDS[fold(el.type)] && !isRoomElement(el as Parameters<typeof isRoomElement>[0]) && el.hidden !== true && el.known_of !== true;
 }
 
+// ---------------------------------------------------------------- recent changes
+
+export interface Change {
+  id: string;
+  type: string;
+  name: string;
+  /** Who last changed it: changed_by, else (an element no v2 write touched) who made it. */
+  by: string;
+  at: string;
+  /** Never changed since it was made. */
+  made: boolean;
+  el: El;
+}
+
+/**
+ * The world's own elements, newest change first (sheet §2: a world's parlor's work surface). Room
+ * elements are the room, not changes to the world, so they are left out.
+ */
+export function readChanges(els: Iterable<El>, max = 40): Change[] {
+  const out: Change[] = [];
+  for (const el of els) {
+    if (isRoomElement(el as Parameters<typeof isRoomElement>[0])) continue;
+    const at = el.updated_at ?? el.created_at ?? '';
+    if (!at) continue;
+    const by = 'changed_by' in el ? (typeof el.changed_by === 'string' && el.changed_by ? el.changed_by : OWNER) : whoMade(el);
+    out.push({ id: el.id, type: fold(el.type), name: (el.name ?? '').toString().trim() || 'Untitled', by, at, made: !!el.created_at && el.created_at === el.updated_at, el });
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id)).slice(0, max);
+}
+
 // ---------------------------------------------------------------- the charter
 
 export interface Charter {

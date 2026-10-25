@@ -359,6 +359,14 @@ try {
   await memberItem.getByRole('button', { name: 'Delete it' }).click();
   check('host: Delete takes the item away', await until(() => hostItem.isHidden(), 10000));
   await shot(host, 'host-work');
+
+  // Changes (sheet §2): the lore Character the walk made shows, who and which door; the room's own
+  // elements (the work item, the lines) are the room, never a change to the world.
+  await host.getByRole('tab', { name: /^Changes/ }).click();
+  const loreRow = host.locator('.changes li', { hasText: loreName });
+  check('host: the world\'s change shows, said as a script\'s', await until(async () => (await loreRow.innerText()).includes('through a script'), 8000));
+  check('host: a room line is not a change to the world', !(await host.locator('.changes').getByText(workAnswer).count()) && !(await host.locator('.changes').getByText(lineText).count()));
+  await shot(host, 'host-changes');
   await m.getByRole('tab', { name: /^Specs/ }).click();
   await host.getByRole('tab', { name: /^Specs/ }).click();
 

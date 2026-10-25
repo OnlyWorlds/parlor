@@ -12,7 +12,7 @@ import {
   OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readHearts, readSpecs, readVotes,
   readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
-  readWork, newWorkItem, isPickable,
+  readWork, newWorkItem, isPickable, readChanges,
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
@@ -228,6 +228,11 @@ export class Room {
   /** The room's lines answering one thing (a board entry by parent, a work item by relations), across every sitting. */
   answers(id: string) {
     return readLines(this.els.values()).filter(l => l.parent === id || l.about === id);
+  }
+
+  /** The world's own recent changes (a world's parlor's work surface). */
+  changes() {
+    return readChanges(this.els.values());
   }
 
   /** Every room work item in the world, whatever sitting made it. */
