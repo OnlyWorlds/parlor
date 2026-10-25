@@ -1,62 +1,39 @@
 # OnlyWorlds Parlor
 
-A room on an [OnlyWorlds](https://www.onlyworlds.com) world, where people and their AI meet, talk, and leave with things built into the world: lines in the room, a board of what waits on whom, work items that point at the world's own elements, and a workshop's specs, hearts and votes. Everything it writes is saved in the world itself, so every OnlyWorlds tool can read it. You need an OnlyWorlds account ([create one](https://www.onlyworlds.com/signup)) and an invite to a world.
+A chat room that lives inside an [OnlyWorlds](https://www.onlyworlds.com) world. People and their AI talk there, keep a board of what is waiting on whom, and hand out work about the world's own characters, places and the rest. Everything the room writes is saved in the world itself, as ordinary world elements, so any OnlyWorlds tool can read it.
 
-**The parlor lives at parlor.onlyworlds.com**, not yet announced: the first workshops are run by the OnlyWorlds team. This repository is its build, readable and runnable on your own machine.
+A parlor can also run a **workshop**: an event in phases where people pitch **specs** (ideas to build), give **hearts** to the ones they like, vote, and the host names a winner. Each run of a workshop is a **sitting**.
 
-The first parlor is the Workshop, OnlyWorlds' February event tool, rebuilt so each person writes with their own account. Its design lives in the crew's design sheet (OW Parlor #485, outside this repository); this repository is its build (#481 the ground, #486 the build). `keel` in these files is the server behind onlyworlds.com.
-
-**Who writes this repository.** The parlor is built by Temper, one of a crew of AI minds working with Titus, the OnlyWorlds founder (called the Captain in these files). Commit messages and comments are that crew's working record: names (Skeld, Seethe, Boss, TC, Kael), item and room references (#486, h66 #12834) and paths into the crew's own folders (`Forge/Notes/...`, `Orrery/...`) point at records outside this repository.
-
-**State (2026-10-25)**: walked live on onlyworlds.com in Chromium and Firefox at every change since 10-22 (the room, the six phases, specs, hearts and votes, the Board, work items, recent changes, Sign in with OnlyWorlds). The Workshop stays live at its old host until the parlor replaces it.
-
----
+It lives at [parlor.onlyworlds.com](https://parlor.onlyworlds.com). You need an OnlyWorlds account ([create one](https://www.onlyworlds.com/signup)) and an invite to a world from its owner.
 
 ## Run it
 
 ```bash
 npm install
-npm run dev       # localhost:30335; a dev run may add ?api=<staging base>/api/v2 (never in a production build)
-npm test          # vitest: the shapes, the feed, the roster rules, the write queue
-npm run build     # dist/, a static app with no server and no key in it
+npm run dev       # a local copy at http://localhost:30335
+npm test          # unit tests
+npm run build     # dist/: static files only, with no secret in them
 ```
+
+A local copy signs in with your OnlyWorlds email and password. The "Sign in with OnlyWorlds" button appears only on parlor.onlyworlds.com, since that is the one address onlyworlds.com sends people back to.
 
 ## How it works
 
-- **Each person on their own credential.** On parlor.onlyworlds.com the landing's Entry is **Sign in with OnlyWorlds** (keel's handoff, #515; `src/parlor/signin.ts`): the browser goes to onlyworlds.com and comes back to `/signin/callback` with an account token, using whichever account is signed in there, so an invite that comes back this way asks "Join <world> as <name>" before it is spent. The SDK's email and password sign-in sits behind "Sign in with a password", and is the only door on any other host (a preview, localhost), since keel returns only to the registered address. Either way this browser holds an account token, which mints a world key on the person's own seat; keys and the PIN outlive a new sign-in only for the same account. The password is never kept; the token, keys and PIN stay in this browser. An account without a PIN reads with a read key and is told how to write.
-- **Joining**: an invite link, as `#/join/<code>` on the parlor, or keel's own link pasted on the parlors page. A person's link is spent by its first join.
-- **The room follows the world's feed**: `GET /changes?head=true` every 2 s (15 s with the tab hidden), a walk only when the head or the view's epoch moved (`src/parlor/feed.ts`).
-- **What each thing is** (`src/parlor/shapes.ts`): a line is a Narrative (supertype Message), a spec a Construct (Spec; its subtype its kind: Tool, Modelling, Feature or World), a heart and a vote are Relations made by the hearter or voter, a sitting is an Event whose subtype is the phase, whose switches are `x_hearts_on`, `x_specs_shown`, `x_voting_open`, and whose winner is `x_star`, the winning spec's id (sheet §6 point 13; a sitting made before 2026-10-26 that names none reads February's subtype star), a board entry a Narrative (Board; subtype red, orange or green; `characters` whom it waits on; answered by a line whose `parent_narrative` is the entry), a work item a Relation (Work item; `actor` whom it is for, the elements it is about in its typed link fields, subtype open or done; a landed packet's `x_packet_elements` read with their reasons, never written; answered by a line whose `relations` is the item), the charter a Law (Charter). The board and the work list show every room entry whatever sitting raised it; its maker, the host or a co-host takes an entry off, closes, reopens or deletes an item. Taking a work item waits on a ninth room pair, relation/Take (asked of Skeld, h66 #12900). A person with no Character names themselves once (a Character, supertype Member; h66 #9720).
-- **The room mark** (schema-dist `profiles/room.md`): everything the room makes carries `x_room_of` from its first write (a line, spec, heart or vote the newest sitting's id; a sitting and a member's card the world's), and the room reads only elements with the pair and the mark (the SDK's `isRoomElement`), so a world's own lore in the same words never shows as the room. A sitting's specs, hearts and votes are those it marked: each new sitting starts clean, and an earlier sitting is read, never changed. Lines stay grouped by time.
-- **Who wrote it** is `created_by`, never text. The AI mark reads the roster's kind, the door only as a fallback.
-- **The host** (the world's owner, or a co-builder) runs the phases, starts sittings, picks the winner, and hides lines with keel's hidden mark. Writes go one at a time, in order.
+- **Each person signs in as themselves.** The parlor has no server of its own: the page talks straight to onlyworlds.com with the person's own sign-in, and each person writes in a world with their own access to it (no shared key). The password goes to onlyworlds.com and is not stored by the parlor.
+- **Joining** takes an invite link from the world's owner. An invite made for one person is used up when they join.
+- **The room stays current** by asking onlyworlds.com what changed in the world, every two seconds while the tab is in front (`src/parlor/feed.ts`).
+- **What the room writes** (`src/parlor/shapes.ts`) uses the world's own element types: a message is a Narrative, a spec a Construct, a heart, a vote, a work item and a take on one are Relations, a sitting an Event. Each carries a room mark (`x_room_of`, from OnlyWorlds' published room profile), which is how the parlor, and any tool that reads the mark, tells the room's talk apart from the world's own story.
+- **Who wrote something** comes from the element's recorded author, not from anything in its text, and lines written by an AI are labelled as such.
+- **The host** (the world's owner, or someone they made a co-builder) runs a workshop's phases, names its winner, and can hide a line.
 
-## Walk it live (the crew's)
+## Testing
 
-This section needs the crew's test accounts; outside the crew, `npm test` is the check. `walk/` drives production keel with the crew's test accounts (claim them in h57 first; their logins live in a file outside this repository, named by `CREW_WALK_ACCOUNTS`, and are never printed):
-
-```bash
-export CREW_WALK_ACCOUNTS=<the crew's accounts file>
-export WALK_STATE=<a file outside the repo>
-node walk/seed.mjs crew-walk-b     # the test world, its charter, fresh invite links (it deletes nothing)
-npx vite preview --port 30336      # the built bundle
-node walk/walk.mjs chromium        # host crew-walk-c, crew-walk-d's PIN-less door, member crew-walk-b
-node walk/walk.mjs firefox
-node walk/teardown.mjs             # takes back only what the state recorded, read back 401
-```
-
-Sign in with OnlyWorlds has two walks of its own. `node walk/signin-oauth.mjs [chromium|firefox]` plays keel and serves `https://parlor.onlyworlds.com` from `dist/` under its `_headers` and `_redirects` (no account needed; `DIST=<dir>` for a control). `node walk/live-signin-ow.mjs <out-prefix> [engine] [crew-walk-b]` uses real keel and a crew account signed in on onlyworlds.com, from `DIST` when set, else the live host, and revokes the token the parlor kept by its id.
-
-The test world is "Parlor ground (crew test)", owned by crew-walk-c; it stays between walks, and each walk starts a new sitting, which is its clean slate. The walk plants lore decoys (the room's words, no mark) and reads the mark back from keel; every key, token and decoy it makes is recorded in `WALK_STATE` by id or last four, and teardown touches nothing else. A control: serve an older build on another port and pass `PARLOR_URL`.
+`npm test` runs anywhere. The `walk/` folder holds browser tests that drive the live site with test accounts the OnlyWorlds team keeps outside this repository; `walk/README.md` describes them.
 
 ## Licence and contributions
 
-The code is MIT (`LICENSE`). The OnlyWorlds name, the logo and the look are not: see `NOTICE`, and give a fork its own name. Issues are welcome: a bug, a wrong word, a thing you could not do. Pull requests are read; a small fix is usually taken as is, and a change to how the parlor works is better opened as an issue first, since we may already be building it or have ruled it out. Temper reads and answers its issues and pull requests; until the crew posts from an identity of its own, those replies post from the founder's account, so a reply from `tmoosting` may be Temper's. A reply can take a few days. What we ask at the door, and what you can expect: the [code of conduct](https://github.com/OnlyWorlds/OnlyWorlds/blob/main/CODE_OF_CONDUCT.md).
+The code is MIT (`LICENSE`). The OnlyWorlds name, the logo and the look are not: see `NOTICE`, and give a fork its own name.
 
-No secret ever goes into this repository or into anything the browser loads.
+Issues are welcome: a bug, a wrong word, something you could not do. A small fix as a pull request is usually taken as is; for a change to how the parlor works, open an issue first, since it may already be planned. A reply can take a few days. The [code of conduct](https://github.com/OnlyWorlds/OnlyWorlds/blob/main/CODE_OF_CONDUCT.md) says what we ask and what you can expect. Security reports: `SECURITY.md`.
 
-## Records
-
-February's tool (the proxy, one shared key, `?host=` mode) and its docs stay in the Workshop's own repository (`OnlyWorlds/workshop-tool`), archived once the parlor replaces it. Security reports: `SECURITY.md`.
-
-**Authors**: TC + Titus + Skeld + Temper; the look from Seethe's parlor screens.
+**Who builds it.** The parlor is built by an AI working with Titus Oosting, the OnlyWorlds founder, and its answers to issues are posted from his account. Commit messages are the team's working notes and refer to records kept outside this repository.
