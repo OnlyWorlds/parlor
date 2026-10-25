@@ -1,6 +1,6 @@
 /**
  * The room page (design sheet §3, Seethe's v1 screens 3, 4, 5, 7 and 10): the
- * room on the left, the work surface beside it (Specs and the Board as tabs);
+ * room on the left, the work surface beside it (Work, Specs and the Board as tabs);
  * on a phone, one at a time. The composer, the forms and the tabs are built
  * once and never redrawn, so a feed tick never eats what someone is typing or
  * pressing; the rest redraws from the room's elements.
@@ -21,8 +21,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
   let picks: string[] = [];
   let specOpen = false;
   let boardOpen = false;
-  let workTab: 'specs' | 'board' = 'specs';
-  let replyTo: { id: string; title: string } | null = null;
+  // A workshop opens on its specs; a world's parlor (no sitting yet) on its work.
+  let workTab: 'work' | 'specs' | 'board' = room.sittings().length ? 'specs' : 'work';
+  let workOpen = false;
+  let replyTo: { id: string; title: string; kind: 'board' | 'work' } | null = null;
   let stickToEnd = true;
 
   // -------------------------------------------------- the composer (built once)
@@ -36,7 +38,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
       if (!t) return;
       sendBtn.disabled = true;
       try {
-        await room.post(t, replyTo?.id ?? null);
+        await room.post(t, replyTo?.kind === 'board' ? replyTo.id : null, replyTo?.kind === 'work' ? replyTo.id : null);
         text.value = '';
         replyTo = null;
         drawReply();
@@ -135,14 +137,79 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     boardTitle.focus();
   }
 
+  // -------------------------------------------------- a work item (built once)
+  const workTitle = h('input', { id: 'work-title', type: 'text', maxlength: 200 });
+  const workFor = h('select', { id: 'work-for' });
+  const workText = h('textarea', { id: 'work-text', class: 'field', rows: 3 });
+  const workFind = h('input', { id: 'work-find', type: 'search', autocomplete: 'off', placeholder: 'Type a name from the world' });
+  const workFound = h('ul', { class: 'found' });
+  const workPicked = h('div', { class: 'picked' });
+  let picksAbout: { type: string; id: string; name: string }[] = [];
+  const typeWord = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+  function drawPicked(): void {
+    clear(workPicked, picksAbout.map(p => h('span', { class: 'chip el' }, `${p.name} · ${typeWord(p.type)} `,
+      h('button', { class: 'act', type: 'button', 'aria-label': `Remove ${p.name}`, onclick: () => {
+        picksAbout = picksAbout.filter(x => x.id !== p.id);
+        drawPicked();
+      } }, '×'))));
+  }
+  function drawFound(): void {
+    const hits = room.pickable(workFind.value, new Set(picksAbout.map(p => p.id)));
+    clear(workFound, hits.map(x => h('li', null, h('button', { type: 'button', onclick: () => {
+      picksAbout = [...picksAbout, x];
+      workFind.value = '';
+      drawFound();
+      drawPicked();
+      workFind.focus();
+    } }, `${x.name} · ${typeWord(x.type)}`))));
+  }
+  workFind.addEventListener('input', drawFound);
+  const workForm = h('form', {
+    class: 'card',
+    hidden: true,
+    onsubmit: async (e: Event) => {
+      e.preventDefault();
+      if (!workTitle.value.trim()) return;
+      try {
+        await room.makeWork(workTitle.value, workText.value, workFor.value || null, picksAbout);
+        workOpen = false;
+        draw();
+      } catch (err) {
+        // A picked element deleted meanwhile is refused by keel: the form keeps what was typed.
+        notice(problemLine(err, 'adding the work item'), true);
+      }
+    },
+  },
+    h('label', { for: 'work-title' }, 'What needs doing?'), workTitle,
+    h('label', { for: 'work-for' }, 'For'), workFor,
+    h('label', { for: 'work-text' }, 'Why'), workText,
+    h('label', { for: 'work-find' }, 'What it is about'), workFind, workFound, workPicked,
+    h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'submit' }, 'Add the work item'),
+      h('button', { class: 'btn quiet', type: 'button', onclick: () => { workOpen = false; draw(); } }, 'Cancel')),
+  );
+  function openWorkForm(): void {
+    workOpen = true;
+    workTitle.value = '';
+    workText.value = '';
+    workFind.value = '';
+    picksAbout = [];
+    drawFound();
+    drawPicked();
+    clear(workFor, h('option', { value: '' }, 'Anyone'), room.writers().map(w => h('option', { value: w.character }, w.name)));
+    draw();
+    workTitle.focus();
+  }
+
   // -------------------------------------------------- the work tabs (built once)
+  const tabWorkItems = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'work'; draw(); } }, 'Work');
   const tabSpecs = h('button', { type: 'button', role: 'tab', 'aria-selected': 'true', onclick: () => { workTab = 'specs'; draw(); } }, 'Specs');
   const tabBoard = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'board'; draw(); } }, 'Board');
-  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Work' }, tabSpecs, tabBoard);
+  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Work' }, tabWorkItems, tabSpecs, tabBoard);
   const board = h('div');
+  const workList = h('div');
   // -------------------------------------------------- the layout
   const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? send : null);
-  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, work, specForm, board, boardForm);
+  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, work, specForm, board, boardForm);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
   function phoneTab(which: 'room' | 'work') {
@@ -163,18 +230,24 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     drawHost();
     drawWork();
     drawBoard();
+    drawWorkItems();
     drawTabs();
   }
 
   function drawTabs(): void {
+    const workLabel = `Work ${room.work().filter(w => w.state !== 'done').length}`;
     const specsLabel = `Specs ${room.specs().length}`;
     const boardLabel = `Board ${room.board().length}`;
+    if (tabWorkItems.textContent !== workLabel) tabWorkItems.textContent = workLabel;
     if (tabSpecs.textContent !== specsLabel) tabSpecs.textContent = specsLabel;
     if (tabBoard.textContent !== boardLabel) tabBoard.textContent = boardLabel;
+    tabWorkItems.setAttribute('aria-selected', String(workTab === 'work'));
     tabSpecs.setAttribute('aria-selected', String(workTab === 'specs'));
     tabBoard.setAttribute('aria-selected', String(workTab === 'board'));
+    workList.hidden = workTab !== 'work';
     work.hidden = workTab !== 'specs';
     board.hidden = workTab !== 'board';
+    workForm.hidden = !(workOpen && workTab === 'work');
     specForm.hidden = !(specOpen && workTab === 'specs');
     boardForm.hidden = !(boardOpen && workTab === 'board');
   }
@@ -216,9 +289,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     }
     nameCard.hidden = !room.needsName();
     const ls = room.lines();
-    const entries = new Map(room.board().map(e => [e.id, e]));
+    const entries = new Map<string, { title: string }>(room.board().map(e => [e.id, e]));
+    for (const w of room.work()) entries.set(w.id, w);
     clear(lines, ls.length ? ls.map(l => {
-      const answering = l.parent ? entries.get(l.parent) : undefined;
+      const answering = (l.parent ? entries.get(l.parent) : undefined) ?? (l.about ? entries.get(l.about) : undefined);
       const ai = room.isAi(l.by, l.el.changed_via);
       const name = room.name(l.by);
       const hidden = room.hidden.has(l.id);
@@ -259,9 +333,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
       h('div', { class: 'row' }, input, h('button', { class: 'btn entry', type: 'submit' }, 'Save')));
   }
 
-  async function hide(id: string, on: boolean) {
+  async function hide(id: string, on: boolean, type = 'narrative') {
     try {
-      await room.hide('narrative', id, on);
+      await room.hide(type, id, on);
       draw();
     } catch (err) {
       notice(problemLine(err, on ? 'hiding the line' : 'unhiding the line'), true);
@@ -316,6 +390,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     const live = room.canWrite && !room.browsing;
     if (!live && specOpen) specOpen = false;
     if (!room.canWrite && boardOpen) boardOpen = false;
+    if (!room.canWrite && workOpen) workOpen = false;
     const voting = !!s?.voting && !room.browsing;
     if (voting && !picks.length) picks = room.myVote()?.picks ?? [];
 
@@ -392,7 +467,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
           hidden ? (room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : ''].filter(Boolean).join(' · ')) : null,
         h('div', { class: 'btns' },
           room.canWrite ? h('button', { class: 'btn std', type: 'button', onclick: () => {
-            replyTo = { id: e.id, title: e.title || 'Untitled' };
+            replyTo = { id: e.id, title: e.title || 'Untitled', kind: 'board' };
             drawReply();
             if (mq.matches) phoneTab('room');
             text.focus();
@@ -404,6 +479,58 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
         )))
         : h('div', { class: 'empty' }, h('h3', null, 'Nothing waits'), h('p', null, 'When something waits on someone, put it here so it is not lost in the room.')),
       room.canWrite && !boardOpen ? h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'button', onclick: openBoardForm }, 'Put something on the board')) : null,
+    );
+  }
+
+  /** The work list, rebuilt only when what it shows moved (as the board). */
+  let workKey = '';
+  let deleting: string | null = null;
+  const STATE_WORD = { open: 'Open', taken: 'Taken', done: 'Done' } as const;
+  function drawWorkItems(): void {
+    const view = room.work().map(w => ({
+      w, can: room.canRetire(w.by), hidden: room.hidden.has(w.id) || (!room.isHost && w.el.hidden === true),
+      who: w.forWho ? room.characterName(w.forWho) : 'anyone', by: room.name(w.by), answers: room.answers(w.id).length,
+      els: w.elements.map(x => ({ ...x, name: w.otherWorld ? null : room.elementName(x.id) })),
+    }));
+    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.by, v.answers, v.els]),
+      room.canWrite, room.isHost, workOpen, deleting]);
+    if (key === workKey) return;
+    workKey = key;
+    clear(workList,
+      h('p', { class: 'sys' }, 'Work on this world: each item says what it is about, and opens in the room when you answer it.'),
+      view.length ? view.map(({ w, can, hidden, who, by, answers, els }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
+        h('div', { class: 'ttl' }, h('span', { class: `chip s-${w.state}` }, STATE_WORD[w.state]), w.proposed ? h('span', { class: 'chip prop' }, 'Proposed') : null,
+          h('h3', null, w.title || 'Untitled')),
+        h('div', { class: 'm' }, `For ${who} · made by ${by}`),
+        w.text ? h('p', null, w.text) : null,
+        els.length ? h('ul', { class: 'about' }, els.map(x => h('li', null,
+          h('span', { class: 'chip el' }, w.otherWorld ? `In another world · ${typeWord(x.type)}` : x.name === null ? `Missing · ${typeWord(x.type)}` : `${x.name} · ${typeWord(x.type)}`),
+          x.reason ? h('span', { class: 'why' }, x.reason) : null))) : null,
+        answers || hidden ? h('div', { class: 'm' }, [answers ? `${answers} answer${answers === 1 ? '' : 's'} in the room` : '',
+          hidden ? (room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : ''].filter(Boolean).join(' · ')) : null,
+        deleting === w.id
+          ? h('div', { class: 'btns' }, h('span', { class: 'sys' }, 'Delete this work item for everyone?'),
+            h('button', { class: 'btn std', type: 'button', onclick: async () => {
+              deleting = null;
+              try { await room.deleteWork(w.id); } catch (err) { notice(problemLine(err, 'deleting the work item'), true); }
+              draw();
+            } }, 'Delete it'),
+            h('button', { class: 'btn quiet', type: 'button', onclick: () => { deleting = null; draw(); } }, 'Keep it'))
+          : h('div', { class: 'btns' },
+            room.canWrite ? h('button', { class: 'btn std', type: 'button', onclick: () => {
+              replyTo = { id: w.id, title: w.title || 'Untitled', kind: 'work' };
+              drawReply();
+              if (mq.matches) phoneTab('room');
+              text.focus();
+            } }, 'Answer') : null,
+            can ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
+              try { await room.setWorkState(w.id, w.state === 'done' ? 'open' : 'done'); } catch (err) { notice(problemLine(err, 'changing the work item'), true); }
+            } }, w.state === 'done' ? 'Reopen' : 'Mark done') : null,
+            can ? h('button', { class: 'btn quiet', type: 'button', onclick: () => { deleting = w.id; draw(); } }, 'Delete') : null,
+            room.isHost ? h('button', { class: 'btn quiet', type: 'button', onclick: () => hide(w.id, !hidden, 'relation') }, hidden ? 'Unhide' : 'Hide') : null,
+          )))
+        : h('div', { class: 'empty' }, h('h3', null, 'No work yet'), h('p', null, 'A work item names what needs doing and the elements it is about, so anyone in the room can pick it up.')),
+      room.canWrite && !workOpen ? h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'button', onclick: openWorkForm }, 'Add a work item')) : null,
     );
   }
 

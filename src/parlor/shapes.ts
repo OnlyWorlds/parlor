@@ -10,6 +10,8 @@
  *   a vote      Relation,  supertype Vote: actor the voter, constructs the picks in order
  *   a sitting   Event,     supertype Sitting: subtype the phase; the switches and x_star as x_ fields
  *   a board entry Narrative, supertype Board: subtype red, orange or green; characters whom it waits on
+ *   a work item Relation,  supertype Work item: actor whom it is for, the elements it is about in the
+ *               Relation's typed link fields, subtype open, taken or done (schema-dist profiles/packet.md)
  *   the charter Law,       supertype Charter
  *   a member    Character, supertype Member: a person's own name in the room when their seat has no
  *               Character (an invite link gives a person none; h66 #9720, until keel's roster names them)
@@ -111,6 +113,8 @@ export interface Line {
   by: string;
   narrator: string | null;
   parent: string | null;
+  /** The work item a line answers: a Narrative cannot point at a Relation by parent_narrative, so `relations`. */
+  about: string | null;
   at: string;
   el: El;
 }
@@ -125,6 +129,7 @@ export function readLines(els: Iterable<El>): Line[] {
       by: whoMade(el),
       narrator: link(el, 'narrator'),
       parent: link(el, 'parent_narrative'),
+      about: links(el, 'relations')[0] ?? null,
       at: el.created_at ?? '',
       el,
     });
@@ -138,7 +143,7 @@ export function lineName(text: string): string {
   return one.length <= 60 ? one : one.slice(0, 59).trimEnd() + '…';
 }
 
-export function newLine(text: string, narrator: string | null, parent: string | null, roomOf: string): Record<string, unknown> {
+export function newLine(text: string, narrator: string | null, parent: string | null, roomOf: string, about: string | null = null): Record<string, unknown> {
   const body: Record<string, unknown> = {
     name: lineName(text),
     description: text,
@@ -147,6 +152,7 @@ export function newLine(text: string, narrator: string | null, parent: string | 
   };
   if (narrator) body.narrator = narrator;
   if (parent) body.parent_narrative = parent;
+  if (about) body.relations = [about];
   return body;
 }
 
@@ -472,6 +478,111 @@ export function newBoardEntry(
   };
   if (narrator) body.narrator = narrator;
   return body;
+}
+
+// ---------------------------------------------------------------- work items
+
+/**
+ * The Relation's link field for each type it can point at (keel schema/relation.yaml). Law, Map,
+ * Pin, Marker and Relation have none, so a work item made here cannot be about them.
+ */
+export const LINK_FIELDS: Readonly<Record<string, string>> = {
+  character: 'characters', object: 'objects', location: 'locations', species: 'species', creature: 'creatures',
+  institution: 'institutions', trait: 'traits', collective: 'collectives', zone: 'zones', ability: 'abilities',
+  phenomenon: 'phenomena', language: 'languages', family: 'families', title: 'titles', construct: 'constructs',
+  narrative: 'narratives', event: 'events',
+};
+
+export type WorkState = 'open' | 'taken' | 'done';
+
+export interface WorkElement {
+  type: string;
+  id: string;
+  /** A packet's one sentence on why (x_packet_elements); null for a typed link. */
+  reason: string | null;
+}
+
+export interface WorkItem {
+  id: string;
+  title: string;
+  text: string;
+  state: WorkState;
+  /** The Character it is for; null for anyone. */
+  forWho: string | null;
+  by: string;
+  at: string;
+  elements: WorkElement[];
+  /** The packet's ids belong to another world (x_packet_source): read there, never here. */
+  otherWorld: boolean;
+  /** An agent's write waiting for review (schema-dist profiles/review.md: x_review_proposed set). */
+  proposed: boolean;
+  el: El;
+}
+
+/** The packet's valid entries (each of type, id and reason a string), or null when it has none. */
+function packetElements(el: El): WorkElement[] | null {
+  const v = el.x_packet_elements;
+  if (!Array.isArray(v)) return null;
+  const out: WorkElement[] = [];
+  for (const e of v) {
+    if (!e || typeof e !== 'object') continue;
+    const { type, id, reason } = e as Record<string, unknown>;
+    if (typeof type === 'string' && typeof id === 'string' && typeof reason === 'string') out.push({ type: fold(type), id, reason });
+  }
+  return out.length ? out : null;
+}
+
+/** Every room work item in the world, whatever sitting made it: open and taken first, done last, newest first within. */
+export function readWork(els: Iterable<El>, worldId: string): WorkItem[] {
+  const out: WorkItem[] = [];
+  for (const el of els) {
+    if (!isA(el, 'relation', SUPERTYPE.workItem)) continue;
+    const word = fold(el.subtype);
+    const packet = packetElements(el);
+    const source = el.x_packet_source as { world?: unknown } | null | undefined;
+    const elements = packet ?? Object.entries(LINK_FIELDS).flatMap(([type, field]) => links(el, field).map(id => ({ type, id, reason: null })));
+    out.push({
+      id: el.id,
+      title: (el.name ?? '').toString(),
+      text: (el.description ?? '').toString(),
+      state: word === 'done' ? 'done' : word === 'taken' ? 'taken' : 'open',
+      forWho: link(el, 'actor'),
+      by: whoMade(el),
+      at: el.created_at ?? '',
+      elements,
+      otherWorld: !!packet && !!source && typeof source.world === 'string' && source.world !== worldId,
+      proposed: el.x_review_proposed !== undefined && el.x_review_proposed !== null,
+      el,
+    });
+  }
+  const rank = (s: WorkState) => (s === 'done' ? 1 : 0);
+  return out.sort((a, b) => rank(a.state) - rank(b.state) || b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+}
+
+/** A new work item: the picked elements in their typed link fields (a type with no field is left out), subtype open. */
+export function newWorkItem(
+  title: string, text: string, forWho: string | null, picks: ReadonlyArray<{ type: string; id: string }>, roomOf: string,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    name: title.trim().slice(0, 200),
+    description: text,
+    supertype: SUPERTYPE.workItem,
+    subtype: 'open',
+    [ROOM_MARK]: roomOf,
+  };
+  if (forWho) body.actor = forWho;
+  for (const p of picks) {
+    const field = LINK_FIELDS[p.type];
+    if (!field) continue;
+    const had = (body[field] as string[] | undefined) ?? [];
+    if (!had.includes(p.id)) body[field] = [...had, p.id];
+  }
+  return body;
+}
+
+/** What a person may pick as what a work item is about: the world's own elements, never the room's or a hidden one. */
+export function isPickable(el: El): boolean {
+  return !!LINK_FIELDS[fold(el.type)] && !isRoomElement(el as Parameters<typeof isRoomElement>[0]) && el.hidden !== true && el.known_of !== true;
 }
 
 // ---------------------------------------------------------------- the charter

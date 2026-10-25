@@ -98,3 +98,17 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .chip.c-green{color:var(--ok);border-color:var(--ok)}
 .card.bentry.hidden h3,.card.bentry.hidden p{color:var(--muted)}
 .reply{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:10px;font-size:13px;color:var(--muted)}
+.found{list-style:none;margin:4px 0 0;padding:0}
+.found li button{width:100%;text-align:left;background:var(--surf2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;margin:0 0 4px;cursor:pointer;font-size:14px}
+.found li button:hover,.found li button:focus-visible{border-color:var(--accent);outline:none}
+.picked{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip.el{color:var(--text);font-size:13px}
+.chip.el .act{font-size:14px;border:0;background:transparent;color:var(--accent);cursor:pointer;padding:0 0 0 2px}
+.about{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.about .why{color:var(--muted);font-size:13px;margin-left:8px}
+.chip.s-open{color:var(--accent);border-color:var(--accent)}
+.chip.s-taken{color:var(--warn);border-color:var(--warn)}
+.chip.s-done{color:var(--ok);border-color:var(--ok)}
+.chip.prop{border-style:dashed;color:var(--text)}
+.card.witem.done h3,.card.witem.done p{color:var(--muted)}
+.card.witem.hidden h3,.card.witem.hidden p{color:var(--muted)}

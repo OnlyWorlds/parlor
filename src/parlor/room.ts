@@ -12,7 +12,9 @@ import {
   OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readHearts, readSpecs, readVotes,
   readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
+  readWork, newWorkItem, isPickable,
 } from './shapes';
+import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
 
 function newestOf<T extends { at: string }>(xs: T[]): T | null {
@@ -223,9 +225,41 @@ export class Room {
     return left ? `${name} (left)` : name;
   }
 
-  /** The room's lines answering one thing (a board entry), across every sitting. */
-  answers(parent: string) {
-    return readLines(this.els.values()).filter(l => l.parent === parent);
+  /** The room's lines answering one thing (a board entry by parent, a work item by relations), across every sitting. */
+  answers(id: string) {
+    return readLines(this.els.values()).filter(l => l.parent === id || l.about === id);
+  }
+
+  /** Every room work item in the world, whatever sitting made it. */
+  work() {
+    return readWork(this.els.values(), this.world.id);
+  }
+
+  /** Whom a work item can be for: a seat that can write, with a Character (a guest never reads a Relation by actor). */
+  writers(): { character: string; name: string }[] {
+    const can = new Set(this.seats().filter(s => s.role !== 'watcher').map(s => s.name));
+    return this.waitables().filter(w => can.has(w.name));
+  }
+
+  /** The world's own elements a person may pick as what a work item is about, by name, at most `max`. */
+  pickable(query: string, skip: ReadonlySet<string>, max = 8): { type: string; id: string; name: string }[] {
+    const q = simpleCaseFold(query.trim());
+    if (!q) return [];
+    const out: { type: string; id: string; name: string }[] = [];
+    for (const el of this.els.values()) {
+      if (skip.has(el.id) || !isPickable(el)) continue;
+      const name = (el.name ?? '').toString();
+      if (!simpleCaseFold(name).includes(q)) continue;
+      out.push({ type: simpleCaseFold(el.type), id: el.id, name });
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+
+  /** An element's name for a work item's chip, or null when this world does not hold it. */
+  elementName(id: string): string | null {
+    const el = this.els.get(id);
+    return el ? (el.name ?? '').toString().trim() || 'Untitled' : null;
   }
 
   // ------------------------------------------------------------ writes
@@ -254,10 +288,37 @@ export class Room {
   }
 
   /** A line goes to the newest sitting, so writing one brings the room back to now, where it shows. */
-  post(text: string, parent: string | null = null): Promise<void> {
+  post(text: string, parent: string | null = null, about: string | null = null): Promise<void> {
     this.showSitting = null;
     return this.serial(async () => {
-      this.landed(await this.client.create('narrative', newLine(text, this.myCharacter(), parent, this.roomOfNow())));
+      this.landed(await this.client.create('narrative', newLine(text, this.myCharacter(), parent, this.roomOfNow(), about)));
+    });
+  }
+
+  /** A work item, marked like a line; its picks go in the Relation's typed link fields. */
+  makeWork(title: string, text: string, forWho: string | null, picks: ReadonlyArray<{ type: string; id: string }>): Promise<void> {
+    return this.serial(async () => {
+      this.landed(await this.client.create('relation', newWorkItem(title, text, forWho, picks, this.roomOfNow())));
+    });
+  }
+
+  /** Close (done) or reopen a work item: its maker, the host or a co-host. The one write keel's draught reads. */
+  setWorkState(id: string, state: 'done' | 'open'): Promise<void> {
+    return this.serial(async () => {
+      const item = this.work().find(w => w.id === id);
+      if (!item || !this.canRetire(item.by)) return;
+      this.landed(await this.client.patch('relation', item.id, { subtype: state }));
+    });
+  }
+
+  /** Delete one work item, by its id: its maker, the host or a co-host. */
+  deleteWork(id: string): Promise<void> {
+    return this.serial(async () => {
+      const item = this.work().find(w => w.id === id);
+      if (!item || !this.canRetire(item.by)) return;
+      await this.client.delete('relation', item.id);
+      this.feed.removeLocal(item.id);
+      this.feed.poke();
     });
   }
 

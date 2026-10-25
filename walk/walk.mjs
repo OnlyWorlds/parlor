@@ -293,6 +293,72 @@ try {
   check('host: Done takes the entry off the host\'s board', await until(() => hostEntry.isHidden(), 10000));
   check('host: the answer stays in the room', await host.getByText(answerText).isVisible());
   await shot(host, 'host-board');
+
+  // Work items (sheet §1, profiles/packet.md): the member makes one about a lore Character, for the
+  // host; the host answers it and marks it done; the member deletes it. A lore Work item never shows.
+  const stamp = new Date().toISOString().slice(11, 19);
+  const loreName = `Walk lore ${engineName} ${stamp}`;
+  const lore = await decoy('character', { name: loreName });
+  await decoy('relation', { name: `DECOY work ${engineName}`, supertype: 'Work item', subtype: 'open' });
+  const workTitle = `Tie ${loreName} into the world`;
+  await m.getByRole('tab', { name: /^Work/ }).click();
+  await host.getByRole('tab', { name: /^Work/ }).click();
+  await m.getByRole('button', { name: 'Add a work item' }).click();
+  await m.fill('#work-title', workTitle);
+  await m.locator('#work-for').selectOption({ label: 'Host C' });
+  await m.fill('#work-text', 'It has no <b>links</b> yet.');
+  check('member: the lore Character is found by name', await until(async () => {
+    await m.fill('#work-find', `lore ${engineName} ${stamp}`);
+    return m.locator('.found button', { hasText: loreName }).isVisible();
+  }, 10000));
+  {
+    // The host's marked card is a room element and never offered; an unmarked one (10-22's ground
+    // made them before the mark) is lore by the room profile, and is. Offered = unmarked, and a marked one exists.
+    let marked = 0, unmarked = 0;
+    for await (const e of api.listAll('character')) if ((e.name ?? '') === 'Host C') e.x_room_of ? marked++ : unmarked++;
+    await m.fill('#work-find', 'Host C');
+    await m.waitForTimeout(300);
+    const offered = await m.locator('.found button', { hasText: 'Host C' }).count();
+    check('member: the host\'s marked card is never offered, an unmarked one is lore', marked > 0 && offered === unmarked, `marked ${marked}, unmarked ${unmarked}, offered ${offered}`);
+  }
+  await m.fill('#work-find', `lore ${engineName} ${stamp}`);
+  await m.locator('.found button', { hasText: loreName }).click();
+  check('member: the pick is a chip', await m.locator('.picked .chip', { hasText: `${loreName} · Character` }).isVisible());
+  await m.getByRole('button', { name: 'Add the work item' }).click();
+  const hostItem = host.locator('.witem', { hasText: workTitle });
+  check('host: the work item arrives, for the host, open', await until(async () =>
+    (await hostItem.locator('.m').first().innerText()).startsWith('For Host C · made by Walker') && await hostItem.locator('.chip.s-open').isVisible(), 10000));
+  check('host: it names what it is about', await hostItem.locator('.about .chip', { hasText: `${loreName} · Character` }).isVisible());
+  check('host: markup in a work item stays text', await hostItem.getByText('<b>links</b>', { exact: false }).isVisible());
+  await host.waitForTimeout(2500);
+  check('host: a lore Work item is not work', !(await host.getByText(`DECOY work ${engineName}`).count()));
+  await hostItem.getByRole('button', { name: 'Answer' }).click();
+  const workAnswer = `The host takes the ${engineName} item: linking it now.`;
+  await host.fill('textarea[aria-label="Write a line"]', workAnswer);
+  await host.keyboard.press('Enter');
+  check('host: the answer says what it answers', await until(async () =>
+    (await host.locator('.line', { hasText: workAnswer }).locator('.meta').innerText()).includes(`answering ${workTitle}`), 8000));
+  const memberItem = m.locator('.witem', { hasText: workTitle });
+  check('member: the item counts the answer', await until(() => memberItem.getByText('1 answer in the room').isVisible(), 10000));
+  await hostItem.getByRole('button', { name: 'Mark done' }).click();
+  check('member: Done reaches them', await until(() => memberItem.locator('.chip.s-done').isVisible(), 10000));
+  await shot(host, 'host-work-item');
+  {
+    let item = null, answer = null, sitting = null, hostCard = null;
+    for await (const e of api.listAll('relation')) if (e.name === workTitle) item = e;
+    for await (const e of api.listAll('narrative')) if (e.description === workAnswer) answer = e;
+    for await (const e of api.listAll('event')) if ((e.supertype ?? '').toLowerCase() === 'sitting' && e.x_room_of && (!sitting || e.created_at > sitting.created_at)) sitting = e;
+    for await (const e of api.listAll('character')) if ((e.supertype ?? '').toLowerCase() === 'member' && e.x_room_of && !e.created_by && (!hostCard || e.created_at < hostCard.created_at)) hostCard = e;
+    const hostWho = (await api.members()).find(r => r.id === null)?.character ?? hostCard?.id ?? null;
+    check('work: the item reads back Work item, done, the sitting\'s mark', item?.supertype === 'Work item' && item?.subtype === 'done' && item?.x_room_of === sitting?.id, `${item?.supertype} ${item?.subtype}`);
+    check('work: it links the lore Character and is for the host', JSON.stringify(item?.characters) === JSON.stringify([lore.id]) && item?.actor === hostWho, `${JSON.stringify(item?.characters)} ${item?.actor}`);
+    check('work: no packet keys written', !!item && !Object.keys(item).some(k => k.startsWith('x_packet_')));
+    check('work: the answer is a Message pointing at the item by relations', answer?.supertype === 'Message' && JSON.stringify(answer?.relations) === JSON.stringify([item?.id]) && !answer?.parent_narrative);
+  }
+  await memberItem.getByRole('button', { name: 'Delete', exact: true }).click();
+  await memberItem.getByRole('button', { name: 'Delete it' }).click();
+  check('host: Delete takes the item away', await until(() => hostItem.isHidden(), 10000));
+  await shot(host, 'host-work');
   await m.getByRole('tab', { name: /^Specs/ }).click();
   await host.getByRole('tab', { name: /^Specs/ }).click();
 

@@ -4,6 +4,7 @@ import {
   readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, readCharter, PHASES, phaseOf,
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
+  readWork, newWorkItem, isPickable,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.65, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -280,5 +281,61 @@ describe('the board (sheet §1, screen 07)', () => {
     const anyone = newBoardEntry('A', '', 'green', null, null, 'w1');
     expect(anyone.characters).toEqual([]);
     expect('narrator' in anyone).toBe(false);
+  });
+});
+
+describe('work items (sheet §1, profiles/packet.md)', () => {
+  const item = (o: Partial<El> & { id: string }) => el({ type: 'relation', supertype: 'Work item', name: o.id, ...o });
+
+  it('a new item: subtype open, whom it is for, each pick in its typed link field, no packet keys', () => {
+    const body = newWorkItem(' Tie the guild in ', 'why', 'c1', [
+      { type: 'character', id: 'a' }, { type: 'location', id: 'b' }, { type: 'character', id: 'a' }, { type: 'law', id: 'x' },
+    ], 's1');
+    expect(body).toMatchObject({ name: 'Tie the guild in', supertype: 'Work item', subtype: 'open', actor: 'c1', characters: ['a'], locations: ['b'], [ROOM_MARK]: 's1' });
+    expect(Object.keys(body).some(k => k.startsWith('x_packet_'))).toBe(false);
+    expect('laws' in body).toBe(false);
+    expect('actor' in newWorkItem('A', '', null, [], 'w1')).toBe(false);
+  });
+
+  it('reads the state by the folded subtype, done last, and the typed links as its elements', () => {
+    const w = readWork([
+      item({ id: 'd', subtype: 'Done', created_at: '2026-10-25T10:00:00Z' }),
+      item({ id: 'o', subtype: 'open', characters: ['a'], locations: ['b'], created_at: '2026-10-25T09:00:00Z' }),
+      item({ id: 't', subtype: ' taken ', created_at: '2026-10-25T08:00:00Z' }),
+      item({ id: 'q', subtype: 'whatever', created_at: '2026-10-25T07:00:00Z' }),
+    ], 'w1');
+    expect(w.map(x => [x.id, x.state])).toEqual([['o', 'open'], ['t', 'taken'], ['q', 'open'], ['d', 'done']]);
+    expect(w[0].elements).toEqual([{ type: 'character', id: 'a', reason: null }, { type: 'location', id: 'b', reason: null }]);
+  });
+
+  it("a landed packet's entries win, with their reasons; entries missing a key are ignored; another world's say so", () => {
+    const [w] = readWork([item({
+      id: 'p', characters: ['a'],
+      x_packet_elements: [{ type: 'Character', id: 'a', reason: 'No links.' }, { type: 'location', id: 'b' }],
+      x_packet_source: { server: 'https://www.onlyworlds.com', world: 'w2' },
+    })], 'w1');
+    expect(w.elements).toEqual([{ type: 'character', id: 'a', reason: 'No links.' }]);
+    expect(w.otherWorld).toBe(true);
+    expect(readWork([item({ id: 'p', x_packet_elements: [{ type: 'character', id: 'a', reason: 'r' }], x_packet_source: { world: 'w1' } })], 'w1')[0].otherWorld).toBe(false);
+  });
+
+  it("an agent's proposed item says so; a lore Work item never shows", () => {
+    const w = readWork([item({ id: 'p', x_review_proposed: 'agent' }), lore({ id: 'l', type: 'relation', supertype: 'Work item' })], 'w1');
+    expect(w.map(x => [x.id, x.proposed])).toEqual([['p', true]]);
+  });
+
+  it("only the world's own elements of a linkable type can be picked", () => {
+    expect(isPickable(lore({ id: 'c', type: 'character', name: 'Ana' }))).toBe(true);
+    expect(isPickable(lore({ id: 'l', type: 'law', name: 'A law' }))).toBe(false);
+    expect(isPickable(el({ id: 'm', type: 'character', supertype: 'Member', name: 'a card' }))).toBe(false);
+    expect(isPickable(lore({ id: 'h', type: 'location', hidden: true }))).toBe(false);
+    expect(isPickable(lore({ id: 'k', type: 'location', known_of: true }))).toBe(false);
+  });
+
+  it('a line answering a work item points at it by relations', () => {
+    const body = newLine('on it', null, null, 's1', 'wi');
+    expect(body.relations).toEqual(['wi']);
+    expect('parent_narrative' in body).toBe(false);
+    expect(readLines([el({ id: 'l', type: 'narrative', supertype: 'Message', relations: ['wi'] })])[0].about).toBe('wi');
   });
 });
