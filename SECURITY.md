@@ -9,4 +9,4 @@ What counts: anything in the parlor that could leak an API key, PIN, account tok
 not asked to go, write to a world it was not asked to, show a line or an element the world hides, or let a crafted world,
 line or server answer run script in the page. A problem in onlyworlds.com itself is passed on to its maintainer.
 
-Supported: the live app at parlor.onlyworlds.com only, once it is live.
+Supported: no release yet. Once the parlor is live, the app at parlor.onlyworlds.com and this repository's `main`.

@@ -1,10 +1,11 @@
-// The crew's test accounts (Comms/var/secrets/crew-walk-accounts.txt), read for a
-// walk and never printed. Claim one in h57 before a walk.
+// The crew's test accounts, from the file CREW_WALK_ACCOUNTS names (outside this
+// repository), read for a walk and never printed. Claim one in h57 before a walk.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
-const FILE = 'C:/Users/Titus/Carrier/Comms/var/secrets/crew-walk-accounts.txt';
+const FILE = process.env.CREW_WALK_ACCOUNTS;
 
 export function account(label) {
+  if (!FILE) throw new Error('set CREW_WALK_ACCOUNTS to the crew\'s accounts file (outside the repo)');
   const lines = readFileSync(FILE, 'utf8').split(/\r?\n/);
   const row = lines.find(l => l.startsWith(`${label} `) && l.includes('@'));
   const pinRow = lines.find(l => l.startsWith(`${label} PIN `));

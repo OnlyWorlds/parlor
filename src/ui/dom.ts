@@ -1,7 +1,7 @@
 /**
  * The one way the parlor makes DOM. Text goes in through text nodes only, so a
- * quote or a tag in a line or a spec stays text (February's tool built markup
- * from strings and a quote in a spec could inject it).
+ * quote or a tag in a line or a spec stays text, and no markup is ever built
+ * from strings.
  */
 
 type Child = Node | string | number | null | undefined | false;

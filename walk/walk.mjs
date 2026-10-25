@@ -98,7 +98,7 @@ try {
   pages.push([host, 'crew-walk-c']);
   await host.goto(`${BASE}#/w/${s.worldId}`);
   check('host: the room opens on the host\'s own seat', await until(() => host.getByText('You: host').isVisible()));
-  check('host: the charter is on the work surface', await until(() => host.getByText('House rules').isVisible()));
+  check('host: the charter is on the work surface', await until(() => host.locator('details.card summary', { hasText: 'House rules' }).isVisible()));
   if (await host.locator('#my-name').isVisible().catch(() => false)) {
     await host.fill('#my-name', 'Host C');
     await host.getByRole('button', { name: 'Save', exact: true }).click();
@@ -116,7 +116,7 @@ try {
   await decoy('event', { name: 'Decoy sitting', supertype: 'Sitting', subtype: 'Voting', x_hearts_on: true, x_specs_shown: true, x_voting_open: true });
   await decoy('narrative', { name: 'Decoy letter', supertype: 'Message', description: 'DECOY: a letter in the world\'s lore, never a line in the room' });
   await host.waitForTimeout(4500);
-  check('host: a lore letter is not a line in the room', !(await host.getByText('DECOY: a letter').count()));
+  check('host: a lore letter is not a line in the room', !(await host.locator('.lines').getByText('DECOY: a letter').count()));
   check('host: a newer lore Sitting does not take the room (still Arrive, after the feed)', await host.locator('.hostbar .pp.now', { hasText: 'Arrive' }).isVisible());
   await shot(host, 'host-lobby');
 
@@ -265,7 +265,7 @@ try {
     (await hostEntry.locator('.m').first().innerText()).startsWith('Waits on Host C · raised by Walker'), 10000));
   check('host: the colour word comes first', await hostEntry.locator('.chip.c-orange', { hasText: 'Orange' }).isVisible());
   await host.waitForTimeout(2500);
-  check('host: a lore Board narrative is not on the board', !(await host.getByText(`DECOY board ${engineName}`).count()));
+  check('host: a lore Board narrative is not on the board', !(await host.locator('.bentry', { hasText: `DECOY board ${engineName}` }).count()));
   check('host: markup in an entry stays text', await hostEntry.getByText('<i>disagree</i>', { exact: false }).isVisible());
   await hostEntry.getByRole('button', { name: 'Answer' }).click();
   check('host: the composer says what it answers', await host.locator('.reply', { hasText: `Answering: ${entryTitle}` }).isVisible());
@@ -336,7 +336,7 @@ try {
   check('host: it names what it is about', await hostItem.locator('.about .chip', { hasText: `${loreName} · Character` }).isVisible());
   check('host: markup in a work item stays text', await hostItem.getByText('<b>links</b>', { exact: false }).isVisible());
   await host.waitForTimeout(2500);
-  check('host: a lore Work item is not work', !(await host.getByText(`DECOY work ${engineName}`).count()));
+  check('host: a lore Work item is not work', !(await host.locator('.witem', { hasText: `DECOY work ${engineName}` }).count()));
   await hostItem.getByRole('button', { name: 'Answer' }).click();
   const workAnswer = `The host takes the ${engineName} item: linking it now.`;
   await host.fill('textarea[aria-label="Write a line"]', workAnswer);

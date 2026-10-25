@@ -214,8 +214,8 @@ export function kindOf(subtype: unknown): Kind | null {
 }
 
 /**
- * Builds before 2026-10-25 marked the winner as the spec's subtype star. A sitting made before
- * this moment that names no `x_star` reads that old mark; a later one never does, so a member
+ * Builds up to 2026-10-25 marked the winner as the spec's subtype star. A sitting made before
+ * 2026-10-26 (this constant) that names no `x_star` reads that old mark; a later one never does, so a member
  * cannot crown their own spec by setting its subtype (the S473 gate's G2). Only crew test worlds
  * ever ran those builds.
  */
