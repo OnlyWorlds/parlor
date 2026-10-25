@@ -9,9 +9,9 @@ import { RoomFeed } from './feed';
 import { serialQueue } from './serial';
 import { session, type AccountWorld } from './session';
 import {
-  OWNER, type El, type Switches, readLines, readHearts, readSpecs, readVotes, readSittings, readCharter,
-  readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart, newVote, newSitting,
-  newMember, phasePatch, switchPatch, ofRoom,
+  OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readHearts, readSpecs, readVotes,
+  readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
+  newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
 } from './shapes';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
 
@@ -179,8 +179,9 @@ export class Room {
     return readHearts(this.shown());
   }
 
+  /** The shown sitting's specs; its star is that sitting's x_star (an old sitting's subtype star when it names none). */
   specs() {
-    return readSpecs(this.shown(), this.hearts());
+    return readSpecs(this.shown(), this.hearts(), starOf(this.sitting()));
   }
 
   myVote() {
@@ -193,6 +194,38 @@ export class Room {
 
   charter() {
     return readCharter(this.els.values());
+  }
+
+  /** Every room board entry, whatever sitting raised it: an entry waits across sittings. */
+  board() {
+    return readBoard(this.els.values());
+  }
+
+  /** Whom a board entry can wait on: each seat on the roster with a Character, by its name. */
+  waitables(): { character: string; name: string }[] {
+    const members = this.members();
+    const out: { character: string; name: string }[] = [];
+    for (const seat of this.seats()) {
+      const row = this.roster?.find(m => (m.id ?? OWNER) === seat.by);
+      const character = row?.character ?? members.get(seat.by)?.id ?? null;
+      if (character) out.push({ character, name: seat.name });
+    }
+    return out;
+  }
+
+  /** A Character's name for the board: the seat's name, else the element's (said as gone when its seat left), else 'someone'. */
+  characterName(id: string): string {
+    const seat = this.waitables().find(x => x.character === id);
+    if (seat) return seat.name;
+    const name = (this.els.get(id)?.name ?? '').toString().trim() || 'someone';
+    const members = this.members();
+    const left = (this.roster ?? []).some(m => m.status === 'removed' && (m.character === id || members.get(m.id ?? OWNER)?.id === id));
+    return left ? `${name} (left)` : name;
+  }
+
+  /** The room's lines answering one thing (a board entry), across every sitting. */
+  answers(parent: string) {
+    return readLines(this.els.values()).filter(l => l.parent === parent);
   }
 
   // ------------------------------------------------------------ writes
@@ -228,13 +261,44 @@ export class Room {
     });
   }
 
-  /** My spec in the newest sitting is edited; in a new sitting I start a new one. */
-  saveSpec(title: string, text: string): Promise<void> {
+  /**
+   * My spec in the newest sitting is edited (its title and text, and its kind when one is picked:
+   * an old spec's subtype, February's star, is never overwritten by an edit that picks none); in a
+   * new sitting I start a new one, which needs a kind.
+   */
+  saveSpec(title: string, text: string, kind: Kind | null): Promise<void> {
     return this.serial(async () => {
-      const body = newSpec(title, text, this.roomOfNow());
       const had = readSpecs(this.live(), []).find(s => s.by === this.meBy);
-      this.landed(had ? await this.client.patch('construct', had.id, { name: body.name, description: body.description })
-        : await this.client.create('construct', body));
+      if (had) {
+        const patch: Record<string, unknown> = { name: title.trim(), description: text };
+        if (kind) patch.subtype = kind;
+        this.landed(await this.client.patch('construct', had.id, patch));
+      } else if (kind) {
+        this.landed(await this.client.create('construct', newSpec(title, text, kind, this.roomOfNow())));
+      }
+    });
+  }
+
+  /** A board entry, marked like a line: the newest sitting's, else the world's. */
+  raise(title: string, text: string, colour: BoardColour, waitsOn: string | null): Promise<void> {
+    return this.serial(async () => {
+      this.landed(await this.client.create('narrative', newBoardEntry(title, text, colour, waitsOn, this.myCharacter(), this.roomOfNow())));
+    });
+  }
+
+  /** Who may take an entry off the board: its maker, the host and co-hosts (keel lets an owner and a co-builder delete). */
+  canRetire(by: string): boolean {
+    return this.canWrite && (by === this.meBy || this.isHost);
+  }
+
+  /** Done: one entry off the board, by its one id. */
+  done(entryId: string): Promise<void> {
+    return this.serial(async () => {
+      const entry = this.board().find(e => e.id === entryId);
+      if (!entry || !this.canRetire(entry.by)) return;
+      await this.client.delete('narrative', entry.id);
+      this.feed.removeLocal(entry.id);
+      this.feed.poke();
     });
   }
 
@@ -295,13 +359,12 @@ export class Room {
     });
   }
 
-  /** The winner: one star in the newest sitting. */
+  /** The winner is a fact about the newest sitting (its x_star): one patch on it, no spec written. */
   star(specId: string): Promise<void> {
     return this.serial(async () => {
-      for (const spec of readSpecs(this.live(), [])) {
-        if (spec.star && spec.id !== specId) this.landed(await this.client.patch('construct', spec.id, { subtype: '' }));
-      }
-      this.landed(await this.client.patch('construct', specId, { subtype: 'star' }));
+      const s = this.newestSitting();
+      if (!s || !readSpecs(this.live(), []).some(x => x.id === specId)) return;
+      this.landed(await this.client.patch('event', s.id, starPatch(specId)));
     });
   }
 

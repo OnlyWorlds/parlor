@@ -21,8 +21,18 @@ export function signInView(root: HTMLElement, preview: OwJoinPreview | null, onI
   const login = h('input', { id: 'login', type: 'text', autocomplete: 'username', required: true });
   const password = h('input', { id: 'password', type: 'password', autocomplete: 'current-password', required: true });
   const problem = h('p', { class: 'problem', role: 'alert', hidden: true });
-  const submit = h('button', { class: 'btn entry', type: 'submit' }, preview ? 'Sign in to join' : 'Sign in');
+  const submit = h('button', { class: 'btn entry', type: 'submit' }, 'Sign in');
+  // No password box on the landing (sheet §3): the Entry button opens the form, until Sign in
+  // with OnlyWorlds reaches the parlor's host (#490, #515).
+  const entry = h('button', { class: 'btn entry', type: 'button', onclick: () => {
+    form.hidden = false;
+    entryRow.hidden = true;
+    login.focus();
+  } }, preview ? 'Sign in to join' : 'Sign in');
+  const signup = () => h('a', { class: 'btn quiet', href: `${SITE}/signup`, target: '_blank', rel: 'noopener' }, 'Create an account');
+  const entryRow = h('div', { class: 'btns' }, entry, signup());
   const form = h('form', {
+    hidden: true,
     onsubmit: async (e: Event) => {
       e.preventDefault();
       submit.disabled = true;
@@ -41,8 +51,7 @@ export function signInView(root: HTMLElement, preview: OwJoinPreview | null, onI
     h('label', { for: 'login' }, 'Email or username'), login,
     h('label', { for: 'password' }, 'Password'), password,
     problem,
-    h('div', { class: 'btns' }, submit,
-      h('a', { class: 'btn quiet', href: `${SITE}/signup`, target: '_blank', rel: 'noopener' }, 'Create an account')),
+    h('div', { class: 'btns' }, submit, signup()),
   );
   const head = preview
     ? [
@@ -59,8 +68,8 @@ export function signInView(root: HTMLElement, preview: OwJoinPreview | null, onI
         ? h('p', null, 'This invite link did not open: it may be used or out of date. If you joined with it before, sign in and your parlor is there. Otherwise ask the host for a new link.')
         : h('p', null, 'A room on a world, where people and their AI meet, talk, and build. Sign in with your OnlyWorlds account.'),
     ];
-  clear(root, h('div', { class: 'center' }, h('div', { class: 'land' }, h('div', { class: 'brand' }, 'PARLOR'), ...head, form)));
-  login.focus();
+  clear(root, h('div', { class: 'center' }, h('div', { class: 'land' }, h('div', { class: 'brand' }, 'PARLOR'), ...head, entryRow, form)));
+  entry.focus();
 }
 
 export function worldsView(root: HTMLElement, onOpen: (w: AccountWorld) => void, onJoined: (worldId: string) => void): void {

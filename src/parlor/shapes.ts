@@ -4,10 +4,12 @@
  * no DOM, so every rule here has a unit test.
  *
  *   a line      Narrative, supertype Message: narrator the poster's Character, parent_narrative the line it answers
- *   a spec      Construct, supertype Spec: its owner's own element; the winner has subtype star
+ *   a spec      Construct, supertype Spec: its owner's own element; subtype its kind (Tool, Modelling,
+ *               Feature, World); the winner is the sitting's x_star (sheet §6 point 13, draft 7)
  *   a heart     Relation,  supertype Heart: actor the hearter, constructs the spec; one per person per target
  *   a vote      Relation,  supertype Vote: actor the voter, constructs the picks in order
- *   a sitting   Event,     supertype Sitting: subtype the phase; the switches as x_ fields
+ *   a sitting   Event,     supertype Sitting: subtype the phase; the switches and x_star as x_ fields
+ *   a board entry Narrative, supertype Board: subtype red, orange or green; characters whom it waits on
  *   the charter Law,       supertype Charter
  *   a member    Character, supertype Member: a person's own name in the room when their seat has no
  *               Character (an invite link gives a person none; h66 #9720, until keel's roster names them)
@@ -155,6 +157,8 @@ export interface Spec {
   title: string;
   text: string;
   by: string;
+  /** Tool, Modelling, Feature or World; null for none (February's specs). */
+  kind: Kind | null;
   star: boolean;
   hearts: number;
   at: string;
@@ -194,7 +198,36 @@ export function myHearts(hearts: readonly Heart[], me: string, target: string): 
   return hearts.filter(h => h.by === me && h.target === target);
 }
 
-export function readSpecs(els: Iterable<El>, hearts: readonly Heart[]): Spec[] {
+/** What a spec is (sheet §6 point 13): its subtype, which never changes with the vote. */
+export const KINDS = ['Tool', 'Modelling', 'Feature', 'World'] as const;
+export type Kind = (typeof KINDS)[number];
+
+export function kindOf(subtype: unknown): Kind | null {
+  const word = fold(subtype);
+  return KINDS.find(k => fold(k) === word) ?? null;
+}
+
+/**
+ * Builds before 2026-10-25 marked the winner as the spec's subtype star. A sitting made before
+ * this moment that names no `x_star` reads that old mark; a later one never does, so a member
+ * cannot crown their own spec by setting its subtype (the S473 gate's G2). Only crew test worlds
+ * ever ran those builds.
+ */
+export const OLD_STAR_BEFORE = '2026-10-26T00:00:00Z';
+
+/** What a sitting says its winner is, for readSpecs: its x_star, else 'subtype' for an old sitting, else none. */
+export function starOf(sitting: { star: string | null; at: string } | null): string | null {
+  if (!sitting) return null;
+  if (sitting.star) return sitting.star;
+  return sitting.at && sitting.at < OLD_STAR_BEFORE ? OLD_STAR : null;
+}
+export const OLD_STAR = 'subtype';
+
+/**
+ * The sitting's specs. The star is the sitting's `x_star` (pass starOf(sitting)); OLD_STAR reads
+ * the old subtype star, never rewritten; null means no winner yet.
+ */
+export function readSpecs(els: Iterable<El>, hearts: readonly Heart[], star: string | null = null): Spec[] {
   const counts = heartCounts(hearts);
   const out: Spec[] = [];
   for (const el of els) {
@@ -204,7 +237,8 @@ export function readSpecs(els: Iterable<El>, hearts: readonly Heart[]): Spec[] {
       title: (el.name ?? '').toString(),
       text: (el.description ?? '').toString(),
       by: whoMade(el),
-      star: (el.subtype ?? '').toLowerCase() === 'star',
+      kind: kindOf(el.subtype),
+      star: star === OLD_STAR ? fold(el.subtype) === 'star' : !!star && el.id === star,
       hearts: counts.get(el.id) ?? 0,
       at: el.created_at ?? '',
     });
@@ -212,8 +246,8 @@ export function readSpecs(els: Iterable<El>, hearts: readonly Heart[]): Spec[] {
   return out.sort((a, b) => Number(b.star) - Number(a.star) || b.hearts - a.hearts || a.at.localeCompare(b.at));
 }
 
-export function newSpec(title: string, text: string, roomOf: string): Record<string, unknown> {
-  return { name: title.trim(), description: text, supertype: SUPERTYPE.spec, [ROOM_MARK]: roomOf };
+export function newSpec(title: string, text: string, kind: Kind, roomOf: string): Record<string, unknown> {
+  return { name: title.trim(), description: text, supertype: SUPERTYPE.spec, subtype: kind, [ROOM_MARK]: roomOf };
 }
 
 export function newHeart(target: string, targetName: string, actor: string | null, roomOf: string): Record<string, unknown> {
@@ -282,6 +316,8 @@ export interface Switches {
 export interface Sitting extends Switches {
   id: string;
   phase: string;
+  /** The winning spec's id (x_star), or null before the host picks one. */
+  star: string | null;
   feedStart: number | null;
   at: string;
   by: string;
@@ -315,6 +351,7 @@ export function phaseOf(subtype: unknown): string {
 
 export const SWITCH_FIELDS = { hearts: 'x_hearts_on', specs: 'x_specs_shown', voting: 'x_voting_open' } as const;
 export const FEED_START_FIELD = 'x_feed_start';
+export const STAR_FIELD = 'x_star';
 
 /** All sittings, oldest first; the room shows the newest. */
 export function readSittings(els: Iterable<El>): Sitting[] {
@@ -325,6 +362,7 @@ export function readSittings(els: Iterable<El>): Sitting[] {
     out.push({
       id: el.id,
       phase: phaseOf(el.subtype),
+      star: link(el, STAR_FIELD),
       hearts: bool(el, SWITCH_FIELDS.hearts),
       specs: bool(el, SWITCH_FIELDS.specs),
       voting: bool(el, SWITCH_FIELDS.voting),
@@ -367,6 +405,11 @@ export function switchPatch(which: keyof Switches, on: boolean): Record<string, 
   return { [SWITCH_FIELDS[which]]: on };
 }
 
+/** The winner is a fact about the sitting: one patch on it, never a write to a spec. */
+export function starPatch(specId: string): Record<string, unknown> {
+  return { [STAR_FIELD]: specId };
+}
+
 /** Lines of one sitting: made at or after its start and before the next one's. */
 export function linesOfSitting(lines: readonly Line[], sittings: readonly Sitting[], sittingId: string | null): Line[] {
   if (!sittingId) return [...lines];
@@ -375,6 +418,60 @@ export function linesOfSitting(lines: readonly Line[], sittings: readonly Sittin
   const from = sittings[i].at;
   const to = sittings[i + 1]?.at ?? null;
   return lines.filter(l => l.at >= from && (to === null || l.at < to));
+}
+
+// ---------------------------------------------------------------- the board
+
+/** The sheet's three, in the order the board shows them. */
+export const BOARD_COLOURS = ['red', 'orange', 'green'] as const;
+export type BoardColour = (typeof BOARD_COLOURS)[number];
+
+export interface BoardEntry {
+  id: string;
+  title: string;
+  text: string;
+  colour: BoardColour | null;
+  /** The Character it waits on; null for anyone. */
+  waitsOn: string | null;
+  by: string;
+  at: string;
+  el: El;
+}
+
+/** Every room board entry in the world, whatever sitting it was raised in: red, orange, green, newest first. */
+export function readBoard(els: Iterable<El>): BoardEntry[] {
+  const out: BoardEntry[] = [];
+  for (const el of els) {
+    if (!isA(el, 'narrative', SUPERTYPE.board)) continue;
+    const word = fold(el.subtype);
+    out.push({
+      id: el.id,
+      title: (el.name ?? '').toString(),
+      text: (el.description ?? '').toString(),
+      colour: BOARD_COLOURS.find(c => c === word) ?? null,
+      waitsOn: links(el, 'characters')[0] ?? null,
+      by: whoMade(el),
+      at: el.created_at ?? '',
+      el,
+    });
+  }
+  const rank = (c: BoardColour | null) => (c ? BOARD_COLOURS.indexOf(c) : BOARD_COLOURS.length);
+  return out.sort((a, b) => rank(a.colour) - rank(b.colour) || b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+}
+
+export function newBoardEntry(
+  title: string, text: string, colour: BoardColour, waitsOn: string | null, narrator: string | null, roomOf: string,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    name: title.trim().slice(0, 200),
+    description: text,
+    supertype: SUPERTYPE.board,
+    subtype: colour,
+    characters: waitsOn ? [waitsOn] : [],
+    [ROOM_MARK]: roomOf,
+  };
+  if (narrator) body.narrator = narrator;
+  return body;
 }
 
 // ---------------------------------------------------------------- the charter

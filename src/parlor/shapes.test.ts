@@ -3,6 +3,7 @@ import {
   OWNER, type El, readLines, lineName, newLine, readHearts, heartCounts, myHearts, readSpecs,
   readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, readCharter, PHASES, phaseOf,
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
+  kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.65, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -47,7 +48,8 @@ describe('lines', () => {
 describe('the room mark (schema-dist profiles/room.md)', () => {
   it('every room thing the parlor makes carries x_room_of in its first write', () => {
     expect(newLine('hi', null, null, 's1')[ROOM_MARK]).toBe('s1');
-    expect(newSpec('A', 'text', 's1')[ROOM_MARK]).toBe('s1');
+    expect(newSpec('A', 'text', 'Tool', 's1')[ROOM_MARK]).toBe('s1');
+    expect(newBoardEntry('A', '', 'red', null, null, 's1')[ROOM_MARK]).toBe('s1');
     expect(newHeart('sp', 'A', null, 's1')[ROOM_MARK]).toBe('s1');
     expect(newVote(['a'], null, 's1')[ROOM_MARK]).toBe('s1');
     expect(newSitting('S', 1, 'w1')[ROOM_MARK]).toBe('w1');
@@ -131,7 +133,7 @@ describe('hearts', () => {
     const specs = readSpecs([
       el({ id: 's1', type: 'construct', supertype: 'Spec', name: 'A', created_at: '2026-10-22T10:00:01Z' }),
       el({ id: 's2', type: 'construct', supertype: 'Spec', name: 'B', subtype: 'star', created_at: '2026-10-22T10:00:02Z' }),
-    ], hearts);
+    ], hearts, OLD_STAR);
     expect(specs.map(s => [s.id, s.hearts, s.star])).toEqual([['s2', 1, true], ['s1', 2, false]]);
   });
 });
@@ -195,5 +197,88 @@ describe('charter', () => {
     expect(readCharter([el({ id: 'x', type: 'law', supertype: 'Charter', name: 'House rules', description: 'Be kind' })]))
       .toEqual({ id: 'x', name: 'House rules', text: 'Be kind' });
     expect(readCharter([el({ id: 'x', type: 'law', supertype: 'Statute' })])).toBeNull();
+  });
+});
+
+describe("a spec's kind and the sitting's star (sheet §6 point 13, draft 7)", () => {
+  const spec = (o: Partial<El> & { id: string }) => el({ type: 'construct', supertype: 'Spec', name: o.id, ...o });
+
+  it('the kind is the subtype, folded; anything else is none', () => {
+    expect(kindOf('modelling')).toBe('Modelling');
+    expect(kindOf(' World ')).toBe('World');
+    expect(kindOf('star')).toBeNull();
+    expect(kindOf('')).toBeNull();
+    expect(newSpec('A', '', 'Feature', 's1').subtype).toBe('Feature');
+    expect(readSpecs([spec({ id: 'a', subtype: 'Tool' })], [])[0].kind).toBe('Tool');
+  });
+
+  it("the star is the sitting's x_star, never a subtype, once the sitting names one", () => {
+    const els = [spec({ id: 'old', subtype: 'star' }), spec({ id: 'new', subtype: 'Tool' })];
+    expect(readSpecs(els, [], 'new').filter(s => s.star).map(s => s.id)).toEqual(['new']);
+    expect(readSpecs(els, [], 'gone').filter(s => s.star)).toEqual([]);
+  });
+
+  it('an old sitting that names no star reads the old subtype star (February, the 10-22 ground)', () => {
+    const els = [spec({ id: 'old', subtype: 'star' }), spec({ id: 'b' })];
+    expect(readSpecs(els, [], OLD_STAR).filter(s => s.star).map(s => s.id)).toEqual(['old']);
+    expect(starOf({ star: null, at: '2026-10-22T10:00:00Z' })).toBe(OLD_STAR);
+  });
+
+  it('a new sitting with no x_star has no winner, whatever a spec calls itself (the S473 gate G2)', () => {
+    const els = [spec({ id: 'self', subtype: 'star' }), spec({ id: 'b' })];
+    const now = starOf({ star: null, at: OLD_STAR_BEFORE });
+    expect(now).toBeNull();
+    expect(readSpecs(els, [], now).filter(s => s.star)).toEqual([]);
+    expect(readSpecs(els, [], now).map(s => s.id)).toEqual(['self', 'b']);
+    expect(starOf({ star: 'b', at: '2026-10-22T10:00:00Z' })).toBe('b');
+    expect(starOf(null)).toBeNull();
+  });
+
+  it('the star sorts first by the sitting, not by a subtype', () => {
+    const els = [spec({ id: 'self', subtype: 'star', created_at: '2026-10-25T10:00:00Z' }), spec({ id: 'win', created_at: '2026-10-25T10:00:01Z' })];
+    expect(readSpecs(els, [], 'win').map(s => s.id)).toEqual(['win', 'self']);
+  });
+
+  it('the winner is one patch on the sitting, and the sitting reads it back', () => {
+    expect(starPatch('sp')).toEqual({ [STAR_FIELD]: 'sp' });
+    const [s] = readSittings([el({ id: 's', type: 'event', supertype: 'Sitting', ...starPatch('sp') } as El)]);
+    expect(s.star).toBe('sp');
+    expect(readSittings([el({ id: 's', type: 'event', supertype: 'Sitting' })])[0].star).toBeNull();
+  });
+});
+
+describe('the board (sheet §1, screen 07)', () => {
+  const entry = (o: Partial<El> & { id: string }) => el({ type: 'narrative', supertype: 'Board', name: o.id, ...o });
+
+  it('reads room Board entries red, orange, green, newest first, whatever sitting marked them', () => {
+    const b = readBoard([
+      entry({ id: 'g', subtype: 'green', created_at: '2026-10-25T09:00:00Z', [ROOM_MARK]: 's1' }),
+      entry({ id: 'r1', subtype: 'Red', created_at: '2026-10-25T08:00:00Z', [ROOM_MARK]: 's1' }),
+      entry({ id: 'r2', subtype: 'red', created_at: '2026-10-25T09:30:00Z', [ROOM_MARK]: 's2' }),
+      entry({ id: 'o', subtype: 'orange', characters: ['c1'], [ROOM_MARK]: 'w1' }),
+      entry({ id: 'x', subtype: 'purple' }),
+    ]);
+    expect(b.map(e => e.id)).toEqual(['r2', 'r1', 'o', 'g', 'x']);
+    expect(b.find(e => e.id === 'o')?.waitsOn).toBe('c1');
+    expect(b.find(e => e.id === 'g')?.waitsOn).toBeNull();
+    expect(b.find(e => e.id === 'x')?.colour).toBeNull();
+  });
+
+  it("a world's own Board narrative and a line are never entries; an entry is never a line", () => {
+    const els = [
+      lore({ id: 'lore', type: 'narrative', supertype: 'Board', name: 'the guild board' }),
+      el({ id: 'line', type: 'narrative', supertype: 'Message', description: 'hi' }),
+      entry({ id: 'e', subtype: 'red' }),
+    ];
+    expect(readBoard(els).map(e => e.id)).toEqual(['e']);
+    expect(readLines(els).map(l => l.id)).toEqual(['line']);
+  });
+
+  it('a new entry: whom it waits on, or nobody named; the maker as narrator', () => {
+    const one = newBoardEntry('  Who runs the harbour? ', 'more', 'orange', 'c1', 'c9', 's1');
+    expect(one).toMatchObject({ name: 'Who runs the harbour?', supertype: 'Board', subtype: 'orange', characters: ['c1'], narrator: 'c9' });
+    const anyone = newBoardEntry('A', '', 'green', null, null, 'w1');
+    expect(anyone.characters).toEqual([]);
+    expect('narrator' in anyone).toBe(false);
   });
 });

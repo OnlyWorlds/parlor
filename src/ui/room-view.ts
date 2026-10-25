@@ -1,12 +1,12 @@
 /**
- * The room page (design sheet §3, Seethe's v1 screens 3, 4, 5 and 10): the room
- * on the left, the work surface beside it; on a phone, one at a time. The
- * composer and the spec form are built once and never redrawn, so a feed
- * tick never eats what someone is typing; everything else redraws from the
- * room's elements on every tick.
+ * The room page (design sheet §3, Seethe's v1 screens 3, 4, 5, 7 and 10): the
+ * room on the left, the work surface beside it (Specs and the Board as tabs);
+ * on a phone, one at a time. The composer, the forms and the tabs are built
+ * once and never redrawn, so a feed tick never eats what someone is typing or
+ * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, type Switches } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, type Switches, type Kind, type BoardColour } from '../parlor/shapes';
 import { problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
@@ -20,6 +20,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
   const work = h('div');
   let picks: string[] = [];
   let specOpen = false;
+  let boardOpen = false;
+  let workTab: 'specs' | 'board' = 'specs';
+  let replyTo: { id: string; title: string } | null = null;
   let stickToEnd = true;
 
   // -------------------------------------------------- the composer (built once)
@@ -33,8 +36,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
       if (!t) return;
       sendBtn.disabled = true;
       try {
-        await room.post(t);
+        await room.post(t, replyTo?.id ?? null);
         text.value = '';
+        replyTo = null;
+        drawReply();
         stickToEnd = true;
       } catch (err) {
         notice(problemLine(err, 'sending your line'), true);
@@ -50,19 +55,30 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
   text.addEventListener('input', () => { text.style.height = 'auto'; text.style.height = `${text.scrollHeight}px`; });
   lines.addEventListener('scroll', () => { stickToEnd = lines.scrollTop + lines.clientHeight >= lines.scrollHeight - 24; });
 
+  // Answering a board entry: the composer says so until the line is sent or the answer dropped.
+  const replyBar = h('div', { class: 'reply', hidden: true });
+  function drawReply(): void {
+    replyBar.hidden = !replyTo;
+    if (!replyTo) { clear(replyBar); return; }
+    clear(replyBar, h('span', null, `Answering: ${replyTo.title}`),
+      h('button', { class: 'btn quiet', type: 'button', onclick: () => { replyTo = null; drawReply(); } }, 'Not now'));
+  }
+
   // -------------------------------------------------- my spec (built once)
   const specTitle = h('input', { id: 'spec-title', type: 'text', maxlength: 200 });
   const specText = h('textarea', { id: 'spec-text', class: 'field', rows: 6 });
+  const kindRadios = KINDS.map(k => h('input', { type: 'radio', name: 'spec-kind', value: k, id: `kind-${k}`, required: true }));
+  const kindPicked = (): Kind | null => (kindRadios.find(r => r.checked)?.value as Kind | undefined) ?? null;
   const specForm = h('form', {
     class: 'card',
     hidden: true,
     onsubmit: async (e: Event) => {
       e.preventDefault();
-      if (!specTitle.value.trim()) return;
+      const kind = kindPicked();
+      if (!specTitle.value.trim() || (!kind && !mySpec())) return;
       try {
-        await room.saveSpec(specTitle.value, specText.value);
+        await room.saveSpec(specTitle.value, specText.value, kind);
         specOpen = false;
-        specForm.hidden = true;
         draw();
       } catch (err) {
         notice(problemLine(err, 'saving your spec'), true);
@@ -70,15 +86,63 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     },
   },
     h('label', { for: 'spec-title' }, 'What would you build? A tool, a feature, a modelling question or a world'), specTitle,
+    h('fieldset', { class: 'picks' }, h('legend', null, 'It is'),
+      KINDS.map((k, i) => h('label', { class: 'pick', for: `kind-${k}` }, kindRadios[i], k === 'Modelling' ? 'A modelling question' : `A ${k.toLowerCase()}`))),
     h('label', { for: 'spec-text' }, 'Say more'), specText,
     h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'submit' }, 'Save your spec'),
-      h('button', { class: 'btn quiet', type: 'button', onclick: () => { specOpen = false; specForm.hidden = true; draw(); } }, 'Cancel')),
+      h('button', { class: 'btn quiet', type: 'button', onclick: () => { specOpen = false; draw(); } }, 'Cancel')),
   );
   const mySpec = () => room.specs().find(s => s.by === room.meBy) ?? null;
 
+  // -------------------------------------------------- a board entry (built once)
+  const COLOUR_WORD: Record<BoardColour, string> = { red: 'Red', orange: 'Orange', green: 'Green' };
+  const COLOUR_HINT: Record<BoardColour, string> = { red: 'paused until they decide', orange: 'their input would help now', green: 'look whenever' };
+  const boardTitle = h('input', { id: 'board-title', type: 'text', maxlength: 200 });
+  const boardWho = h('select', { id: 'board-who' });
+  const colourRadios = BOARD_COLOURS.map(c => h('input', { type: 'radio', name: 'board-colour', value: c, id: `colour-${c}`, required: true }));
+  const boardText = h('textarea', { id: 'board-text', class: 'field', rows: 4 });
+  const boardForm = h('form', {
+    class: 'card',
+    hidden: true,
+    onsubmit: async (e: Event) => {
+      e.preventDefault();
+      const colour = colourRadios.find(r => r.checked)?.value as BoardColour | undefined;
+      if (!boardTitle.value.trim() || !colour) return;
+      try {
+        await room.raise(boardTitle.value, boardText.value, colour, boardWho.value || null);
+        boardOpen = false;
+        draw();
+      } catch (err) {
+        notice(problemLine(err, 'raising the entry'), true);
+      }
+    },
+  },
+    h('label', { for: 'board-title' }, 'What waits?'), boardTitle,
+    h('label', { for: 'board-who' }, 'It waits on'), boardWho,
+    h('fieldset', { class: 'picks' }, h('legend', null, 'How soon'),
+      BOARD_COLOURS.map((c, i) => h('label', { class: 'pick', for: `colour-${c}` }, colourRadios[i], `${COLOUR_WORD[c]} · ${COLOUR_HINT[c]}`))),
+    h('label', { for: 'board-text' }, 'What it needs to be decided'), boardText,
+    h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'submit' }, 'Put it on the board'),
+      h('button', { class: 'btn quiet', type: 'button', onclick: () => { boardOpen = false; draw(); } }, 'Cancel')),
+  );
+  function openBoardForm(): void {
+    boardOpen = true;
+    boardTitle.value = '';
+    boardText.value = '';
+    for (const r of colourRadios) r.checked = false;
+    clear(boardWho, h('option', { value: '' }, 'Anyone'), room.waitables().map(w => h('option', { value: w.character }, w.name)));
+    draw();
+    boardTitle.focus();
+  }
+
+  // -------------------------------------------------- the work tabs (built once)
+  const tabSpecs = h('button', { type: 'button', role: 'tab', 'aria-selected': 'true', onclick: () => { workTab = 'specs'; draw(); } }, 'Specs');
+  const tabBoard = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'board'; draw(); } }, 'Board');
+  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Work' }, tabSpecs, tabBoard);
+  const board = h('div');
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, roomHead, nameCard, lines, room.canWrite ? send : null);
-  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, work, specForm);
+  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? send : null);
+  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, work, specForm, board, boardForm);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
   function phoneTab(which: 'room' | 'work') {
@@ -98,6 +162,21 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     drawRoom();
     drawHost();
     drawWork();
+    drawBoard();
+    drawTabs();
+  }
+
+  function drawTabs(): void {
+    const specsLabel = `Specs ${room.specs().length}`;
+    const boardLabel = `Board ${room.board().length}`;
+    if (tabSpecs.textContent !== specsLabel) tabSpecs.textContent = specsLabel;
+    if (tabBoard.textContent !== boardLabel) tabBoard.textContent = boardLabel;
+    tabSpecs.setAttribute('aria-selected', String(workTab === 'specs'));
+    tabBoard.setAttribute('aria-selected', String(workTab === 'board'));
+    work.hidden = workTab !== 'specs';
+    board.hidden = workTab !== 'board';
+    specForm.hidden = !(specOpen && workTab === 'specs');
+    boardForm.hidden = !(boardOpen && workTab === 'board');
   }
 
   function drawTop(): void {
@@ -137,7 +216,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     }
     nameCard.hidden = !room.needsName();
     const ls = room.lines();
+    const entries = new Map(room.board().map(e => [e.id, e]));
     clear(lines, ls.length ? ls.map(l => {
+      const answering = l.parent ? entries.get(l.parent) : undefined;
       const ai = room.isAi(l.by, l.el.changed_via);
       const name = room.name(l.by);
       const hidden = room.hidden.has(l.id);
@@ -150,6 +231,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
           h('div', { class: 'meta' }, h('span', { class: 'who' }, name), ai ? h('span', { class: 'chip' }, 'AI') : null,
             h('span', { class: 't' }, hhmm(l.at)),
             door ? h('span', { class: 't' }, door) : null,
+            answering ? h('span', { class: 't' }, `answering ${answering.title}`) : null,
             hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
             hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
             room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this line') : null),
@@ -232,7 +314,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
     const score = room.tally();
     // An earlier sitting is a record: read it, change nothing in it.
     const live = room.canWrite && !room.browsing;
-    if (!live && specOpen) { specOpen = false; specForm.hidden = true; }
+    if (!live && specOpen) specOpen = false;
+    if (!room.canWrite && boardOpen) boardOpen = false;
     const voting = !!s?.voting && !room.browsing;
     if (voting && !picks.length) picks = room.myVote()?.picks ?? [];
 
@@ -240,7 +323,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
       const iHearted = hearts.some(x => x.by === room.meBy && x.target === spec.id);
       const pickAt = picks.indexOf(spec.id);
       return h('div', { class: spec.star ? 'card star' : 'card' },
-        h('h3', null, spec.title || 'Untitled', spec.star ? ' ★' : ''),
+        h('div', { class: 'ttl' }, h('h3', null, spec.title || 'Untitled', spec.star ? ' ★' : ''), spec.kind ? h('span', { class: 'chip' }, spec.kind) : null),
         h('div', { class: 'm' }, `${room.name(spec.by)} · ♡ ${spec.hearts}${room.isHost && score.has(spec.id) ? ` · ${score.get(spec.id)} points` : ''}`),
         spec.text ? h('p', null, spec.text) : null,
         h('div', { class: 'btns' },
@@ -276,10 +359,51 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
         specOpen = true;
         specTitle.value = mine?.title ?? '';
         specText.value = mine?.text ?? '';
-        specForm.hidden = false;
+        // A kind is needed for a new spec; an old one with none (February's) may stay without.
+        for (const r of kindRadios) { r.checked = r.value === mine?.kind; r.required = !mine || !!mine.kind; }
         draw();
         specTitle.focus();
       } }, mine ? 'Edit your spec' : 'Add your spec') : null,
+    );
+  }
+
+  /**
+   * The board is rebuilt only when what it shows moved, as the host bar is: a press on Answer
+   * or Done must not land on a card a feed tick just replaced.
+   */
+  let boardKey = '';
+  function drawBoard(): void {
+    const entries = room.board();
+    const view = entries.map(e => ({
+      e, mine: room.canRetire(e.by), hidden: room.hidden.has(e.id) || (!room.isHost && e.el.hidden === true),
+      who: e.waitsOn ? room.characterName(e.waitsOn) : 'anyone', by: room.name(e.by), answers: room.answers(e.id).length,
+    }));
+    const key = JSON.stringify([view.map(v => [v.e.id, v.e.title, v.e.text, v.e.colour, v.mine, v.hidden, v.who, v.by, v.answers]),
+      room.canWrite, room.isHost, boardOpen]);
+    if (key === boardKey) return;
+    boardKey = key;
+    clear(board,
+      h('p', { class: 'sys' }, 'What waits on someone, one entry each.'),
+      view.length ? view.map(({ e, hidden, who, by, answers }) => h('div', { class: `card bentry${hidden ? ' hidden' : ''}` },
+        h('div', { class: 'ttl' }, e.colour ? h('span', { class: `chip c-${e.colour}` }, COLOUR_WORD[e.colour]) : null, h('h3', null, e.title || 'Untitled')),
+        h('div', { class: 'm' }, [`Waits on ${who}`, `raised by ${by}`, e.colour ? COLOUR_HINT[e.colour] : ''].filter(Boolean).join(' · ')),
+        e.text ? h('p', null, e.text) : null,
+        answers || hidden ? h('div', { class: 'm' }, [answers ? `${answers} answer${answers === 1 ? '' : 's'} in the room` : '',
+          hidden ? (room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : ''].filter(Boolean).join(' · ')) : null,
+        h('div', { class: 'btns' },
+          room.canWrite ? h('button', { class: 'btn std', type: 'button', onclick: () => {
+            replyTo = { id: e.id, title: e.title || 'Untitled' };
+            drawReply();
+            if (mq.matches) phoneTab('room');
+            text.focus();
+          } }, 'Answer') : null,
+          room.canRetire(e.by) ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
+            try { await room.done(e.id); } catch (err) { notice(problemLine(err, 'taking the entry off the board'), true); }
+          } }, 'Done: take it off the board') : null,
+          room.isHost ? h('button', { class: 'btn quiet', type: 'button', onclick: () => hide(e.id, !hidden) }, hidden ? 'Unhide' : 'Hide') : null,
+        )))
+        : h('div', { class: 'empty' }, h('h3', null, 'Nothing waits'), h('p', null, 'When something waits on someone, put it here so it is not lost in the room.')),
+      room.canWrite && !boardOpen ? h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'button', onclick: openBoardForm }, 'Put something on the board')) : null,
     );
   }
 

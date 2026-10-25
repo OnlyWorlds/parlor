@@ -39,9 +39,12 @@ async function until(fn, ms = 12000) {
 /** Sign in through the page's own form (the door), counting toward keel's sign-in budget. */
 async function signInByForm(page, label) {
   const a = account(label);
+  // No password box on the landing: the Entry button opens the form.
+  check(`${label}: the landing shows no password box before the Entry button`, await page.locator('#password').isHidden());
+  await page.getByRole('button', { name: /^Sign in/ }).click();
   await page.fill('#login', a.email);
   await page.fill('#password', a.password);
-  await page.click('button[type=submit]');
+  await page.locator('form button[type=submit]').click();
 }
 
 /** Reuse a token the seed minted: the page starts signed in, as after a reload. */
@@ -195,9 +198,11 @@ try {
   await m.getByRole('button', { name: /Add your spec|Edit your spec/ }).click();
   await m.fill('#spec-title', specTitle);
   await m.fill('#spec-text', 'A spec with "quotes" and <b>tags</b> stays text.');
+  await m.getByRole('radio', { name: 'A feature' }).check();
   await m.getByRole('button', { name: 'Save your spec' }).click();
   check('host: the member\'s spec arrives', await until(() => host.getByRole('heading', { name: specTitle }).isVisible(), 8000));
   check('host: markup in a spec stays text', await until(() => host.getByText('<b>tags</b>', { exact: false }).isVisible()));
+  check('host: the spec says its kind', await until(() => host.locator('.card', { has: host.getByRole('heading', { name: specTitle }) }).locator('.chip', { hasText: 'Feature' }).isVisible()));
   // A lore Heart by the host's own key on the member's spec: never counted, never the host's to toggle.
   const specRow = await until(async () => { for await (const e of api.listAll('construct')) if (e.name === specTitle) { s.specId = e.id; return true; } return false; }, 8000);
   if (specRow) await decoy('relation', { name: 'Decoy heart', supertype: 'Heart', constructs: [s.specId] });
@@ -222,6 +227,7 @@ try {
 
   // Edit your spec patches this sitting's spec.
   await m.getByRole('button', { name: 'Edit your spec' }).click();
+  check('member: the edit form keeps the kind picked', await m.getByRole('radio', { name: 'A feature' }).isChecked());
   await m.fill('#spec-text', 'An edited spec, the same element.');
   await m.getByRole('button', { name: 'Save your spec' }).click();
   check('host: the edited spec arrives', await until(() => host.getByText('An edited spec, the same element.').isVisible(), 8000));
@@ -236,6 +242,59 @@ try {
   await host.locator('.hostbar .pp', { hasText: 'Show' }).click();
   check('member: Show reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Show' }).isVisible(), 8000));
   await shot(m, 'member-showcase');
+
+  // The board (sheet §1, screen 07): the member raises an entry waiting on the host, the host
+  // answers it in the room, the member takes it off. A lore Board narrative never shows.
+  const entryTitle = `Who decides the ${engineName} map's scale? ${new Date().toISOString().slice(11, 19)}`;
+  await decoy('narrative', { name: `DECOY board ${engineName}`, supertype: 'Board', subtype: 'red', description: 'lore, never an entry' });
+  await m.getByRole('tab', { name: /^Board/ }).click();
+  await host.getByRole('tab', { name: /^Board/ }).click();
+  await m.getByRole('button', { name: 'Put something on the board' }).click();
+  await m.fill('#board-title', entryTitle);
+  await m.locator('#board-who').selectOption({ label: 'Host C' });
+  await m.getByRole('radio', { name: /^Orange/ }).check();
+  await m.fill('#board-text', 'Two scales <i>disagree</i>.');
+  await m.getByRole('button', { name: 'Put it on the board' }).click();
+  const hostEntry = host.locator('.bentry', { hasText: entryTitle });
+  check('host: the entry arrives on the board, waiting on the host', await until(async () =>
+    (await hostEntry.locator('.m').first().innerText()).startsWith('Waits on Host C · raised by Walker'), 10000));
+  check('host: the colour word comes first', await hostEntry.locator('.chip.c-orange', { hasText: 'Orange' }).isVisible());
+  await host.waitForTimeout(2500);
+  check('host: a lore Board narrative is not on the board', !(await host.getByText(`DECOY board ${engineName}`).count()));
+  check('host: markup in an entry stays text', await hostEntry.getByText('<i>disagree</i>', { exact: false }).isVisible());
+  await hostEntry.getByRole('button', { name: 'Answer' }).click();
+  check('host: the composer says what it answers', await host.locator('.reply', { hasText: `Answering: ${entryTitle}` }).isVisible());
+  const answerText = `The host answers from ${engineName}: 1 to 1000.`;
+  await host.fill('textarea[aria-label="Write a line"]', answerText);
+  await host.keyboard.press('Enter');
+  check('host: the answer is a line saying what it answers', await until(async () =>
+    (await host.locator('.line', { hasText: answerText }).locator('.meta').innerText()).includes(`answering ${entryTitle}`), 8000));
+  check('host: the composer lets go of the entry once sent', await until(() => host.locator('.reply').isHidden(), 3000));
+  const memberEntry = m.locator('.bentry', { hasText: entryTitle });
+  check('member: the entry counts the answer', await until(() => memberEntry.getByText('1 answer in the room').isVisible(), 10000));
+  await shot(host, 'host-board-entry');
+  {
+    let entry = null, answer = null, sitting = null;
+    for await (const e of api.listAll('narrative')) {
+      if (e.name === entryTitle) entry = e;
+      if (e.description === answerText) answer = e;
+    }
+    for await (const e of api.listAll('event')) if ((e.supertype ?? '').toLowerCase() === 'sitting' && e.x_room_of && (!sitting || e.created_at > sitting.created_at)) sitting = e;
+    const roster = await api.members();
+    const hostChar = roster.find(r => r.id === null)?.character ?? null;
+    let hostCard = null;
+    for await (const e of api.listAll('character')) if ((e.supertype ?? '').toLowerCase() === 'member' && e.x_room_of && !e.created_by && (!hostCard || e.created_at < hostCard.created_at)) hostCard = e;
+    const hostWho = hostChar ?? hostCard?.id ?? null;
+    check('board: the entry reads back Board, orange, the sitting\'s mark', entry?.supertype === 'Board' && entry?.subtype === 'orange' && entry?.x_room_of === sitting?.id, `${entry?.supertype} ${entry?.subtype} ${entry?.x_room_of}`);
+    check('board: it waits on one Character, the host\'s own', (entry?.characters ?? []).length === 1 && entry.characters[0] === hostWho, `${JSON.stringify(entry?.characters)} ${hostWho}`);
+    check('board: the answer is a Message answering the entry, marked', answer?.supertype === 'Message' && answer?.parent_narrative === entry?.id && answer?.x_room_of === sitting?.id);
+  }
+  await memberEntry.getByRole('button', { name: 'Done: take it off the board' }).click();
+  check('host: Done takes the entry off the host\'s board', await until(() => hostEntry.isHidden(), 10000));
+  check('host: the answer stays in the room', await host.getByText(answerText).isVisible());
+  await shot(host, 'host-board');
+  await m.getByRole('tab', { name: /^Specs/ }).click();
+  await host.getByRole('tab', { name: /^Specs/ }).click();
 
   // The room mark (schema-dist profiles/room.md), read back from keel: every room thing this
   // run made carries x_room_of from its first write, and kept it through the phase patches
@@ -257,7 +316,8 @@ try {
     const charter = (await all('law')).find(e => sup(e, 'charter'));
     check('mark: the sitting is the world\'s, kept through every phase change', sitting?.x_room_of === s.worldId && sitting?.subtype === 'Show', `${sitting?.x_room_of} ${sitting?.subtype}`);
     check('mark: the member\'s line is the sitting\'s', !!line && line.x_room_of === sitting?.id, String(line?.x_room_of));
-    check('mark: the spec is the sitting\'s, kept through the star', !!spec && spec.x_room_of === sitting?.id && spec.subtype === 'star', `${spec?.x_room_of} ${spec?.subtype}`);
+    check('mark: the spec is the sitting\'s, its kind its subtype, kept through the star', !!spec && spec.x_room_of === sitting?.id && spec.subtype === 'Feature', `${spec?.x_room_of} ${spec?.subtype}`);
+    check('star: the winner is the sitting\'s x_star, no spec written', !!spec && sitting?.x_star === spec.id, String(sitting?.x_star));
     check('mark: the heart is the sitting\'s', !!heart && heart.x_room_of === sitting?.id, String(heart?.x_room_of));
     check('mark: the vote is the sitting\'s', !!vote && vote.x_room_of === sitting?.id, String(vote?.x_room_of));
     check('mark: the charter is lore, unmarked', !!charter && !('x_room_of' in charter), String(charter?.x_room_of));
