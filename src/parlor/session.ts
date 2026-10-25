@@ -1,8 +1,8 @@
 /**
  * Who is here, on their own credential (design sheet §4): no shared key and no
- * server in between. A person signs in with their OnlyWorlds email and
- * password through the SDK (until keel's "Sign in with OnlyWorlds" handoff,
- * #515, replaces the fields); that mints this browser an account token, and
+ * server in between. A person signs in with OnlyWorlds (keel's handoff, #515,
+ * `signin.ts`) or with their email and password through the SDK; either way
+ * this browser holds an account token, and
  * the token mints a world key per parlor world, bound to the person's own
  * seat. The password is never kept; the token, the keys and the PIN are, in
  * this browser only, as Atlas keeps them.
@@ -34,6 +34,8 @@ export type AccountWorld = OwAccountWorld;
 interface Stored {
   token: string;
   login: string;
+  /** keel's account id, when the door named it: keys and the PIN outlive a sign-in only for the same id. */
+  accountId?: string;
   pin?: string;
   /** A write key per world (a guest's is a read key). */
   keys: Record<string, string>;
@@ -42,6 +44,17 @@ interface Stored {
 }
 
 const STORE = 'parlor.session.v1';
+/** Sign in with OnlyWorlds' round trip: the SDK's record (`ow_signin:` and the client id) and where the person was going. */
+export const SIGN_IN_RECORD_KEY = 'ow_signin:parlor';
+export const RESUME_KEY = 'parlor.signin.resume';
+
+/** A sign-in by another door, or a sign-out, leaves no round trip waiting. */
+function dropSignInRecord(): void {
+  try {
+    localStorage.removeItem(SIGN_IN_RECORD_KEY);
+    localStorage.removeItem(RESUME_KEY);
+  } catch { /* no storage, no record */ }
+}
 
 function load(): Stored | null {
   try {
@@ -90,6 +103,22 @@ export function joinCodeIn(text: string): string | null {
   return m ? m[0] : null;
 }
 
+/** keel's profile (`GET /account`): the account's id and username, or null when it does not answer in time. */
+async function whoIs(token: string): Promise<{ id: string; username: string } | null> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const c = new OwV2Client({ apiKey: token, baseUrl: apiBase(), fetch: (i, init) => fetch(i, { ...init, signal: ctl.signal }) });
+    const r = await c.request<{ id?: string; username?: string; data?: { id?: string; username?: string } }>('GET', '/account');
+    const who = r?.data ?? r;
+    return typeof who?.id === 'string' && typeof who.username === 'string' ? { id: who.id, username: who.username } : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class Session {
   private s: Stored | null = load();
 
@@ -104,7 +133,6 @@ class Session {
   get pin(): string {
     return this.s?.pin ?? '';
   }
-
   async signIn(login: string, password: string): Promise<void> {
     const id = login.trim();
     const client = new OwV2Client({ baseUrl: apiBase() });
@@ -113,8 +141,26 @@ class Session {
       password,
       tokenName: tokenName(),
     });
-    this.s = { token: signed.token, login: id, keys: {} };
+    // The token is kept first; the password's answer names no account, keel's profile does, when it
+    // answers, and the keys and PIN from before are judged against it.
+    const before = this.s;
+    this.adopt(signed.token, { username: id }, null);
+    const who = await whoIs(signed.token);
+    if (who && this.s?.token === signed.token) this.adopt(signed.token, who, before);
+  }
+
+  /**
+   * Keep a new account token (every door). The world keys and the PIN are a seat's and an
+   * account's: they stay only when keel named the same account as the record before (`before`,
+   * the record this browser held); otherwise this browser starts clean.
+   */
+  adopt(token: string, account: { id?: string; username: string }, before: Stored | null = this.s): void {
+    const same = !!before?.accountId && !!account.id && before.accountId === account.id;
+    this.s = same && before
+      ? { ...before, token, login: account.username || before.login }
+      : { token, login: account.username, ...(account.id ? { accountId: account.id } : {}), keys: {} };
     save(this.s);
+    dropSignInRecord();
   }
 
   setPin(pin: string): void {
@@ -126,6 +172,7 @@ class Session {
   signOut(): void {
     this.s = null;
     save(null);
+    dropSignInRecord();
   }
 
   private account(): OwV2Client {

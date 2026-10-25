@@ -11,8 +11,20 @@ import { problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
 
-export function roomView(root: HTMLElement, room: Room, onLeave: () => void): () => void {
+export interface SignedInAs {
+  /** The account's name; empty when keel named none. */
+  name: string;
+  signOut: () => void;
+}
+
+/** `signedInAs`: the room was reached by a sign-in just now, so it names the account (the S474 gate's G2). */
+export function roomView(root: HTMLElement, room: Room, onLeave: () => void, signedInAs?: SignedInAs): () => void {
   const top = h('header', { class: 'top' });
+  const whoLine = signedInAs
+    ? h('p', { class: 'sys', 'data-part': 'signed-in-as' },
+      signedInAs.name ? `Signed in as ${signedInAs.name}. ` : 'Signed in with the account on onlyworlds.com in this browser. ',
+      h('button', { class: 'btn quiet', type: 'button', onclick: signedInAs.signOut }, 'Not you? Sign out'))
+    : null;
   const lines = h('div', { class: 'lines', 'aria-live': 'polite' });
   const roomHead = h('div');
   const nameCard = nameForm();
@@ -214,7 +226,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
   const workList = h('div');
   const changeList = h('div');
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? send : null);
+  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? send : null);
   const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');

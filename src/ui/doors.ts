@@ -5,6 +5,7 @@
 
 import { OwV2Client, type OwJoinPreview } from '@onlyworlds/sdk';
 import { apiBase, session, signInLine, joinCodeIn, type AccountWorld } from '../parlor/session';
+import { beginOnlyWorldsSignIn, canSignInWithOnlyWorlds, NEEDS_CONNECTION_LINE, NO_STORAGE_LINE, type Resume } from '../parlor/signin';
 import { h, clear } from './dom';
 
 const SITE = 'https://www.onlyworlds.com';
@@ -17,41 +18,77 @@ export async function previewOf(code: string): Promise<OwJoinPreview | null> {
   }
 }
 
-export function signInView(root: HTMLElement, preview: OwJoinPreview | null, onIn: () => void, staleLink = false): void {
+export interface SignInOptions {
+  /** Where the person was going, carried through Sign in with OnlyWorlds' round trip. */
+  resume: Resume;
+  /** A refusal from the round trip, said on the landing (contract P7). */
+  problem?: string;
+  /** Open on the password form ("Use another account"). */
+  openForm?: boolean;
+}
+
+export function signInView(root: HTMLElement, preview: OwJoinPreview | null, onIn: () => void, staleLink = false, opts: SignInOptions = { resume: {} }): void {
+  const withOnlyWorlds = canSignInWithOnlyWorlds();
   const login = h('input', { id: 'login', type: 'text', autocomplete: 'username', required: true });
   const password = h('input', { id: 'password', type: 'password', autocomplete: 'current-password', required: true });
-  const problem = h('p', { class: 'problem', role: 'alert', hidden: true });
-  const submit = h('button', { class: 'btn entry', type: 'submit' }, 'Sign in');
-  // No password box on the landing (sheet §3): the Entry button opens the form, until Sign in
-  // with OnlyWorlds reaches the parlor's host (#490, #515).
-  const entry = h('button', { class: 'btn entry', type: 'button', onclick: () => {
-    form.hidden = false;
-    entryRow.hidden = true;
-    login.focus();
-  } }, preview ? 'Sign in to join' : 'Sign in');
+  const problem = h('p', { class: 'problem', role: 'alert', hidden: !opts.problem }, opts.problem ?? '');
+  // One Entry per screen: on parlor.onlyworlds.com that is Sign in with OnlyWorlds, and the form's
+  // Sign in steps down beside it.
+  const submit = h('button', { class: withOnlyWorlds && !opts.openForm ? 'btn std' : 'btn entry', type: 'submit' }, 'Sign in');
   const signup = () => h('a', { class: 'btn quiet', href: `${SITE}/signup`, target: '_blank', rel: 'noopener' }, 'Create an account');
-  const entryRow = h('div', { class: 'btns' }, entry, signup());
+  const say = (line: string) => {
+    problem.textContent = line;
+    problem.hidden = false;
+  };
+  const openForm = () => {
+    form.hidden = false;
+    if (withOnlyWorlds) toForm.hidden = true;
+    else entryRow.hidden = true;
+    login.focus();
+  };
+  // Sign in with OnlyWorlds (#515): only on the registered origin (contract P1).
+  const ow = h('button', { class: 'btn entry', type: 'button', 'data-action': 'signin-onlyworlds', onclick: async () => {
+    ow.disabled = true;
+    submit.disabled = true;
+    problem.hidden = true;
+    try {
+      await beginOnlyWorldsSignIn(opts.resume);
+    } catch (err) {
+      // Only the parlor's own sentences; anything else (the SDK's, the browser's) gets a plain one (the code gate's C10).
+      const own = err instanceof Error && (err.message === NEEDS_CONNECTION_LINE || err.message === NO_STORAGE_LINE);
+      say(own ? (err as Error).message : 'Signing in with OnlyWorlds did not start. Try again in a moment.');
+      ow.disabled = false;
+      submit.disabled = false;
+    }
+  } }, preview ? 'Sign in to join' : 'Sign in with OnlyWorlds');
+  // No password box on the landing (sheet §3): off the registered origin the Entry button opens the form.
+  const entry = withOnlyWorlds ? ow : h('button', { class: 'btn entry', type: 'button', onclick: openForm }, preview ? 'Sign in to join' : 'Sign in');
+  const toForm = h('button', { class: 'btn quiet', type: 'button', onclick: openForm }, 'Sign in with a password');
+  const entryRow = h('div', { class: 'btns' }, entry, ...(withOnlyWorlds ? [] : [signup()]));
+  const owNote = withOnlyWorlds
+    ? [h('p', { class: 'sys' }, 'It uses the account signed in on onlyworlds.com in this browser.'), h('div', { class: 'btns' }, toForm, signup())]
+    : [];
   const form = h('form', {
     hidden: true,
     onsubmit: async (e: Event) => {
       e.preventDefault();
       submit.disabled = true;
+      ow.disabled = true;
       problem.hidden = true;
       try {
         await session.signIn(login.value, password.value);
         password.value = '';
         onIn();
       } catch (err) {
-        problem.textContent = signInLine(err);
-        problem.hidden = false;
+        say(signInLine(err));
         submit.disabled = false;
+        ow.disabled = false;
       }
     },
   },
     h('label', { for: 'login' }, 'Email or username'), login,
     h('label', { for: 'password' }, 'Password'), password,
-    problem,
-    h('div', { class: 'btns' }, submit, signup()),
+    h('div', { class: 'btns' }, submit, ...(withOnlyWorlds && !opts.openForm ? [] : [signup()])),
   );
   const head = preview
     ? [
@@ -68,8 +105,45 @@ export function signInView(root: HTMLElement, preview: OwJoinPreview | null, onI
         ? h('p', null, 'This invite link did not open: it may be used or out of date. If you joined with it before, sign in and your parlor is there. Otherwise ask the host for a new link.')
         : h('p', null, 'A room on a world, where people and their AI meet, talk, and build. Sign in with your OnlyWorlds account.'),
     ];
-  clear(root, h('div', { class: 'center' }, h('div', { class: 'land' }, h('div', { class: 'brand' }, 'PARLOR'), ...head, entryRow, form)));
-  entry.focus();
+  clear(root, h('div', { class: 'center' }, h('div', { class: 'land' }, h('div', { class: 'brand' }, 'PARLOR'), ...head, problem, entryRow, ...owNote, form)));
+  if (opts.openForm) {
+    // "Use another account": the button would bring back the account just declined (the gate's G8).
+    entryRow.hidden = true;
+    for (const el of owNote) el.hidden = true;
+    openForm();
+  } else {
+    entry.focus();
+  }
+}
+
+/**
+ * An invite a signed-in browser meets (contract P6): a person's invite is spent by its first join,
+ * and the account may be the one the browser chose, so the join is asked, naming who.
+ */
+export function confirmJoinView(root: HTMLElement, preview: OwJoinPreview, onJoin: () => void, onOther: () => void, onNotNow: () => void): void {
+  // keel may name no username (the S474 gate's G4): then the sentence names the door instead.
+  const who = session.login;
+  const world = preview.world.name;
+  // One press each: the buttons go inert on the first (the code gate's C8).
+  const once = (act: () => void) => () => {
+    for (const b of buttons) b.disabled = true;
+    act();
+  };
+  const join = h('button', { class: 'btn entry', type: 'button', onclick: once(onJoin) }, who ? `Join ${world} as ${who}` : `Join ${world}`);
+  const buttons = [
+    join,
+    h('button', { class: 'btn quiet', type: 'button', onclick: once(onOther) }, 'Use another account'),
+    h('button', { class: 'btn quiet', type: 'button', onclick: once(onNotNow) }, 'Not now'),
+  ];
+  clear(root, h('div', { class: 'center' }, h('div', { class: 'land' },
+    h('div', { class: 'brand' }, 'PARLOR'),
+    h('h1', null, `Join ${world}`),
+    h('p', null, who
+      ? `Signed in as ${who}. Joining spends this invite on that account.`
+      : 'Signed in with the account on onlyworlds.com in this browser. Joining spends this invite on that account.'),
+    h('div', { class: 'btns' }, ...buttons),
+  )));
+  join.focus();
 }
 
 export function worldsView(root: HTMLElement, onOpen: (w: AccountWorld) => void, onJoined: (worldId: string) => void): void {

@@ -151,6 +151,10 @@ try {
   const m = await mCtx.newPage();
   pages.push([m, memberLabel]);
   await m.goto(`${BASE}#/join/${s.invites.member.code}`);
+  // Signed in already: the invite is asked first, naming the account (S474, the sign-in gate's G1).
+  const ask = m.getByRole('button', { name: `Join Parlor ground (crew test) as ${memberLabel}` });
+  check('member: a signed-in invite asks first, naming the account', await until(() => ask.isVisible(), 20000));
+  await ask.click();
   check('member: the join lands in the room', await until(() => m.getByText('You: member').isVisible(), 20000));
   const named = await m.locator('#my-name').isVisible().catch(() => false);
   if (named) {

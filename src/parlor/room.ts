@@ -26,7 +26,7 @@ export function problemLine(err: unknown, doing: string): string {
   if (err instanceof OwNetworkError) return `OnlyWorlds could not be reached while ${doing}. Check your connection; nothing was lost.`;
   if (err instanceof OwApiError || (err && typeof err === 'object' && 'status' in err)) {
     const e = err as { status: number; code?: string | null };
-    if (e.status === 401) return `Your PIN did not match while ${doing}. Check it under Your seat.`;
+    if (e.status === 401) return `Your PIN did not match while ${doing}. Check your PIN on Your parlors.`;
     if (e.code === 'not_author') return 'Only the person who made it can change that.';
     if (e.status === 403) return `Your seat in this world cannot do that (${doing}).`;
     if (e.status === 429) return 'Too many requests for a moment. Wait a little and try again.';
