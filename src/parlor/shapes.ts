@@ -36,6 +36,9 @@ export interface El {
   created_by?: string | null;
   changed_by?: string | null;
   changed_via?: string | null;
+  changed_client?: string | null;
+  /** keel #537: true on a maker's own read of what a keeper hid. */
+  hidden?: boolean;
   [k: string]: unknown;
 }
 

@@ -46,6 +46,21 @@ export function isAiSeat(by: string, roster: readonly OwMember[] | null, door?: 
   return isAgentDoor((door ?? null) as OwWriteDoor | null);
 }
 
+const CLIENT_NAMES: Readonly<Record<string, string>> = { atlas: 'Atlas', lantern: 'Lantern', council: 'the Council', sdk: 'a script' };
+
+/**
+ * Which door a room thing came through, when it is not the parlor's own (sheet §1: "who and which
+ * door on each row"): MCP and the site by keel's `changed_via`, else the tool's own claimed name,
+ * `changed_client` (keel #520; the parlor names itself 'parlor'). Null for the parlor and for none.
+ */
+export function doorLine(el: Pick<El, 'changed_via' | 'changed_client'>): string | null {
+  if (el.changed_via === 'mcp') return 'through MCP';
+  if (el.changed_via === 'site') return 'on onlyworlds.com';
+  const client = typeof el.changed_client === 'string' ? el.changed_client : '';
+  if (!client || client === 'parlor') return null;
+  return `through ${CLIENT_NAMES[client] ?? client}`;
+}
+
 export interface Seat {
   by: string;
   name: string;

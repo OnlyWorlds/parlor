@@ -8,6 +8,7 @@
 
 import { PHASES, type Switches } from '../parlor/shapes';
 import { problemLine, type Room } from '../parlor/room';
+import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
 
 export function roomView(root: HTMLElement, room: Room, onLeave: () => void): () => void {
@@ -140,12 +141,17 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void): ()
       const ai = room.isAi(l.by, l.el.changed_via);
       const name = room.name(l.by);
       const hidden = room.hidden.has(l.id);
-      return h('div', { class: `line${ai ? ' ai' : ''}${hidden ? ' hidden' : ''}` },
+      // keel tells a maker their own line is hidden (#537); a host reads it from the hidden list.
+      const hiddenMine = !room.isHost && l.el.hidden === true;
+      const door = doorLine(l.el);
+      return h('div', { class: `line${ai ? ' ai' : ''}${hidden || hiddenMine ? ' hidden' : ''}` },
         h('span', { class: ai ? 'bdg a' : 'bdg' }, ai ? 'AI' : initial(name)),
         h('div', null,
           h('div', { class: 'meta' }, h('span', { class: 'who' }, name), ai ? h('span', { class: 'chip' }, 'AI') : null,
             h('span', { class: 't' }, hhmm(l.at)),
+            door ? h('span', { class: 't' }, door) : null,
             hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
+            hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
             room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this line') : null),
           h('div', { class: 'txt' }, l.text)));
     }) : h('div', { class: 'sys' }, room.canWrite ? 'No lines yet. Say hello.' : 'No lines yet.'));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OwMember } from '@onlyworlds/sdk';
-import { isAiSeat, nameOf, roomRole, seats } from './roster';
+import { doorLine, isAiSeat, nameOf, roomRole, seats } from './roster';
 import { OWNER, readMemberCharacters, type El } from './shapes';
 
 const roster: OwMember[] = [
@@ -16,6 +16,19 @@ const els = new Map<string, El>([
   ['c-own2', { id: 'c-own2', type: 'character', supertype: 'Member', name: 'Sam (double)', created_by: 'm-person', created_at: '2026-10-22T10:00:01Z', x_room_of: 'w1' }],
 ]);
 const members = readMemberCharacters(els.values());
+
+describe('which door', () => {
+  it("says a door only when it is not the parlor's own", () => {
+    expect(doorLine({ changed_via: 'mcp', changed_client: 'sdk' })).toBe('through MCP');
+    expect(doorLine({ changed_via: 'site', changed_client: null })).toBe('on onlyworlds.com');
+    expect(doorLine({ changed_via: 'api', changed_client: 'atlas' })).toBe('through Atlas');
+    expect(doorLine({ changed_via: 'api', changed_client: 'sdk' })).toBe('through a script');
+    expect(doorLine({ changed_via: 'api', changed_client: 'my-bot' })).toBe('through my-bot');
+    expect(doorLine({ changed_via: 'api', changed_client: 'parlor' })).toBeNull();
+    expect(doorLine({ changed_via: 'api', changed_client: null })).toBeNull();
+    expect(doorLine({})).toBeNull();
+  });
+});
 
 describe('the AI mark', () => {
   it("reads the roster's kind, so a person through MCP is a person", () => {

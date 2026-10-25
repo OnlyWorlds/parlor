@@ -172,6 +172,20 @@ try {
   check('host: the line carries the member\'s name, not an AI mark', await until(async () => (await hostLine.locator('.who').innerText()).startsWith('Walker') && !(await hostLine.getAttribute('class')).includes('ai')));
   await shot(m, 'member-line');
 
+  // Which door: the parlor names itself on writes (keel #520), and a room line written by a plain
+  // script (the SDK's default client, the pair and the mark) shows in the room, saying so.
+  {
+    let mine = null;
+    for await (const e of api.listAll('narrative')) if (e.description === lineText) mine = e;
+    check('door: the member\'s line reads back changed_client parlor', mine?.changed_client === 'parlor', String(mine?.changed_client));
+    let sittingId = null;
+    for await (const e of api.listAll('event')) if ((e.supertype ?? '').toLowerCase() === 'sitting' && e.x_room_of && (!sittingId || e.created_at > sittingId.at)) sittingId = { id: e.id, at: e.created_at };
+    const scriptText = `A line from a script, ${engineName}, ${new Date().toISOString().slice(11, 19)}`;
+    await decoy('narrative', { name: 'Script line', supertype: 'Message', description: scriptText, x_room_of: sittingId?.id });
+    check('door: a script\'s marked line shows in the member\'s room, said as a script\'s', await until(async () =>
+      (await m.locator('.line', { hasText: scriptText }).locator('.meta').innerText()).includes('through a script'), 10000));
+  }
+
   // Pitch: specs shown, hearts on.
   await host.locator('.hostbar .pp', { hasText: 'Pitch' }).click();
   await tab('Work');
@@ -271,6 +285,10 @@ try {
   check('host: the member\'s line is marked hidden', await until(() => host.locator('.line.hidden', { hasText: lineText }).isVisible(), 5000));
   await host.waitForTimeout(4000);
   check('member: the poster still sees their own hidden line (keel: a creator sees what it made)', await m.getByText(lineText).isVisible());
+  // keel #537 promises the maker an upsert row with hidden: true; on 10-25 a hide moved the head and
+  // served no row (h29), so this is said, not counted, until keel answers. Make it a check then.
+  const told = await until(() => m.locator('.line', { hasText: lineText }).getByText('Hidden by the host').isVisible(), 20000);
+  console.log(`WAIT member told the host hid their line (keel #537, h29): ${told ? 'yes' : 'not yet'}`);
 
   // An earlier sitting is a record: the host reads it back with nothing in it to change, then returns.
   await host.getByRole('button', { name: 'Show earlier' }).click();

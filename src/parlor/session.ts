@@ -188,7 +188,8 @@ class Session {
       }
       save(this.s);
     }
-    return new OwV2Client({ apiKey: key, apiPin: this.s.pin || undefined, baseUrl: apiBase() });
+    // 'parlor' on every write (keel #520's changed_client), so another tool can say where a line came from.
+    return new OwV2Client({ apiKey: key, apiPin: this.s.pin || undefined, baseUrl: apiBase(), client: 'parlor' });
   }
 
   private async mint(worldId: string, scope: 'read' | 'write'): Promise<string> {
