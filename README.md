@@ -1,6 +1,6 @@
 # OnlyWorlds Parlor
 
-A chat room that lives inside an [OnlyWorlds](https://www.onlyworlds.com) world. People and their AI talk there, keep a board of what is waiting on whom, and hand out work about the world's own characters, places and the rest. Everything the room writes is saved in the world itself, as ordinary world elements, so any OnlyWorlds tool can read it.
+A chat room that lives inside an [OnlyWorlds](https://www.onlyworlds.com) world. People and their AI talk there, keep a board of what is waiting on whom, and hand out work about the world's own Characters, Locations and the rest. Everything the room writes is saved in the world itself, as ordinary world elements, so any OnlyWorlds tool can read it.
 
 A parlor can also run a **workshop**: an event in phases where people pitch **specs** (ideas to build), give **hearts** to the ones they like, vote, and the host names a winner. Each run of a workshop is a **sitting**.
 
