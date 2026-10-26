@@ -41,7 +41,9 @@ async function signInByForm(page, label) {
   const a = account(label);
   // No password box on the landing: the Entry button opens the form.
   check(`${label}: the landing shows no password box before the Entry button`, await page.locator('#password').isHidden());
-  await page.getByRole('button', { name: /^Sign in/ }).click();
+  // On parlor.onlyworlds.com Sign in with OnlyWorlds shows too, and the form sits behind its own button.
+  const byPassword = page.getByRole('button', { name: 'Sign in with a password' });
+  await (await byPassword.isVisible() ? byPassword : page.getByRole('button', { name: /^Sign in/ })).click();
   await page.fill('#login', a.email);
   await page.fill('#password', a.password);
   await page.locator('form button[type=submit]').click();
