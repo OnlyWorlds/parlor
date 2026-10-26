@@ -1,5 +1,5 @@
 // The crew's test accounts, from the file CREW_WALK_ACCOUNTS names (outside this
-// repository), read for a walk and never printed. Claim one in h57 before a walk.
+// repository), read for a walk and never printed.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 const FILE = process.env.CREW_WALK_ACCOUNTS;

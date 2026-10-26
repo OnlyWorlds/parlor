@@ -1,6 +1,5 @@
 /**
- * OnlyWorlds Parlor: a room on a world (OW Parlor #481, the ground; design
- * sheet Orrery/parlor/design-sheet.md). Three pages: sign in, your parlors,
+ * OnlyWorlds Parlor: a room on a world. Three pages: sign in, your parlors,
  * the room. An invite link (`#/join/<code>`, or keel's own `/join#ow_j_…`
  * pasted in) joins first; the code leaves the address bar before anything
  * else runs. Sign in with OnlyWorlds comes back to `/signin/callback`, whose
@@ -22,7 +21,7 @@ const root = document.getElementById('app')!;
 const PENDING_JOIN = 'parlor.pendingJoin';
 /**
  * An invite waiting to be joined, kept for the tab so a reload of the screen that asks about it
- * keeps it (the S474 gate's G3). A signed-in browser asks before it spends one ("Join X as Y"),
+ * keeps it (the sign-in gate's G3). A signed-in browser asks before it spends one ("Join X as Y"),
  * whichever door signed it in (the gate's G1): only the password form's own sign-in, where the
  * person typed the account, joins at once.
  */
@@ -164,7 +163,7 @@ async function route(): Promise<void> {
   worldsView(root, w => { location.hash = `#/w/${w.id}`; }, id => { location.hash = `#/w/${id}`; });
 }
 
-/** `overtaken`: a newer route() took the page during an await, so this one draws nothing more (S474: Firefox's late room over a newer screen). */
+/** `overtaken`: a newer route() took the page during an await, so this one draws nothing more (Firefox's late room over a newer screen). */
 async function openRoom(worldId: string, overtaken: () => boolean): Promise<void> {
   clear(root, h('div', { class: 'center' }, h('p', { class: 'sys' }, 'Opening the room…')));
   let world: AccountWorld | undefined;
@@ -202,6 +201,6 @@ async function openRoom(worldId: string, overtaken: () => boolean): Promise<void
 
 window.addEventListener('hashchange', () => { void route(); });
 // A page brought back by Back (from onlyworlds.com, or past a sign-in) loads again: its session was
-// read once, before the sign-in (the S474 gate's G5).
+// read once, before the sign-in (the sign-in gate's G5).
 window.addEventListener('pageshow', e => { if (e.persisted) location.reload(); });
 void route();

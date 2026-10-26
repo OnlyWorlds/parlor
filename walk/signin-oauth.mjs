@@ -1,4 +1,4 @@
-// Sign in with OnlyWorlds, played (Keel #515; contract Forge/Notes/2026-10-25-s474-parlor-sign-in-contract.md),
+// Sign in with OnlyWorlds, played,
 // on a built parlor with real presses: Playwright serves https://parlor.onlyworlds.com from a build
 // directory under its own _headers (the policy, COOP, the callback's block) and _redirects, and plays
 // keel's /signin/authorize (a hop back with a code and the SDK's state, or keel's Cancel),

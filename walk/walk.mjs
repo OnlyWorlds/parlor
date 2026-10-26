@@ -1,4 +1,4 @@
-// The ground's live walk (OW Parlor #481): a host and a member on production keel,
+// The ground's live walk: a host and a member on production keel,
 // the built bundle served by `vite preview`, one engine per run.
 //   WALK_STATE=<scratch file> SHOTS=<dir> node walk/walk.mjs chromium|firefox [member-label]
 // The host is crew-walk-c. crew-walk-d walks the PIN-less door. The member
@@ -151,7 +151,7 @@ try {
   const m = await mCtx.newPage();
   pages.push([m, memberLabel]);
   await m.goto(`${BASE}#/join/${s.invites.member.code}`);
-  // Signed in already: the invite is asked first, naming the account (S474, the sign-in gate's G1).
+  // Signed in already: the invite is asked first, naming the account (the sign-in gate's G1).
   const ask = m.getByRole('button', { name: `Join Parlor ground (crew test) as ${memberLabel}` });
   check('member: a signed-in invite asks first, naming the account', await until(() => ask.isVisible(), 20000));
   await ask.click();
@@ -162,7 +162,7 @@ try {
     await m.getByRole('button', { name: 'Save', exact: true }).click();
   }
   check('member: the room knows their name', await until(() => m.locator('#my-name').isHidden()), named ? 'named just now' : 'named before');
-  // One Entry per screen (Seethe h66 #12914): Send and the name's Save are Standard.
+  // One Entry per screen (Seethe, 2026-10-25): Send and the name's Save are Standard.
   {
     const entries = await m.locator('.btn.entry').evaluateAll(els => els.filter(e => e.offsetParent !== null).map(e => e.textContent));
     check('member: at most one Entry button on the screen', entries.length <= 1, entries.join(', '));
@@ -350,7 +350,7 @@ try {
   const memberItem = m.locator('.witem', { hasText: workTitle });
   check('member: the item counts the answer', await until(() => memberItem.getByText('1 answer in the room').isVisible(), 10000));
 
-  // Take (profiles/room.md serial 66; contract Forge/Notes/2026-10-25-s474-parlor-take-contract.md).
+  // Take (profiles/room.md serial 66).
   // A lore Take on this very item (the pair and x_room_item, no mark) never counts.
   let itemId = null;
   for await (const e of api.listAll('relation')) if (e.name === workTitle) itemId = e.id;
@@ -482,7 +482,7 @@ try {
   check('host: a line written while reading back shows, the room back to now', await until(async () =>
     await host.getByText(backLine).isVisible() && !(await host.getByText('An earlier sitting.').count()), 6000));
   check('host: back to now, the phases are the host\'s again', await until(() => host.locator('.hostbar [role="group"][aria-label="Phase"]').isVisible(), 5000));
-  // A window narrowed to a phone after load keeps one pane at a time (Seethe h66 #12914), and both come back when wide.
+  // A window narrowed to a phone after load keeps one pane at a time (Seethe, 2026-10-25), and both come back when wide.
   {
     const panes = () => host.locator('section.pane').evaluateAll(els => els.map(e => getComputedStyle(e).display !== 'none'));
     await host.setViewportSize({ width: 390, height: 844 });

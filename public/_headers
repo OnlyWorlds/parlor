@@ -10,7 +10,7 @@
 /index.html
   Cache-Control: no-cache
 
-# Sign in with OnlyWorlds returns here with a code in the address (Keel #515): never cached, never
+# Sign in with OnlyWorlds returns here with a code in the address: never cached, never
 # sent on as a Referer (the inherited policy detached, as Atlas's and Lantern's).
 /signin/callback
   ! Referrer-Policy

@@ -14,7 +14,7 @@
  *               Relation's typed link fields, subtype open, taken or done (schema-dist profiles/packet.md)
  *   the charter Law,       supertype Charter
  *   a member    Character, supertype Member: a person's own name in the room when their seat has no
- *               Character (an invite link gives a person none; h66 #9720, until keel's roster names them)
+ *               Character (an invite link gives a person none, until keel's roster names them)
  *
  * Who made a thing is `created_by` (a membership id, null for the world's owner),
  * never a name in its text.
@@ -61,7 +61,7 @@ export const SUPERTYPE = {
   vote: 'Vote',
   sitting: 'Sitting',
   charter: 'Charter',
-  /** A person's own Character, made on first entry when their seat has none (h66 #9720). */
+  /** A person's own Character, made on first entry when their seat has none. */
   member: 'Member',
   /** One member's take on a work item (the room profile's ninth pair, schema-dist serial 66). */
   take: 'Take',
@@ -220,7 +220,7 @@ export function kindOf(subtype: unknown): Kind | null {
 /**
  * Builds up to 2026-10-25 marked the winner as the spec's subtype star. A sitting made before
  * 2026-10-26 (this constant) that names no `x_star` reads that old mark; a later one never does, so a member
- * cannot crown their own spec by setting its subtype (the S473 gate's G2). Only crew test worlds
+ * cannot crown their own spec by setting its subtype. Only the team's test worlds
  * ever ran those builds.
  */
 export const OLD_STAR_BEFORE = '2026-10-26T00:00:00Z';
@@ -335,8 +335,8 @@ export interface Sitting extends Switches {
 
 /**
  * The six, named by what a member does there, each a set of switches, never a position in a
- * list (sheet §2 and §6 point 10: the Captain folded February's Parsing into Pitch, h28 #10285;
- * the names h66 #10317).
+ * list (sheet §2 and §6 point 10: Titus folded February's Parsing into Pitch, and the names were
+ * set, on 2026-10-22).
  */
 export const PHASES: ReadonlyArray<{ name: string } & Switches> = [
   { name: 'Arrive', hearts: false, specs: false, voting: false },

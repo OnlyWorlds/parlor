@@ -1,7 +1,7 @@
 /**
  * One at a time, in the order asked. Two writes in flight land in whatever
  * order the server takes them: a host's Build then Showcase, clicked quickly,
- * ended on Build (the S450 Firefox walk). A failed job does not stop the next.
+ * ended on Build (a Firefox walk). A failed job does not stop the next.
  */
 export function serialQueue(): <T>(job: () => Promise<T>) => Promise<T> {
   let tail: Promise<unknown> = Promise.resolve();

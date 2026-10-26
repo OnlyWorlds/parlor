@@ -1,11 +1,11 @@
-// Sign in with OnlyWorlds read live (Keel #515; contract Forge/Notes/2026-10-25-s474-parlor-sign-in-contract.md):
+// Sign in with OnlyWorlds read live:
 // a crew account signed in on onlyworlds.com (its own form, in the walk's browser) presses the button
 // on the parlor, takes the consent page if it shows, and must land on Your parlors signed in with
 // nothing typed into the parlor. Real keel throughout. With DIST set, https://parlor.onlyworlds.com is
 // served from that build (under its _headers and _redirects) so a build is read against real keel
 // before it flies; without it, the live host. The token the parlor kept is revoked by its own id (only
 // that one), then must answer 401; the walk's own token last. Credentials from CREW_WALK_ACCOUNTS,
-// never printed. Claim the account in h57 first.
+// never printed.
 //   CREW_WALK_ACCOUNTS=<file> [DIST=dist] node walk/live-signin-ow.mjs <out-prefix> [chromium|firefox] [crew-walk-b]
 import { chromium, firefox } from '@playwright/test';
 import { OwV2Client } from '@onlyworlds/sdk';
@@ -88,7 +88,7 @@ await Promise.all([p.waitForURL(u => !u.pathname.startsWith('/accounts/login'), 
 step(`site signed in: ${new URL(p.url()).pathname}`);
 
 // 2. The parlor, signed out, on a room's address (ROOM=1: the test world, so the return resumes the
-// room and must name the account there, the S474 gate's G2). The room mints this browser a world key:
+// room and must name the account there, the sign-in gate's G2). The room mints this browser a world key:
 // its id is the one new key ending as the browser's, revoked in step 4.
 const roomMode = process.env.ROOM === '1';
 let worldId = null;

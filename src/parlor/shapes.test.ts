@@ -225,7 +225,7 @@ describe("a spec's kind and the sitting's star (sheet §6 point 13, draft 7)", (
     expect(starOf({ star: null, at: '2026-10-22T10:00:00Z' })).toBe(OLD_STAR);
   });
 
-  it('a new sitting with no x_star has no winner, whatever a spec calls itself (the S473 gate G2)', () => {
+  it('a new sitting with no x_star has no winner, whatever a spec calls itself', () => {
     const els = [spec({ id: 'self', subtype: 'star' }), spec({ id: 'b' })];
     const now = starOf({ star: null, at: OLD_STAR_BEFORE });
     expect(now).toBeNull();
@@ -297,7 +297,7 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     expect('actor' in newWorkItem('A', '', null, [], 'w1')).toBe(false);
   });
 
-  describe('Take (profiles/room.md serial 66, contract S474)', () => {
+  describe('Take (profiles/room.md serial 66)', () => {
     const take = (o: Partial<El> & { id: string }) => el({ type: 'relation', supertype: 'Take', subtype: 'taken', ...o });
     it('a take: the pair, the item by x_room_item, the item\'s own scope, the taker as actor; the item untouched', () => {
       const body = newTake({ id: 'i1', title: 'Tie the guild in', roomOf: 's1' }, 'c1');

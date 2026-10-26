@@ -485,7 +485,7 @@ export class Room {
   /**
    * Hide a line from the room (keel's hidden mark: owner and co-builders; the
    * poster and the hosts still see it, so the host's room marks it). The SDK's
-   * hide and unhide (Kael h66 #9737).
+   * hide and unhide (Kael, 2026-10-22).
    */
   hide(type: string, id: string, hidden = true): Promise<void> {
     return this.serial(async () => {

@@ -1,7 +1,5 @@
 /**
- * Sign in with OnlyWorlds (Keel #515, D139; contract
- * `Forge/Notes/2026-10-25-s474-parlor-sign-in-contract.md`, the twin of Lantern's and the
- * Council's). The SDK's two calls: `signInWithOnlyWorlds` sends the browser to onlyworlds.com with
+ * Sign in with OnlyWorlds (the twin of Lantern's and the Council's). The SDK's two calls: `signInWithOnlyWorlds` sends the browser to onlyworlds.com with
  * a PKCE challenge, `completeSignIn` trades the code on `/signin/callback`. Where the person was
  * going (an invite, a room) is the parlor's own note, kept beside the SDK's record, so a refusal
  * gives it back too.
@@ -110,7 +108,7 @@ class NoStorage extends Error {}
 export function startSignInCallback(href: string = location.href, fetchImpl?: typeof fetch): Promise<SignInOutcome> {
   const cancelled = new URL(href).searchParams.get('error') === 'access_denied';
   const storage = recordStore();
-  // The limit spans the whole exchange, its answer's body too (the S474 gate's G12).
+  // The limit spans the whole exchange, its answer's body too (the sign-in gate's G12).
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), SIGN_IN_EXCHANGE_LIMIT_MS);
   const limited: typeof fetch = (input, init) => (fetchImpl ?? fetch)(input, { ...init, signal: ctl.signal });
@@ -154,7 +152,7 @@ export interface Landing {
   join?: string;
   /** A refusal, said on the landing (P7). */
   problem?: string;
-  /** Signed in by this return: the room it lands in names the account (the S474 gate's G2). */
+  /** Signed in by this return: the room it lands in names the account (the sign-in gate's G2). */
   signedIn?: boolean;
 }
 
@@ -170,7 +168,7 @@ export function applySignInOutcome(outcome: SignInOutcome, resume: Resume): Land
     return { hash: resume.hash ?? '#/', join: resume.join, signedIn: true };
   }
   // Signed in, the button was never offered: a return that did not sign in is not this browser's
-  // to report (P8; a crafted Cancel too, the S474 gate's G9).
+  // to report (P8; a crafted Cancel too, the sign-in gate's G9).
   if (session.signedIn) return { hash: '#/' };
   if (!outcome.cancelled) console.warn('[sign-in] the return did not sign in:', outcome.error);
   return { hash: '#/', join: resume.join, problem: signInCallbackLine(outcome) };

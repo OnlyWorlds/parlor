@@ -17,7 +17,7 @@ export interface SignedInAs {
   signOut: () => void;
 }
 
-/** `signedInAs`: the room was reached by a sign-in just now, so it names the account (the S474 gate's G2). */
+/** `signedInAs`: the room was reached by a sign-in just now, so it names the account (the sign-in gate's G2). */
 export function roomView(root: HTMLElement, room: Room, onLeave: () => void, signedInAs?: SignedInAs): () => void {
   const top = h('header', { class: 'top' });
   const whoLine = signedInAs
@@ -371,7 +371,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   /**
    * The host bar is rebuilt only when what it shows moved: a press that straddles a rebuild
    * lands on a node that is gone, so a feed tick from someone else's line must not cost a
-   * host's click (the S472 walk lost a phase press that way).
+   * host's click (a walk lost a phase press that way).
    */
   let hostKey = '';
   function drawHost(): void {

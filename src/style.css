@@ -1,5 +1,5 @@
-/* The parlor's look: Seethe's v1 screens (Studio desk/current/2026-10-21-parlor-screens/parlor.css,
-   OW Parlor #488), taken whole for the ground; her pass on the built pages follows. */
+/* The parlor's look: Seethe's v1 screens (2026-10-21), taken whole for the ground; her pass on
+   the built pages follows. */
 :root{--bg:#000;--surf:#0b0f14;--surf2:#10161d;--line:#243040;--text:#e2e8f0;--muted:#94a3b8;--accent:#22d3ee;--fill:#22d3ee;--onfill:#00141a;--ai:#c4a3ff;--warn:#f5b942;--ok:#86efac;--red:#ff8a8a}
 *{box-sizing:border-box}
 [hidden]{display:none!important}

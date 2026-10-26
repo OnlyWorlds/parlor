@@ -28,7 +28,7 @@ export function apiBase(): string {
   }
 }
 
-/** One world on the account, as GET /account/worlds lists it (SDK 4.45's listAccountWorlds, Kael h66 #9737). */
+/** One world on the account, as GET /account/worlds lists it (SDK 4.45's listAccountWorlds). */
 export type AccountWorld = OwAccountWorld;
 
 interface Stored {

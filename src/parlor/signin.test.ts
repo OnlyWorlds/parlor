@@ -3,7 +3,7 @@ import { OwSignInError } from '@onlyworlds/sdk';
 import sourcePage from '../../index.html?raw';
 import viteConfig from '../../vite.config.ts?raw';
 
-// A localStorage before the session module reads it, so the storage paths run (the S474 gate's G7).
+// A localStorage before the session module reads it, so the storage paths run (the sign-in gate's G7).
 const store = vi.hoisted(() => {
   const m = new Map<string, string>();
   (globalThis as { localStorage?: unknown }).localStorage = {

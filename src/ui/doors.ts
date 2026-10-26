@@ -121,7 +121,7 @@ export function signInView(root: HTMLElement, preview: OwJoinPreview | null, onI
  * and the account may be the one the browser chose, so the join is asked, naming who.
  */
 export function confirmJoinView(root: HTMLElement, preview: OwJoinPreview, onJoin: () => void, onOther: () => void, onNotNow: () => void): void {
-  // keel may name no username (the S474 gate's G4): then the sentence names the door instead.
+  // keel may name no username (the sign-in gate's G4): then the sentence names the door instead.
   const who = session.login;
   const world = preview.world.name;
   // One press each: the buttons go inert on the first (the code gate's C8).

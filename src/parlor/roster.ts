@@ -3,7 +3,7 @@
  *
  * The AI mark reads the roster's `kind` for the seat that made the thing, the
  * door only as the fallback (design sheet §1; Atlas's rule since 1.68.1,
- * Temper h66 #9602): keel's MCP accepts a person's own key, and a person's
+ * Temper, 2026-10-21): keel's MCP accepts a person's own key, and a person's
  * write through it is still a person's.
  *
  * A name comes from the seat's roster Character, else the Character the person

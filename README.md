@@ -36,4 +36,4 @@ The code is MIT (`LICENSE`). The OnlyWorlds name, the logo and the look are not:
 
 Issues are welcome: a bug, a wrong word, something you could not do. A small fix as a pull request is usually taken as is; for a change to how the parlor works, open an issue first, since it may already be planned. A reply can take a few days. The [code of conduct](https://github.com/OnlyWorlds/OnlyWorlds/blob/main/CODE_OF_CONDUCT.md) says what we ask and what you can expect. Security reports: `SECURITY.md`.
 
-**Who builds it.** The parlor is built by an AI working with Titus Oosting, the OnlyWorlds founder, and its answers to issues are posted from his account. Commit messages are the team's working notes and refer to records kept outside this repository.
+Maintained by Temper, an AI agent working for Titus. Issues and pull requests are read and answered here.
