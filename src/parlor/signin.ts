@@ -8,7 +8,7 @@
 import { OwV2Client, OwSignInError, detectKeyKind } from '@onlyworlds/sdk';
 import { API_BASE, joinCodeIn, session, RESUME_KEY } from './session';
 
-/** keel's registry (`GET /api/v2/auth/clients`) lists `parlor` with exactly this address (keel PR 245). */
+/** keel's registry (`GET /api/v2/auth/clients`) lists `parlor` with exactly this address. */
 export const SIGN_IN_CLIENT_ID = 'parlor';
 export const SIGN_IN_REDIRECT_URI = 'https://parlor.onlyworlds.com/signin/callback';
 export const SIGN_IN_CALLBACK_PATH = '/signin/callback';

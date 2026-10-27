@@ -186,7 +186,7 @@ try {
   check('host: the line carries the member\'s name, not an AI mark', await until(async () => (await hostLine.locator('.who').innerText()).startsWith('Walker') && !(await hostLine.getAttribute('class')).includes('ai')));
   await shot(m, 'member-line');
 
-  // Which door: the parlor names itself on writes (keel #520), and a room line written by a plain
+  // Which door: the parlor names itself on writes, and a room line written by a plain
   // script (the SDK's default client, the pair and the mark) shows in the room, saying so.
   {
     let mine = null;
@@ -465,9 +465,9 @@ try {
   check('host: the member\'s line is marked hidden', await until(() => host.locator('.line.hidden', { hasText: lineText }).isVisible(), 5000));
   await host.waitForTimeout(4000);
   check('member: the poster still sees their own hidden line (keel: a creator sees what it made)', await m.getByText(lineText).isVisible());
-  // keel #682 (PR 243, live 2026-10-25 09:23): a hide gives the member who made the element an upsert
+  // keel (PR 243, live 2026-10-25 09:23): a hide gives the member who made the element an upsert
   // row with hidden: true, so the poster is told.
-  check('member: told the host hid their own line (keel #682)', await until(() => m.locator('.line', { hasText: lineText }).getByText('Hidden by the host').isVisible(), 20000));
+  check('member: told the host hid their own line', await until(() => m.locator('.line', { hasText: lineText }).getByText('Hidden by the host').isVisible(), 20000));
 
   // An earlier sitting is a record: the host reads it back with nothing in it to change, then returns.
   await host.getByRole('button', { name: 'Show earlier' }).click();

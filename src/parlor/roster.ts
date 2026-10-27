@@ -51,7 +51,7 @@ const CLIENT_NAMES: Readonly<Record<string, string>> = { atlas: 'Atlas', lantern
 /**
  * Which door a room thing came through, when it is not the parlor's own (sheet §1: "who and which
  * door on each row"): MCP and the site by keel's `changed_via`, else the tool's own claimed name,
- * `changed_client` (keel #520; the parlor names itself 'parlor'). Null for the parlor and for none.
+ * `changed_client` (the parlor names itself 'parlor'). Null for the parlor and for none.
  */
 export function doorLine(el: Pick<El, 'changed_via' | 'changed_client'>): string | null {
   if (el.changed_via === 'mcp') return 'through MCP';

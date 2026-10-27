@@ -235,7 +235,7 @@ class Session {
       }
       save(this.s);
     }
-    // 'parlor' on every write (keel #520's changed_client), so another tool can say where a line came from.
+    // 'parlor' on every write (keel's changed_client), so another tool can say where a line came from.
     return new OwV2Client({ apiKey: key, apiPin: this.s.pin || undefined, baseUrl: apiBase(), client: 'parlor' });
   }
 
