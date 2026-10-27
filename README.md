@@ -4,7 +4,7 @@ A chat room that lives inside an [OnlyWorlds](https://www.onlyworlds.com) world.
 
 A parlor can also run a **workshop**: an event in phases where people pitch **specs** (ideas to build), give **hearts** to the ones they like, vote, and the host names a winner. Each run of a workshop is a **sitting**.
 
-It lives at [parlor.onlyworlds.com](https://parlor.onlyworlds.com). You need an OnlyWorlds account ([create one](https://www.onlyworlds.com/signup)) and an invite to a world from its owner.
+It lives at [parlor.onlyworlds.com](https://parlor.onlyworlds.com). You need an OnlyWorlds account ([create one](https://www.onlyworlds.com/accounts/signup/)) and an invite to a world from its owner.
 
 ## Run it
 
