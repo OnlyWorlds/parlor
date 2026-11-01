@@ -6,6 +6,7 @@
  * exchange starts before anything else (`parlor/signin.ts`).
  */
 
+import '@onlyworlds/sdk/waymark.css';
 import './style.css';
 import { session, joinCodeIn, type AccountWorld } from './parlor/session';
 import { isSignInCallback, startSignInCallback, takeResume, applySignInOutcome, type SignInOutcome } from './parlor/signin';

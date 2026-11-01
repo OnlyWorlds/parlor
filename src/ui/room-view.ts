@@ -10,6 +10,7 @@ import { PHASES, KINDS, BOARD_COLOURS, type Switches, type Kind, type BoardColou
 import { problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
+import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot } from './waymark';
 
 export interface SignedInAs {
   /** The account's name; empty when keel named none. */
@@ -225,6 +226,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const board = h('div');
   const workList = h('div');
   const changeList = h('div');
+  const workMarks = markSet(workList);
+  const changeMarks = markSet(changeList);
   // -------------------------------------------------- the layout
   const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? send : null);
   const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm);
@@ -278,14 +281,18 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     boardForm.hidden = !(boardOpen && workTab === 'board');
   }
 
+  // The world's name and its mark are built once: the bar's other parts are redrawn on every draw, and
+  // the mark is never moved, so an open fan-out and the focus on the mark stay where they are.
+  const worldMark = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, null), 'world');
+  const topSub = h('div', { class: 'wsub' });
+  const topRest = h('div', { class: 'top-rest' });
+  top.append(h('div', { class: 'brand' }, 'PARLOR'), h('div', null, h('div', { class: 'wname' }, room.world.name, worldMark.el), topSub), topRest);
   function drawTop(): void {
     const s = room.sitting();
     const seats = room.seats();
     const hostName = seats.find(x => x.role === 'host')?.name;
-    clear(top,
-      h('div', { class: 'brand' }, 'PARLOR'),
-      h('div', null, h('div', { class: 'wname' }, room.world.name),
-        h('div', { class: 'wsub' }, [s ? s.phase : 'No sitting yet', hostName ? `host ${hostName}` : ''].filter(Boolean).join(' · '))),
+    topSub.textContent = [s ? s.phase : 'No sitting yet', hostName ? `host ${hostName}` : ''].filter(Boolean).join(' · ');
+    clear(topRest,
       h('span', { class: 'chip' }, `You: ${room.role}`),
       h('div', { class: 'seats', 'aria-label': `${seats.length} seats` },
         seats.slice(0, 12).map(x => h('span', { class: x.ai ? 'bdg a' : 'bdg', title: `${x.name}, ${x.ai ? 'AI ' : ''}${x.role}` }, x.ai ? 'AI' : initial(x.name))),
@@ -524,7 +531,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.by, v.answers, v.els, v.takers, v.mine]),
       room.canWrite, room.isHost, room.needsName(), workOpen, deleting]);
     if (key === workKey) return;
+    // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.
+    if (workMarks.held()) return;
     workKey = key;
+    const focused = workMarks.before();
+    const world = { id: room.world.id, name: room.world.name };
     clear(workList,
       h('p', { class: 'sys' }, 'Work on this world: each item says what it is about, and opens in the room when you answer it.'),
       view.length ? view.map(({ w, can, hidden, who, by, answers, els, takers, mine }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
@@ -536,6 +547,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         w.text ? h('p', null, w.text) : null,
         els.length ? h('ul', { class: 'about' }, els.map(x => h('li', null,
           h('span', { class: 'chip el' }, w.otherWorld ? `In another world · ${typeWord(x.type)}` : x.name === null ? `Missing · ${typeWord(x.type)}` : `${x.name} · ${typeWord(x.type)}`),
+          // A Missing element or one in another world has no page here to open. The mark takes the element
+          // the room holds, its own type and body, never the type a packet claims for it.
+          !w.otherWorld && x.name !== null && room.els.get(x.id)
+            ? workMarks.mark(waymarkPlan(world, room.els.get(x.id) as unknown as Record<string, unknown>, 'Untitled'), `work:${w.id}:${x.id}`) : null,
           x.reason ? h('span', { class: 'why' }, x.reason) : null))) : null,
         answers || hidden ? h('div', { class: 'm' }, [answers ? `${answers} answer${answers === 1 ? '' : 's'} in the room` : '',
           hidden ? (room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : ''].filter(Boolean).join(' · ')) : null,
@@ -570,6 +585,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         : h('div', { class: 'empty' }, h('h3', null, 'No work yet'), h('p', null, 'A work item names what needs doing and the elements it is about, so anyone in the room can pick it up.')),
       room.canWrite && !workOpen ? h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'button', onclick: openWorkForm }, 'Add a work item')) : null,
     );
+    workMarks.after(focused);
   }
 
   /** The world's recent changes: who, which door, an AI's rows marked (sheet §2). Drawn only when the list moved. */
@@ -578,19 +594,37 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const rows = room.changes().map(c => ({ c, who: room.name(c.by), ai: room.isAi(c.by, c.el.changed_via), door: doorLine(c.el), fresh: !!seenBefore && c.at > seenBefore }));
     const key = JSON.stringify(rows.map(r => [r.c.id, r.c.name, r.c.at, r.who, r.ai, r.door, r.fresh]));
     if (key === changesKey) return;
+    // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.
+    if (changeMarks.held()) return;
     changesKey = key;
+    const focused = changeMarks.before();
+    const world = { id: room.world.id, name: room.world.name };
     clear(changeList,
       h('p', { class: 'sys' }, seenBefore ? 'What changed in the world, newest first; new since you last opened the room are marked.' : 'What changed in the world, newest first.'),
       rows.length ? h('ul', { class: 'changes' }, rows.map(({ c, who, ai, door, fresh }) => h('li', { class: ai ? 'ai' : '' },
         h('span', { class: ai ? 'bdg a' : 'bdg' }, ai ? 'AI' : initial(who)),
         h('div', null,
-          h('div', null, h('span', { class: 'nm' }, c.name), ' ', h('span', { class: 't' }, c.type.charAt(0).toUpperCase() + c.type.slice(1)), fresh ? h('span', { class: 'chip on' }, 'New') : null),
+          h('div', null, h('span', { class: 'nm' }, c.name), changeMarks.mark(waymarkPlan(world, { ...c.el, id: c.id, type: c.type, name: c.name }), `change:${c.id}`), ' ', h('span', { class: 't' }, c.type.charAt(0).toUpperCase() + c.type.slice(1)), fresh ? h('span', { class: 'chip on' }, 'New') : null),
           h('div', { class: 't' }, [`${c.made ? 'made' : 'changed'} by ${who}`, ai ? 'an AI' : '', door ?? '', hhmm(c.at)].filter(Boolean).join(' · '))))))
         : h('div', { class: 'empty' }, h('h3', null, 'Nothing yet'), h('p', null, 'When someone adds to the world or changes it, it shows here.')),
     );
+    changeMarks.after(focused);
   }
 
+  // A fan-out that settled lets its panel's held rebuild run.
+  let gone = false;
+  const onSettled = (): void => { if (!gone) draw(); };
+  root.addEventListener(WAYMARK_SETTLED, onSettled);
   const off = room.feed.subscribe(draw);
   draw();
-  return () => { off(); mq.removeEventListener('change', onWidth); room.close(); };
+  return () => {
+    gone = true;
+    off();
+    root.removeEventListener(WAYMARK_SETTLED, onSettled);
+    workMarks.dispose();
+    changeMarks.dispose();
+    worldMark.dispose();
+    mq.removeEventListener('change', onWidth);
+    room.close();
+  };
 }

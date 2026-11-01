@@ -341,6 +341,7 @@ try {
     (await hostItem.locator('.m').first().innerText()).startsWith('For Host C · made by Walker') && await hostItem.locator('.chip.s-open').isVisible(), 10000));
   check('host: it names what it is about', await hostItem.locator('.about .chip', { hasText: `${loreName} · Character` }).isVisible());
   check('host: markup in a work item stays text', await hostItem.getByText('<b>links</b>', { exact: false }).isVisible());
+  check('mark: the element a work item is about carries the OnlyWorlds mark', (await hostItem.locator(`.parlor-waymark[data-mark$=":${lore.id}"] .ow-waymark__mark`).count()) === 1);
   await host.waitForTimeout(2500);
   check('host: a lore Work item is not work', !(await host.locator('.witem', { hasText: `DECOY work ${engineName}` }).count()));
   await hostItem.getByRole('button', { name: 'Answer' }).click();
@@ -401,7 +402,12 @@ try {
   check('member: the host\'s Delete takes the item away', await until(() => memberItem.isHidden(), 10000));
   {
     // The host deletes an item the member made and took: the host may delete another's take, so it goes too (T6).
-    const gone = takeEl ? await fetch(`${API}/relation/${takeEl.id}`, { headers: { 'API-Key': s.hostKey.key, 'API-Pin': account('crew-walk-c').pin } }).then(r => r.status) : 'no take';
+    // The page deletes the takes after the item, in later requests, so the walk waits for the outcome.
+    let gone = 'no take';
+    if (takeEl) await until(async () => {
+      gone = await fetch(`${API}/relation/${takeEl.id}`, { headers: { 'API-Key': s.hostKey.key, 'API-Pin': account('crew-walk-c').pin } }).then(r => r.status);
+      return gone === 404 || gone === 410;
+    }, 10000);
     check('take: the item\'s delete took the member\'s take with it (keel answers 404 or 410)', gone === 404 || gone === 410, String(gone));
   }
   await shot(host, 'host-work');
@@ -412,6 +418,31 @@ try {
   const loreRow = host.locator('.changes li', { hasText: loreName });
   check('host: the world\'s change shows, said as a script\'s', await until(async () => (await loreRow.innerText()).includes('through a script'), 8000));
   check('host: a room line is not a change to the world', !(await host.locator('.changes').getByText(workAnswer).count()) && !(await host.locator('.changes').getByText(lineText).count()));
+  // The OnlyWorlds mark: after the changed element's name, its first row the element's own page.
+  {
+    const mark = loreRow.locator('.parlor-waymark .ow-waymark__mark');
+    check('mark: the changed element carries the OnlyWorlds mark', (await mark.count()) === 1, String(await mark.count()));
+    await mark.click();
+    const first = await loreRow.locator('a.ow-waymark__row').first().getAttribute('href').catch(() => null);
+    check('mark: its first row is the element\'s page on onlyworlds.com', first === `https://www.onlyworlds.com/w/${s.worldId}/character/${lore.id}`, String(first));
+    // While its fan-out is open the list holds: a change made now waits, then shows once it closes.
+    const heldName = `Walk held ${engineName} ${stamp}`;
+    await decoy('character', { name: heldName });
+    await host.waitForTimeout(6500);
+    const stillOpen = (await mark.getAttribute('aria-expanded')) === 'true';
+    const shownWhileOpen = await host.locator('.changes li', { hasText: heldName }).count();
+    check('mark: an open fan-out holds the list through the feed', stillOpen && shownWhileOpen === 0, `open ${stillOpen}, held row shown ${shownWhileOpen}`);
+    await host.keyboard.press('Escape');
+    check('mark: closed, the held change shows', await until(async () => (await host.locator('.changes li', { hasText: heldName }).count()) === 1, 8000));
+    const focusOn = await host.evaluate(() => document.activeElement?.closest('.parlor-waymark')?.getAttribute('data-mark') ?? null);
+    check('mark: focus is on the same mark in the new list', focusOn === `change:${lore.id}`, String(focusOn));
+    // The world's own mark sits after its name in the bar, the same node through the feed's redraws.
+    const wm = host.locator('.top .parlor-waymark[data-mark="world"] .ow-waymark__mark');
+    await host.evaluate(() => { const n = document.querySelector('.top .parlor-waymark[data-mark="world"]'); if (n) n.__walk = 1; });
+    await host.waitForTimeout(4500);
+    const same = await host.evaluate(() => document.querySelector('.top .parlor-waymark[data-mark="world"]')?.__walk === 1);
+    check('mark: the world\'s name carries its mark, never rebuilt by the feed', (await wm.count()) === 1 && same, `count ${await wm.count()}, same node ${same}`);
+  }
   await shot(host, 'host-changes');
   await m.getByRole('tab', { name: /^Specs/ }).click();
   await host.getByRole('tab', { name: /^Specs/ }).click();

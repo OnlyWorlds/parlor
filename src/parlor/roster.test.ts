@@ -4,10 +4,10 @@ import { doorLine, isAiSeat, nameOf, roomRole, seats } from './roster';
 import { OWNER, readMemberCharacters, type El } from './shapes';
 
 const roster: OwMember[] = [
-  { id: null, kind: 'owner', role: 'owner', character: 'c-owner', status: 'active' },
-  { id: 'm-person', kind: 'person', role: 'contributor', character: null, status: 'active' },
-  { id: 'm-agent', kind: 'agent', role: 'contributor', character: null, status: 'active', name: 'Skeld' },
-  { id: 'm-gone', kind: 'person', role: 'contributor', character: null, status: 'removed' },
+  { id: null, kind: 'owner', role: 'owner', character: 'c-owner', status: 'active', lenses: [], lenses_from: 'chosen' },
+  { id: 'm-person', kind: 'person', role: 'contributor', character: null, status: 'active', lenses: [], lenses_from: 'chosen' },
+  { id: 'm-agent', kind: 'agent', role: 'contributor', character: null, status: 'active', name: 'Skeld', lenses: [], lenses_from: 'chosen' },
+  { id: 'm-gone', kind: 'person', role: 'contributor', character: null, status: 'removed', lenses: [], lenses_from: 'chosen' },
 ];
 
 const els = new Map<string, El>([
