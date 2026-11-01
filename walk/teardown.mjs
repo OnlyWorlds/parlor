@@ -45,8 +45,7 @@ if (s.hostKey?.id) {
   keyCount++;
 }
 const left = (await accountCall(c, 'GET', `/account/worlds/${s.worldId}/keys`)).data.filter(k => ours(k.name) && !k.revoked);
-// keel takes the browsers' keys back with the host's token below, so this count is before that; the count at the end is the verdict.
-console.log(`world keys revoked: ${keyCount}; live by our names before the tokens go: ${left.length}`);
+console.log(`world keys revoked: ${keyCount}; still live by our names: ${left.length}`);
 if (s.hostKey) {
   const probe = await fetch(`${API}/me`, { headers: { 'API-Key': s.hostKey.key } });
   console.log(`the host's walk key reads back ${probe.status}`);
@@ -76,18 +75,3 @@ for (const [label, t] of Object.entries(s.tokens)) {
 s.tokens = {};
 delete s.hostKey;
 writeState(s);
-
-// The verdict on keys: keel takes the browsers' keys back with the host's token, so they are counted
-// after it, by one more sign-in whose token is revoked at once. A key left here is read, never revoked here.
-{
-  const host = account('crew-walk-c');
-  const v = await new OwV2Client({ baseUrl: API }).signInWithPassword({ email: host.email, password: host.password, tokenName: 'Parlor walk S450' });
-  try {
-    const after = (await accountCall(v.token, 'GET', `/account/worlds/${s.worldId}/keys`)).data.filter(k => ours(k.name) && !k.revoked);
-    console.log(`world keys live by our names after the tokens: ${after.length}${after.length ? ` (${after.map(k => k.last4).join(', ')}: read them before anything is revoked)` : ''}`);
-  } finally {
-    await accountCall(v.token, 'DELETE', `/account/tokens/${v.id}`);
-    const back = await fetch(`${API}/account`, { headers: { Authorization: `Bearer ${v.token}` } });
-    console.log(`the count's token revoked; it reads back ${back.status}`);
-  }
-}
