@@ -17,4 +17,4 @@ The test world is "Parlor ground (crew test)"; each walk starts a new sitting, i
 Sign in with OnlyWorlds has two walks of its own:
 
 - `node walk/signin-oauth.mjs [chromium|firefox]` plays the OnlyWorlds server and serves `https://parlor.onlyworlds.com` from `dist/` under its `_headers` and `_redirects`. No account needed; `DIST=<dir>` runs it on another build as a control.
-- `node walk/live-signin-ow.mjs <out-prefix> [engine] [account]` uses the real server and a test account signed in on onlyworlds.com, against `DIST` when set, else the live site (`ROOM=1` comes back into a room). It revokes the token and key the parlor made, by their ids.
+- `node walk/live-signin-ow.mjs <out-prefix> [engine] [account]` uses the real server and a test account signed in on onlyworlds.com, against `DIST` when set, else the live site (`ROOM=1` comes back into a room). It revokes the token and key the parlor made, by their ids, and a run that throws or rejects still revokes every Parlor token new since its start (`FAIL_AFTER_KEPT=1` forces that failure, to check it).

@@ -60,16 +60,22 @@ const revokeWalk = async () => {
 };
 // A throw or a timeout from here on still takes back what this run made (the code gate's C5): the
 // parlor's tokens new since step 0 (ids absent from the recorded list, named as the parlor names
-// them), then the walk's own token, each read back.
-process.on('uncaughtException', async e => {
+// them), then the walk's own token, each read back. keel names a sign-in's token for the tool and the
+// browser ("Parlor in Chrome"), so the name test is the tool's word alone; the id absent from step 0's
+// list is what makes it this run's. A rejected await reaches here as well as a throw.
+let aborting = false;
+const abort = async e => {
+  if (aborting) return;
+  aborting = true;
   report.aborted = String(e?.message ?? e).split('\n')[0];
   await b.close().catch(() => {});
   try {
-    const left = (await tokenIds()).filter(t => !before.has(t.id) && !t.revoked && /^Parlor on /.test(t.name ?? ''));
+    const left = (await tokenIds()).filter(t => !before.has(t.id) && !t.revoked && t.id !== walkToken.id && /^Parlor\b/.test(t.name ?? ''));
     report.abortRevoked = [];
     for (const t of left) {
       const del = await fetch(`${API}/account/tokens/${t.id}`, { method: 'DELETE', headers: walkAuth });
-      report.abortRevoked.push(`${t.name} …${t.last4}: DELETE ${del.status}`);
+      const back = (await tokenIds()).find(x => x.id === t.id);
+      report.abortRevoked.push(`${t.name} …${t.last4}: DELETE ${del.status}, listed revoked: ${back ? back.revoked : 'gone'}`);
     }
     if (!report.walkTokenRevoked) await revokeWalk();
   } catch (err) {
@@ -78,7 +84,9 @@ process.on('uncaughtException', async e => {
   if (process.env.ROOM === '1') report.worldKeyNote = 'a world key the room minted may be live: read the test world\'s keys';
   console.log(JSON.stringify({ ...report, errors, violations }, null, 2));
   process.exit(1);
-});
+};
+process.on('uncaughtException', abort);
+process.on('unhandledRejection', abort);
 
 // 1. Signed in on onlyworlds.com, by its own form.
 await p.goto('https://www.onlyworlds.com/accounts/login/');
@@ -130,6 +138,9 @@ const landed = roomMode
 await p.waitForTimeout(2500);
 await p.screenshot({ path: `${out}-3-back.png` });
 const session = await p.evaluate(() => JSON.parse(localStorage.getItem('parlor.session.v1') ?? 'null'));
+// The abort path's own check: FAIL_AFTER_KEPT=1 throws once the parlor holds its token, and the run
+// must still leave no new Parlor token live.
+if (process.env.FAIL_AFTER_KEPT === '1') await Promise.reject(new Error('FAIL_AFTER_KEPT: a forced failure after the token was kept'));
 Object.assign(report, {
   landed, url: p.url(),
   tokenKept: Boolean(session?.token?.startsWith('ow_a_')), accountKept: Boolean(session?.accountId),
