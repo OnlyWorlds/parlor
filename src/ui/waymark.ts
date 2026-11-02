@@ -5,7 +5,10 @@
  *
  * Who sees it: everyone in a parlor is signed in with their own OnlyWorlds account and is a member of
  * the world (an invite is how they came in), so every reader is a member, and keel's `/w/<world>` and
- * an element's address send a signed-in member on to their own view. The public face is never drawn.
+ * an element's address send a signed-in member on to their own view. Someone who signed in here with a
+ * password has no session on onlyworlds.com: since 2026-11-02 keel asks them to sign in there and then
+ * lands them on the same address (before, a private world answered a bare 404). The public face is
+ * never drawn.
  * An element the room cannot find (Missing) or one in another world gets no mark.
  *
  * The panels rebuild when what they show moves (the feed asks every two seconds), so this file also
