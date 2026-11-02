@@ -17,7 +17,6 @@
  * landed (the same slot Lantern and the OnlyWorlds Dashboard use).
  */
 
-import { ROOM_PAIRS, TOOLS, handsOnAsProposed, isRoomElement, simpleCaseFold, type OwTool } from '@onlyworlds/sdk';
 import { mountWaymark } from '@onlyworlds/sdk/waymark';
 
 export interface WaymarkSlot {
@@ -28,31 +27,7 @@ export interface WaymarkSlot {
 export interface WaymarkPlan {
   world: { id: string; name: string };
   element: { id: string; type: string; name: string; [k: string]: unknown } | null;
-  /** The tools list's rows to offer, when not the whole baked list. */
-  tools?: readonly OwTool[];
 }
-
-/**
- * Whether Little Lens's element page opens this element. That page reads only what its graph keeps
- * (little-lens `src/lens/graph.ts`, `buildGraph`): no hidden, proposed or room element, and no Map, Pin or
- * Marker. This copies that rule (the OnlyWorlds Dashboard's `waymark.ts` holds the same) until the tools
- * list can say what each tool opens; anything else would offer a row that lands on "You cannot open this element".
- */
-export function littleLensOpens(el: Record<string, unknown>): boolean {
-  const type = typeof el.type === 'string' ? simpleCaseFold(el.type.trim()) : '';
-  if (type === 'map' || type === 'pin' || type === 'marker') return false;
-  if ('hidden' in el && el.hidden !== null && el.hidden !== false && el.hidden !== undefined) return false;
-  if (handsOnAsProposed(el)) return false;
-  if (isRoomElement(el as Parameters<typeof isRoomElement>[0])) return false;
-  if (typeof el.supertype === 'string' && ROOM_PAIRS.some(p => simpleCaseFold(p.type) === type && simpleCaseFold(p.supertype) === simpleCaseFold((el.supertype as string).trim()))) {
-    const ext = el.extensions;
-    const mark = 'x_room_of' in el ? el.x_room_of : ext && typeof ext === 'object' ? (ext as Record<string, unknown>).x_room_of : undefined;
-    if (mark !== null && mark !== undefined && (typeof mark !== 'string' || mark.trim() !== '')) return false;
-  }
-  return true;
-}
-
-const WITHOUT_LITTLE_LENS: readonly OwTool[] = TOOLS.filter(t => t.id !== 'little-lens');
 
 /** The parlor's client name, the same one its reads and writes carry. */
 const CLIENT_NAME = 'parlor';
@@ -96,7 +71,6 @@ export function waymarkPlan(world: { id: string; name: string }, el: Record<stri
   if (typeof id !== 'string' || !id || typeof type !== 'string' || !type) return null;
   const name = typeof el.name === 'string' && el.name ? el.name : unnamed;
   const plan: WaymarkPlan = { world: { id: world.id, name: world.name }, element: { ...el, id, type, name } };
-  if (!littleLensOpens(el)) plan.tools = WITHOUT_LITTLE_LENS;
   return plan;
 }
 
@@ -153,7 +127,6 @@ export function waymarkSlot(plan: WaymarkPlan | null, key: string): WaymarkSlot 
         phone: coarse(),
         ground: 'dark',
         entry: 'mark',
-        ...(plan.tools ? { tools: plan.tools } : {}),
       });
     } catch (err) {
       const k = `${plan.world.id}/${plan.element?.id ?? ''}`;

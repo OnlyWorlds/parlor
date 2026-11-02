@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TOOLS } from '@onlyworlds/sdk';
-import { littleLensOpens, waymarkPlan } from './waymark';
+import { TOOLS, openersFor } from '@onlyworlds/sdk';
+import { waymarkPlan } from './waymark';
 
 const world = { id: '0f0f0f0f-0000-4000-8000-00000000a1a1', name: 'Harbour Co' };
 const ID = '66666666-6666-4666-8666-000000000006';
@@ -35,25 +35,22 @@ describe('waymarkPlan', () => {
   });
 });
 
-describe('littleLensOpens (its element page reads only what its graph keeps)', () => {
+describe('the menu leaves out a tool whose door cannot open the element (the tools list\'s element_skips, SDK 4.126.0)', () => {
   const base = { id: ID, type: 'character', name: 'Ada' };
-  it('opens a plain element', () => {
-    expect(littleLensOpens(base)).toBe(true);
-    expect(waymarkPlan(world, base)?.tools).toBeUndefined();
+  const littleLens = (el: Record<string, unknown>) => {
+    const p = waymarkPlan(world, el);
+    return openersFor(TOOLS, 'element', { form: 'human', world: world.id, type: p!.element!.type, id: ID }, { audience: 'member' }, { element: p!.element }).some(r => r.id === 'little-lens');
+  };
+  it('offers Little Lens on a plain element', () => {
+    expect(littleLens(base)).toBe(true);
+    expect(littleLens({ ...base, hidden: false })).toBe(true);
+    expect(littleLens({ ...base, hidden: null })).toBe(true);
   });
-  it('leaves out a map part, a hidden, a proposed and a room element', () => {
-    for (const type of ['map', 'pin', 'marker', ' Pin ']) expect(littleLensOpens({ ...base, type })).toBe(false);
-    expect(littleLensOpens({ ...base, hidden: true })).toBe(false);
-    expect(littleLensOpens({ ...base, hidden: 'by the keeper' })).toBe(false);
-    expect(littleLensOpens({ ...base, hidden: false })).toBe(true);
-    expect(littleLensOpens({ ...base, hidden: null })).toBe(true);
-    expect(littleLensOpens({ ...base, x_review_proposed: { by: 'm-1', evidence: 'x', expires: '2026-12-31' } })).toBe(false);
-    expect(littleLensOpens({ id: ID, type: 'narrative', name: 'Rota', supertype: 'Board', x_room_of: world.id })).toBe(false);
-  });
-  it('a plan for one it cannot open offers every row but Little Lens', () => {
-    const p = waymarkPlan(world, { id: ID, type: 'narrative', name: 'Rota', supertype: 'Board', x_room_of: world.id });
-    expect(TOOLS.map(t => t.id)).toContain('little-lens');
-    expect(p?.tools?.map(t => t.id)).not.toContain('little-lens');
-    expect(p?.tools?.length).toBeGreaterThan(0);
+  it('leaves it out on a map part, a hidden, a proposed and a room element: the plan hands the marks on', () => {
+    for (const type of ['map', 'pin', 'marker']) expect(littleLens({ ...base, type })).toBe(false);
+    expect(littleLens({ ...base, hidden: true })).toBe(false);
+    expect(littleLens({ ...base, hidden: 'by the keeper' })).toBe(false);
+    expect(littleLens({ ...base, x_review_proposed: { by: 'm-1', evidence: 'x', expires: '2026-12-31' } })).toBe(false);
+    expect(littleLens({ id: ID, type: 'narrative', name: 'Rota', supertype: 'Board', x_room_of: world.id })).toBe(false);
   });
 });
