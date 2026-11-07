@@ -54,3 +54,20 @@ describe('the menu leaves out a tool whose door cannot open the element (the too
     expect(littleLens({ id: ID, type: 'narrative', name: 'Rota', supertype: 'Board', x_room_of: world.id })).toBe(false);
   });
 });
+
+describe("Tactical Tangle is offered where its doors open (the tools list's element_types, SDK 4.132.1)", () => {
+  const tangle = (el: Record<string, unknown> | null) => {
+    const p = waymarkPlan(world, el);
+    const form = p!.element
+      ? openersFor(TOOLS, 'element', { form: 'human', world: world.id, type: p!.element.type, id: ID }, { audience: 'member' }, { element: p!.element })
+      : openersFor(TOOLS, 'world', { form: 'human', world: world.id }, { audience: 'member' });
+    return form.some(r => r.id === 'tangle');
+  };
+  it("offers it on the world's mark and on a Character's", () => {
+    expect(tangle(null)).toBe(true);
+    expect(tangle({ id: ID, type: 'character', name: 'Ada' })).toBe(true);
+  });
+  it('leaves it out on every other type', () => {
+    for (const type of ['location', 'event', 'narrative', 'object']) expect(tangle({ id: ID, type, name: 'X' })).toBe(false);
+  });
+});
