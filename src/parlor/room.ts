@@ -416,9 +416,14 @@ export class Room {
     });
   }
 
-  toggleHeart(specId: string, specTitle: string): Promise<void> {
+  /**
+   * A heart on (`on`) or off, as the button said: a second press on "Heart" landing after the first
+   * one's write leaves one heart, never takes it away (the press guard's gate, S2).
+   */
+  setHeart(specId: string, specTitle: string, on: boolean): Promise<void> {
     return this.serial(async () => {
       const mine = myHearts(readHearts(this.live()), this.meBy, specId);
+      if (on === (mine.length > 0)) return;
       if (mine.length) {
         for (const h of mine) {
           await this.client.delete('relation', h.id);
@@ -431,12 +436,15 @@ export class Room {
     });
   }
 
-  vote(picks: string[]): Promise<void> {
+  /** False when voting has closed by the vote's turn: a press held on an older view sends nothing. */
+  vote(picks: string[]): Promise<boolean> {
     return this.serial(async () => {
+      if (!this.newestSitting()?.voting) return false;
       const had = newestOf(readVotes(this.live()).filter(v => v.by === this.meBy));
       const body = newVote(picks, this.myCharacter(), this.roomOfNow());
       this.landed(had ? await this.client.patch('relation', had.id, { constructs: body.constructs })
         : await this.client.create('relation', body));
+      return true;
     });
   }
 

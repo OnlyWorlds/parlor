@@ -14,6 +14,7 @@ import { Room, problemLine } from './parlor/room';
 import { signInView, confirmJoinView, worldsView, previewOf } from './ui/doors';
 import { roomView } from './ui/room-view';
 import { h, clear, notice } from './ui/dom';
+import { watchPresses } from './ui/press';
 
 // The code is traded first, before the router or any other request (contract P2).
 let signingIn: Promise<SignInOutcome> | null = isSignInCallback() ? startSignInCallback() : null;
@@ -204,4 +205,5 @@ window.addEventListener('hashchange', () => { void route(); });
 // A page brought back by Back (from onlyworlds.com, or past a sign-in) loads again: its session was
 // read once, before the sign-in (the sign-in gate's G5).
 window.addEventListener('pageshow', e => { if (e.persisted) location.reload(); });
+watchPresses();
 void route();

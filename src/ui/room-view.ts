@@ -11,6 +11,7 @@ import { problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot } from './waymark';
+import { afterPress } from './press';
 
 export interface SignedInAs {
   /** The account's name; empty when keel named none. */
@@ -32,6 +33,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const host = h('div');
   const work = h('div');
   let picks: string[] = [];
+  let picksFor: string | null = null;
   let specOpen = false;
   let boardOpen = false;
   // A workshop opens on its specs; a world's parlor (no sitting yet) on its work.
@@ -98,7 +100,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       try {
         await room.saveSpec(specTitle.value, specText.value, kind);
         specOpen = false;
-        draw();
+        redraw();
       } catch (err) {
         notice(problemLine(err, 'saving your spec'), true);
       }
@@ -130,7 +132,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       try {
         await room.raise(boardTitle.value, boardText.value, colour, boardWho.value || null);
         boardOpen = false;
-        draw();
+        redraw();
       } catch (err) {
         notice(problemLine(err, 'raising the entry'), true);
       }
@@ -190,7 +192,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       try {
         await room.makeWork(workTitle.value, workText.value, workFor.value || null, picksAbout);
         workOpen = false;
-        draw();
+        redraw();
       } catch (err) {
         // A picked element deleted meanwhile is refused by keel: the form keeps what was typed.
         notice(problemLine(err, 'adding the work item'), true);
@@ -250,6 +252,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   clear(root, h('div', { class: 'app' }, top, h('nav', { class: 'mtabs' }, tabRoom, tabWork), h('main', { class: 'main' }, roomPane, workPane)));
 
   // -------------------------------------------------- what redraws
+  // A redraw that is not a press's own (the feed's, a write's late answer, a fan-out settling) waits
+  // while a press is in flight: a rebuild under a finger loses the tap (src/ui/press.ts).
+  let gone = false;
+  function redraw(): void { afterPress(heldDraw); }
+  function heldDraw(): void { if (!gone) draw(); }
   function draw(): void {
     drawTop();
     drawRoom();
@@ -369,7 +376,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   async function hide(id: string, on: boolean, type = 'narrative') {
     try {
       await room.hide(type, id, on);
-      draw();
+      redraw();
     } catch (err) {
       notice(problemLine(err, on ? 'hiding the line' : 'unhiding the line'), true);
     }
@@ -425,6 +432,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     if (!room.canWrite && boardOpen) boardOpen = false;
     if (!room.canWrite && workOpen) workOpen = false;
     const voting = !!s?.voting && !room.browsing;
+    // Picks belong to one sitting: a new sitting starts with none of the last one's.
+    if (s?.id !== picksFor) { picks = []; picksFor = s?.id ?? null; }
     if (voting && !picks.length) picks = room.myVote()?.picks ?? [];
 
     const card = (spec: (typeof specs)[number]) => {
@@ -436,7 +445,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         spec.text ? h('p', null, spec.text) : null,
         h('div', { class: 'btns' },
           live && s?.hearts ? h('button', { class: 'btn std', type: 'button', 'aria-pressed': String(iHearted), onclick: async () => {
-            try { await room.toggleHeart(spec.id, spec.title); } catch (err) { notice(problemLine(err, 'leaving a heart'), true); }
+            try { await room.setHeart(spec.id, spec.title, !iHearted); } catch (err) { notice(problemLine(err, 'leaving a heart'), true); }
           } }, iHearted ? '♥ Hearted' : '♡ Heart') : null,
           live && voting ? h('button', { class: 'btn std', type: 'button', 'aria-pressed': String(pickAt >= 0), onclick: () => {
             picks = pickAt >= 0 ? picks.filter(id => id !== spec.id) : [...picks, spec.id].slice(0, 3);
@@ -459,7 +468,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       voting && live ? h('div', { class: 'hostbar' },
         h('div', null, picks.length ? `Your picks: ${picks.map((id, i) => `${i + 1}. ${specs.find(x => x.id === id)?.title ?? '?'}`).join('  ')}` : 'Pick up to three, in order.'),
         h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'button', disabled: !picks.length, onclick: async () => {
-          try { await room.vote(picks); notice('Your vote is in. You can change it while voting is open.'); } catch (err) { notice(problemLine(err, 'sending your vote'), true); }
+          try {
+            const sent = await room.vote(picks);
+            notice(sent ? 'Your vote is in. You can change it while voting is open.' : 'Voting has closed, so your vote was not sent.', !sent);
+          } catch (err) { notice(problemLine(err, 'sending your vote'), true); }
         } }, room.myVote() ? 'Change my vote' : 'Send my vote'))) : null,
       h('div', { class: 'ph' }, `Specs · ${shown.length}${!s?.specs && !room.isHost && specs.length > shown.length ? ' shown (the others show when the host turns specs on)' : ''}`),
       shown.map(card),
@@ -559,7 +571,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
             h('button', { class: 'btn std', type: 'button', onclick: async () => {
               deleting = null;
               try { await room.deleteWork(w.id); } catch (err) { notice(problemLine(err, 'deleting the work item'), true); }
-              draw();
+              redraw();
             } }, 'Delete it'),
             h('button', { class: 'btn quiet', type: 'button', onclick: () => { deleting = null; draw(); } }, 'Keep it'))
           : h('div', { class: 'btns' },
@@ -574,7 +586,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
               try { await (mine ? room.release(w.id) : room.take(w.id)); } catch (err) { notice(problemLine(err, mine ? 'releasing the work item' : 'taking the work item'), true); }
               // Rebuilt even when nothing moved, so a failed press gives its button back (the Take gate's T4-G1).
               workKey = '';
-              draw();
+              redraw();
             } }, mine ? 'Release' : 'Take') : null,
             can ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
               try { await room.setWorkState(w.id, w.state === 'done' ? 'open' : 'done'); } catch (err) { notice(problemLine(err, 'changing the work item'), true); }
@@ -612,10 +624,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   }
 
   // A fan-out that settled lets its panel's held rebuild run.
-  let gone = false;
-  const onSettled = (): void => { if (!gone) draw(); };
+  const onSettled = (): void => redraw();
   root.addEventListener(WAYMARK_SETTLED, onSettled);
-  const off = room.feed.subscribe(draw);
+  const off = room.feed.subscribe(redraw);
   draw();
   return () => {
     gone = true;
