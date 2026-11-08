@@ -239,10 +239,38 @@ class Session {
     return new OwV2Client({ apiKey: key, apiPin: this.s.pin || undefined, baseUrl: apiBase(), client: 'parlor' });
   }
 
+  /**
+   * A world key, under an Idempotency-Key: when the answer is lost on the way back (no answer, a 5xx, a
+   * body without the key), keel may have made the key all the same, so the key this call made is asked
+   * for by it and taken back by the id keel names. A 4xx made nothing. No key this browser holds is ever
+   * asked for: the lost answer's key never reached it.
+   */
   private async mint(worldId: string, scope: 'read' | 'write'): Promise<string> {
-    const minted = await this.withAccount(c => c.mintWorldKey(worldId, { scope, name: tokenName() }));
-    if (!minted?.key) throw new Error('no key in the answer');
+    const idempotencyKey = crypto.randomUUID();
+    let minted;
+    try {
+      minted = await this.withAccount(c => c.mintWorldKey(worldId, { scope, name: tokenName(), idempotencyKey }));
+    } catch (err) {
+      if (!(err instanceof OwApiError && err.status >= 400 && err.status < 500)) await this.takeBackLostMint(worldId, idempotencyKey);
+      throw err;
+    }
+    if (!minted?.key) {
+      await this.takeBackLostMint(worldId, idempotencyKey);
+      throw new Error('no key in the answer');
+    }
     return minted.key;
+  }
+
+  /** The key a lost mint made, asked by its Idempotency-Key and revoked by the id keel names; quiet, 8 s each. */
+  private async takeBackLostMint(worldId: string, idempotencyKey: string): Promise<void> {
+    try {
+      const c = this.account();
+      const row = await c.madeWorldKey(worldId, idempotencyKey, { signal: AbortSignal.timeout(8000) });
+      if (!row || row.revoked) return;
+      await c.revokeWorldKey(worldId, row.id, { signal: AbortSignal.timeout(8000) });
+    } catch {
+      // Left listed on the account's keys page.
+    }
   }
 
   /** A key that stopped working (revoked, or the seat removed): forget it so the next open mints anew. */
