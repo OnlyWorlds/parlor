@@ -12,7 +12,7 @@ import {
   OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readHearts, readSpecs, readVotes,
   readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
-  readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK,
+  readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK, addressOf, type WorkItem,
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
@@ -238,6 +238,11 @@ export class Room {
   /** Every room work item in the world, whatever sitting made it. */
   work() {
     return readWork(this.els.values(), this.world.id, by => this.liveTaker(by));
+  }
+
+  /** Whom a work item is for, as this seat sees it: mine (me, or a Title I hold), others', or no one's. */
+  addressOf(w: Pick<WorkItem, 'forWho' | 'forTitles'>): 'mine' | 'others' | 'none' {
+    return addressOf(w, this.myCharacter(), this.els);
   }
 
   /** A take counts while its maker holds a seat that can write (contract T2); with no roster to read, every take counts. */

@@ -511,8 +511,11 @@ export interface WorkItem {
   title: string;
   text: string;
   state: WorkState;
-  /** The Character it is for; null for anyone. */
+  /** The Character it is for; null when it names no one. */
   forWho: string | null;
+  /** The Titles it is for (`x_packet_for`): whoever holds one. Only ids that are Titles of this world, in their
+   *  first place; an empty list reads as absent. Neither this nor `forWho`: addressed to no one. */
+  forTitles: string[];
   by: string;
   at: string;
   elements: WorkElement[];
@@ -584,10 +587,36 @@ function packetElements(el: El): WorkElement[] | null {
   return out.length ? out : null;
 }
 
+/**
+ * The Titles a work item is for (the packet profile's `x_packet_for`, ruled 2026-11-10): ids of Titles in the world the
+ * item sits in, never the packet's source world. An id that is no Title here, a non-string or an empty string is left
+ * out (a lint's to report, never guessed at); a repeat keeps its first place. Not a link: nothing follows it.
+ */
+export function forTitlesOf(el: El, titles: ReadonlySet<string>): string[] {
+  const v = el.x_packet_for;
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const id of v) if (typeof id === 'string' && id && titles.has(id) && !out.includes(id)) out.push(id);
+  return out;
+}
+
+/**
+ * Whom a work item is for, as a seat sees it (the packet profile's reading): `mine` when `actor` is my Character or a Title
+ * in `x_packet_for` names my Character among its `holders` (the reading keel uses for a Title's default lenses);
+ * `others` when it names someone and not me; `none` when it names no one, shown apart, never as for every role.
+ */
+export function addressOf(w: Pick<WorkItem, 'forWho' | 'forTitles'>, me: string | null, els: ReadonlyMap<string, El>): 'mine' | 'others' | 'none' {
+  if (!w.forWho && !w.forTitles.length) return 'none';
+  if (me && w.forWho === me) return 'mine';
+  if (me && w.forTitles.some(t => { const title = els.get(t); return !!title && links(title, 'holders').includes(me); })) return 'mine';
+  return 'others';
+}
+
 /** Every room work item in the world, whatever sitting made it: open and taken first, done last, newest first within. */
 export function readWork(els: Iterable<El>, worldId: string, live: (by: string) => boolean = () => true): WorkItem[] {
   const all = [...els];
   const takes = readTakes(all, live);
+  const titles = new Set(all.filter(el => fold(el.type) === 'title').map(el => el.id));
   const out: WorkItem[] = [];
   for (const el of all) {
     if (!isA(el, 'relation', SUPERTYPE.workItem)) continue;
@@ -603,6 +632,7 @@ export function readWork(els: Iterable<El>, worldId: string, live: (by: string) 
       // Done wins; then taken, by a live take or the item's own word (a packet's reader may set it).
       state: word === 'done' ? 'done' : word === 'taken' || taken.length ? 'taken' : 'open',
       forWho: link(el, 'actor'),
+      forTitles: forTitlesOf(el, titles),
       by: whoMade(el),
       at: el.created_at ?? '',
       elements,

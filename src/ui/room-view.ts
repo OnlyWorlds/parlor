@@ -533,14 +533,25 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let deleting: string | null = null;
   const STATE_WORD = { open: 'Open', taken: 'Taken', done: 'Done' } as const;
   function drawWorkItems(): void {
+    // Whom it is for: its person and the Titles whose holders it is for (x_packet_for); neither is no one, never everyone.
+    const whoOf = (w: { forWho: string | null; forTitles: string[] }) => [
+      ...(w.forWho ? [room.characterName(w.forWho)] : []),
+      ...w.forTitles.map(t => `whoever holds ${room.elementName(t) ?? 'a Title'}`),
+    ].join(' or ');
     const view = room.work().map(w => ({
       w, can: room.canRetire(w.by), hidden: room.hidden.has(w.id) || (!room.isHost && w.el.hidden === true),
-      who: w.forWho ? room.characterName(w.forWho) : 'anyone', by: room.name(w.by), answers: room.answers(w.id).length,
+      who: whoOf(w), addr: room.addressOf(w), by: room.name(w.by), answers: room.answers(w.id).length,
       els: w.elements.map(x => ({ ...x, name: w.otherWorld ? null : room.elementName(x.id) })),
       // One name per taker: a double take from two tabs is one person (the Take gate's T2-G1).
       takers: [...new Set(w.takes.map(t => t.by))].map(by => room.name(by)), mine: room.hasTaken(w.id),
     }));
-    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.by, v.answers, v.els, v.takers, v.mine]),
+    // For you first, then for others, then addressed to no one; a heading only when there is more than one group.
+    const GROUP = { mine: 'For you', others: 'For others', none: 'Not addressed to anyone' } as const;
+    const grouped = <T extends { addr: keyof typeof GROUP }>(rows: T[], card: (r: T) => HTMLElement): HTMLElement[] => {
+      const order = (['mine', 'others', 'none'] as const).filter(g => rows.some(r => r.addr === g));
+      return order.flatMap(g => [...(order.length > 1 ? [h('h3', { class: 'wgroup' }, GROUP[g])] : []), ...rows.filter(r => r.addr === g).map(card)]);
+    };
+    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.addr, v.by, v.answers, v.els, v.takers, v.mine]),
       room.canWrite, room.isHost, room.needsName(), workOpen, deleting]);
     if (key === workKey) return;
     // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.
@@ -550,10 +561,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const world = { id: room.world.id, name: room.world.name };
     clear(workList,
       h('p', { class: 'sys' }, 'Work on this world: each item says what it is about, and opens in the room when you answer it.'),
-      view.length ? view.map(({ w, can, hidden, who, by, answers, els, takers, mine }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
+      view.length ? grouped(view, ({ w, can, hidden, who, by, answers, els, takers, mine }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
         h('div', { class: 'ttl' }, h('span', { class: `chip s-${w.state}` }, STATE_WORD[w.state]), w.proposed ? h('span', { class: 'chip prop' }, 'Proposed') : null,
           h('h3', null, w.title || 'Untitled')),
-        h('div', { class: 'm' }, `For ${who} · made by ${by}`),
+        h('div', { class: 'm', 'data-part': 'for' }, `${who ? `For ${who}` : 'Not addressed to anyone'} · made by ${by}`),
         // Who took it, by the takes' makers (contract T2); Done wins over a take.
         takers.length && w.state !== 'done' ? h('div', { class: 'm', 'data-part': 'taken-by' }, `Taken by ${takers.join(', ')}`) : null,
         w.text ? h('p', null, w.text) : null,

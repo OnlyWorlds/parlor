@@ -4,7 +4,7 @@ import {
   readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, readCharter, PHASES, phaseOf,
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
-  readWork, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
+  readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -338,6 +338,30 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
       expect(deletableTakes(els, 'a', 'm3')).toEqual([]);
       expect(deletableTakes(els, 'a', 'm3', true).sort()).toEqual(['m1-x', 'm1-y', 'm2-x']);
     });
+  });
+
+  it('x_packet_for: only Titles of this world, first place kept; whom it is for as a seat sees it (the packet profile)', () => {
+    const t1 = lore({ id: 't1', type: 'title', holders: ['me', 'ada'] });
+    const t2 = lore({ id: 't2', type: 'title', holders: ['ada'] });
+    const els = [t1, t2, lore({ id: 'c', type: 'character' }),
+      item({ id: 'role', x_packet_for: ['t1', 'c', '', 7, 'gone', 't1'] }),
+      item({ id: 'other', x_packet_for: ['t2'] }),
+      item({ id: 'person', actor: 'me' }),
+      item({ id: 'both', actor: 'ada', x_packet_for: ['t2'] }),
+      item({ id: 'none', x_packet_for: [] }),
+      item({ id: 'junk', x_packet_for: 't1' }),
+    ];
+    const w = new Map(readWork(els, 'w1').map(x => [x.id, x]));
+    // A Character id, an empty string, a number, an unknown id and a repeat are all left out (rule 4).
+    expect(w.get('role')!.forTitles).toEqual(['t1']);
+    expect(w.get('none')!.forTitles).toEqual([]);
+    expect(w.get('junk')!.forTitles).toEqual([]);
+    const byId = new Map(els.map(e => [e.id, e]));
+    const addr = (id: string, me: string | null) => addressOf(w.get(id)!, me, byId);
+    expect(['role', 'other', 'person', 'both', 'none', 'junk'].map(id => addr(id, 'me'))).toEqual(['mine', 'others', 'mine', 'others', 'none', 'none']);
+    expect(['role', 'other', 'both'].map(id => addr(id, 'ada'))).toEqual(['mine', 'mine', 'mine']);
+    // A seat with no Character holds no Title and is no actor: everything addressed is someone else's.
+    expect(['role', 'person', 'none'].map(id => addr(id, null))).toEqual(['others', 'others', 'none']);
   });
 
   it('reads the state by the folded subtype, done last, and the typed links as its elements', () => {
