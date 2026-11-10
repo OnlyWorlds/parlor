@@ -418,4 +418,12 @@ describe('recent changes (sheet §2)', () => {
     expect(c.map(x => [x.id, x.type, x.by, x.made])).toEqual([['a', 'character', 'm2', false], ['b', 'location', 'm1', true], ['o', 'object', OWNER, true]]);
     expect(c[1].name).toBe('Untitled');
   });
+
+  it('a report a room left behind (narrative/Report with the mark) is no change and no pick; the same report without the mark is lore (SDK 4.146.0)', () => {
+    const marked = el({ id: 'r', type: 'narrative', supertype: 'Report', name: 'Sitting report', updated_at: '2026-10-25T10:00:00Z' });
+    const unmarked = lore({ id: 'u', type: 'narrative', supertype: 'Report', name: 'A lore report', updated_at: '2026-10-25T09:00:00Z' });
+    expect(readChanges([marked, unmarked]).map(x => x.id)).toEqual(['u']);
+    expect(isPickable(marked)).toBe(false);
+    expect(isPickable(unmarked)).toBe(true);
+  });
 });
