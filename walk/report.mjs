@@ -34,7 +34,10 @@ const watchdog = setTimeout(() => { console.log('FAIL watchdog 300 s'); process.
 const RUN = `${engineName} ${Date.now().toString(36)}`;
 const p2 = n => String(n).padStart(2, '0');
 const now = new Date();
-const DAY = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
+const dayOf = (d) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+const DAY = dayOf(now);
+// A run that crosses midnight names its report by the later day: either day is the sender's own.
+const days = () => new Set([DAY, dayOf(new Date())]);
 const dir = join(tmpdir(), `parlor-report-walk-${process.pid}`);
 mkdirSync(dir, { recursive: true });
 const NOTES = `# What the session found (${RUN})\n\nThe harbour list and the ledger disagree on two ships.\n`;
@@ -132,13 +135,13 @@ try {
   check('keel: one report for one Hand in, pressed twice', made1.length === 1, `${made1.length}`);
   const e1 = made1[0] ?? {};
   check('keel: step 1 exactly as the profile writes it', e1.supertype === 'Report' && e1.subtype === 'handed in' && e1.x_room_of === s.worldId
-    && e1.story === STORY.join('\n') && e1.name === `${STORY[0].length <= 48 ? STORY[0] : STORY[0].slice(0, 47).trimEnd() + '…'}, ${DAY}`
+    && e1.story === STORY.join('\n') && [...days()].some(d => e1.name === `${STORY[0].length <= 48 ? STORY[0] : STORY[0].slice(0, 47).trimEnd() + '…'}, ${d}`)
     && typeof e1.narrator === 'string' && !!e1.narrator && !e1.description && !e1.consequences && !('x_report_answers' in e1 && e1.x_report_answers)
     && !e1.parent_narrative && !(e1.relations ?? []).length,
     JSON.stringify({ name: e1.name, subtype: e1.subtype, mark: e1.x_room_of === s.worldId, narrator: !!e1.narrator, description: e1.description, relations: e1.relations }));
   const narrator = e1.narrator ? await api.get('character', e1.narrator).catch(() => null) : null;
   check('keel: its narrator is a Character in the world', !!narrator?.id);
-  check('member: its title carries the day', (await r1.locator('.report-title').innerText()).endsWith(`, ${DAY}`));
+  { const title = await r1.locator('.report-title').innerText(); check('member: its title carries the day', [...days()].some(d => title.endsWith(`, ${d}`))); }
   check('member: the first three lines show, and that a host reads it next', (await r1.locator('[data-part="report-story"]').innerText()).trim() === STORY.slice(0, 3).join('\n')
     && /Not completed yet: a host reads it next\./.test(await r1.innerText()));
   check('member: its file is on it', await until(async () => (await r1.locator('.file[data-file]', { hasText: 'findings.md' }).count()) === 1, 30000));
