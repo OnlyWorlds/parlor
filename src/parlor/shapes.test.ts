@@ -5,7 +5,7 @@ import {
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
-  newReport, reportName, localDay, REPORT_ANSWERS, storyStart,
+  newReport, reportName, localDay, REPORT_ANSWERS, storyStart, splitConsequence,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -99,6 +99,14 @@ describe('reports (schema-dist profiles/report.md)', () => {
     expect(REPORT_ANSWERS in touched).toBe(false);
     expect(newReport('t', 'c1', 'w1', 'd', { item: 'i1', answers: true })[REPORT_ANSWERS]).toEqual(['i1']);
     expect(REPORT_ANSWERS in newReport('t', 'c1', 'w1', 'd', { answers: true })).toBe(false);
+  });
+
+  it('a change reads as its words, its address kept apart; no address, or only one, as written', () => {
+    expect(splitConsequence('Renamed the Steinway: ow://object/o1')).toEqual({ words: 'Renamed the Steinway', address: 'ow://object/o1' });
+    expect(splitConsequence('Linked Ada ow://w1/character/c1')).toEqual({ words: 'Linked Ada', address: 'ow://w1/character/c1' });
+    expect(splitConsequence('Set the subtype of 3 Objects to surveyed')).toEqual({ words: 'Set the subtype of 3 Objects to surveyed', address: null });
+    expect(splitConsequence('ow://object/o1')).toEqual({ words: 'ow://object/o1', address: null });
+    expect(splitConsequence('nothing changed')).toEqual({ words: 'nothing changed', address: null });
   });
 
   it("a handed-in report opens on its story's first three lines, at most 280 characters", () => {

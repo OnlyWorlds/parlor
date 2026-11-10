@@ -190,6 +190,18 @@ function readReportPart(el: El): ReportPart {
   };
 }
 
+/**
+ * A line of `consequences` as a person reads it: its words, and the address that follows them (the report
+ * profile: "the element named in words before its address"), kept apart so the room shows the words and
+ * keeps the address beside them. A line with no address is all words (rule 8); one with only an address keeps it.
+ */
+export function splitConsequence(line: string): { words: string; address: string | null } {
+  const m = /^(.*?)[\s:]*(ow:\/\/\S+)\s*$/.exec(line);
+  if (!m) return { words: line, address: null };
+  const words = m[1].trim();
+  return words ? { words, address: m[2] } : { words: m[2], address: null };
+}
+
 /** A handed-in report's opening in the room: its first three lines, at most 280 characters; `cut` when more remain. */
 export function storyStart(story: string): { text: string; cut: boolean } {
   const ls = story.split(/\r?\n/);

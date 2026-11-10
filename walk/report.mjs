@@ -183,8 +183,10 @@ try {
   for (const [page, who] of [[m, 'member'], [host, 'host']]) {
     const r = page.locator('.line.report', { hasText: `Two ships disagreed (${RUN})` });
     check(`${who}: the completed report shows its description open`, await until(() => r.getAttribute('data-report').then(v => v === 'completed'), 40000));
-    check(`${who}: What changed, one row per line, as text`, await r.locator('[data-part="report-changes"] li').count() === 2
-      && (await r.locator('[data-part="report-changes"] li').first().innerText()).includes(`ow://object/${item.id}`)
+    check(`${who}: What changed, one row per line, its words shown and its address kept apart`, await r.locator('[data-part="report-changes"] li').count() === 2
+      && (await r.locator('[data-part="report-changes"] li').first().innerText()).trim() === 'Renamed the second ship'
+      && await r.locator('[data-part="report-changes"] li').first().getAttribute('data-address') === `ow://object/${item.id}`
+      && await r.locator('[data-part="report-changes"] li').nth(1).getAttribute('data-address') === null
       && await r.locator('[data-part="report-changes"] a').count() === 0);
     check(`${who}: the story is folded under The report as handed in`, await r.locator('[data-part="report-story"]').count() === 0
       && /The report as handed in/.test(await r.innerText()));

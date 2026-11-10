@@ -6,7 +6,7 @@
  * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, type Switches, type Kind, type BoardColour, type Line, type ReportPart } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, splitConsequence, type Switches, type Kind, type BoardColour, type Line, type ReportPart } from '../parlor/shapes';
 import { problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
@@ -524,7 +524,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         r.state === 'handed in' ? h('p', { class: 'sys' }, 'Not completed yet: a host reads it next.') : null,
         r.state === 'completed'
           ? h('div', { class: 'report-changes', 'data-part': 'report-changes' }, h('div', { class: 'ph' }, 'What changed'),
-            r.consequences.length ? h('ul', null, r.consequences.map(c => h('li', null, c))) : h('p', { class: 'sys' }, 'No changes written.'))
+            r.consequences.length ? h('ul', null, r.consequences.map(c => { const { words, address } = splitConsequence(c); return h('li', address ? { title: address, 'data-address': address } : null, words); })) : h('p', { class: 'sys' }, 'No changes written.'))
           : null,
         ...story,
         fileBlock(l.id, l.by)));
