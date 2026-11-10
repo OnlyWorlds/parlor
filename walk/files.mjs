@@ -170,7 +170,17 @@ try {
   violations.push(...await host.evaluate(() => window.__policy ?? []));
 
   // ------------------------------------------------------------ the member reads
-  const mCtx = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
+  // Eight lines after the pictures, so on a short window they open out of view.
+  for (let i = 1; i <= 8; i++) {
+    const t = `Filler ${i} of 8, ${engineName} ${Date.now().toString(36)}`;
+    await host.fill('textarea[aria-label="Write a line"]', t);
+    await host.keyboard.press('Enter');
+    await until(() => host.getByText(t).isVisible(), 8000);
+    const id = await lineId(t);
+    if (id) record(id);
+  }
+  // A short window first: a picture out of view waits as a box, and loads once scrolled to.
+  const mCtx = await browser.newContext({ viewport: { width: 1280, height: 420 }, acceptDownloads: true });
   await watchPolicy(mCtx);
   await withToken(mCtx, 'crew-walk-b');
   const m = await mCtx.newPage();
@@ -182,7 +192,13 @@ try {
   check('member: in the room', await until(() => m.getByText('You: member').isVisible(), 30000));
   const mLine = m.locator('.line', { hasText: text });
   check('member: the host\'s line shows its two files', await until(async () => (await mLine.locator('.file[data-file]').count()) === 2, 30000));
-  check('member: and the preview', await until(() => mLine.locator('.file-pic img').evaluate(i => i.complete && i.naturalWidth > 0), 15000));
+  await m.waitForTimeout(3000);
+  const inView = await mLine.locator('.file-pic').evaluate(b => { const r = b.getBoundingClientRect(); const l = b.closest('.lines').getBoundingClientRect(); return r.bottom > l.top - 200 && r.top < l.bottom + 200; });
+  const loadedBefore = await mLine.locator('.file-pic img').count();
+  check('member: a picture out of view waits as a box, unloaded', !inView && loadedBefore === 0, inView ? 'in view: the state never formed' : `${loadedBefore} loaded`);
+  await m.setViewportSize({ width: 1280, height: 800 });
+  await mLine.locator('.file-pic').scrollIntoViewIfNeeded();
+  check('member: and the preview, once in view', await until(() => mLine.locator('.file-pic img').evaluate(i => i.complete && i.naturalWidth > 0), 15000));
   check('member: no Remove on the host\'s files (keel would refuse it)', await mLine.locator('[data-act="remove-file"]').count() === 0);
   check('member: Download on each', await mLine.locator('[data-act="download-file"]').count() === 2);
   violations.push(...await m.evaluate(() => window.__policy ?? []));

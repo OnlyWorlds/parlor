@@ -396,6 +396,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const ls = room.lines();
     const entries = new Map<string, { title: string }>(room.board().map(e => [e.id, e]));
     for (const w of room.work()) entries.set(w.id, w);
+    room.files.unwatchAll();
     clear(lines, ls.length ? ls.map(l => {
       const answering = (l.parent ? entries.get(l.parent) : undefined) ?? (l.about ? entries.get(l.about) : undefined);
       const ai = room.isAi(l.by, l.el.changed_via);
@@ -440,7 +441,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         viewerImg.alt = r.name;
         viewer.showModal();
       } }, img)
-      : room.files.previewLoading(r) ? h('div', { class: 'file-pic', 'aria-hidden': 'true' }) : null;
+      : room.files.wantsPreview(r) ? waitingBox(r) : null;
     return h('div', { class: 'file', 'data-file': r.id }, pic,
       h('div', { class: 'file-line' },
         h('span', { class: 'file-name' }, r.name),
@@ -454,6 +455,13 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
             try { await room.files.remove(r); } catch (err) { notice(problemLine(err, 'removing the file'), true); }
           } }, 'Remove')
           : null));
+  }
+
+  /** A picture's box, drawn before it loads; it loads once it comes into view. */
+  function waitingBox(r: OwWorldFileRow): HTMLElement {
+    const box = h('div', { class: 'file-pic', 'aria-hidden': 'true' });
+    room.files.watch(box, r);
+    return box;
   }
 
   function pendingRow(p: Pending): HTMLElement {

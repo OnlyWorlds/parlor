@@ -102,6 +102,8 @@ export class RoomFiles {
   private fetching = 0;
   private waiting: Array<() => void> = [];
   private lastProgress = 0;
+  private seen: IntersectionObserver | null = null;
+  private watched = new Map<Element, OwWorldFileRow>();
 
   constructor(private readonly client: Client, private readonly onChange: () => void, private readonly visible: () => boolean = () => true) {}
 
@@ -117,6 +119,7 @@ export class RoomFiles {
     this.timers.clear();
     for (const p of this.previews.values()) if (p.url) URL.revokeObjectURL(p.url);
     this.previews.clear();
+    this.unwatchAll();
   }
 
   private later(ms: number, fn: () => void): void {
@@ -306,15 +309,49 @@ export class RoomFiles {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
-  /**
-   * An image's preview node, made once per file and kept, so a redraw re-appends the same node and never
-   * fetches again (I7). The bytes come only from keel's download link, and the Blob's type comes from the
-   * file's kind, never the response (I6). Null while loading, on a failure, or for a file that is no picture.
-   */
+  /** An image's preview node once it has loaded, kept per file so a redraw re-appends the same node (I7). */
   preview(row: OwWorldFileRow): HTMLImageElement | null {
-    if (!isImage(row.kind) || row.size > PREVIEW_MAX) return null;
     const have = this.previews.get(row.id);
-    if (have) return have.state === 'ready' ? have.img ?? null : null;
+    return have?.state === 'ready' ? have.img ?? null : null;
+  }
+
+  /** A picture that shows as a preview: its box is drawn at once, so the lines never move when it loads. */
+  wantsPreview(row: OwWorldFileRow): boolean {
+    return isImage(row.kind) && row.size <= PREVIEW_MAX && this.previews.get(row.id)?.state !== 'failed';
+  }
+
+  /**
+   * Load a preview only when its box comes into view: a room full of screens downloads only what is seen.
+   * The view hands over each box it draws; a redraw first lets go of the boxes it is about to replace.
+   */
+  watch(box: Element, row: OwWorldFileRow): void {
+    if (this.closed || this.previews.has(row.id)) return;
+    if (typeof IntersectionObserver === 'undefined') { this.load(row); return; }
+    this.seen ??= new IntersectionObserver(entries => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const r = this.watched.get(e.target);
+        this.seen?.unobserve(e.target);
+        this.watched.delete(e.target);
+        if (r) this.load(r);
+      }
+    }, { rootMargin: '200px' });
+    this.watched.set(box, row);
+    this.seen.observe(box);
+  }
+
+  /** Before a redraw replaces the boxes. */
+  unwatchAll(): void {
+    this.seen?.disconnect();
+    this.watched.clear();
+  }
+
+  /**
+   * Fetch a picture once (I7): the bytes come only from keel's download link, and the Blob's type comes from
+   * the file's kind, never the response (I6).
+   */
+  private load(row: OwWorldFileRow): void {
+    if (this.closed || this.previews.has(row.id) || !isImage(row.kind) || row.size > PREVIEW_MAX) return;
     const p: Preview = { state: 'loading' };
     this.previews.set(row.id, p);
     void this.slot(async () => {
@@ -339,13 +376,8 @@ export class RoomFiles {
         this.changed();
       }
     });
-    return null;
   }
 
-  /** True while a picture's preview is on its way: the view draws its box now, so the lines do not move later. */
-  previewLoading(row: OwWorldFileRow): boolean {
-    return this.previews.get(row.id)?.state === 'loading';
-  }
 
   /** The full picture's address for the in-page view, once its preview is ready. */
   previewUrl(fileId: string): string | null {
