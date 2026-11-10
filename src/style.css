@@ -120,3 +120,16 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .changes .nm{font-weight:600;overflow-wrap:anywhere}
 .changes .t{color:var(--muted);font-size:12px}
 .changes li.ai .nm{color:var(--ai)}
+/* Files on a line: picked chips over the composer, then the rows (and a picture's preview) under a line. */
+.send-files{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}
+.send-files .sys{flex-basis:100%;margin:2px 0 0}
+.send-files .act{font-size:13px;border:0;background:transparent;color:var(--accent);cursor:pointer;padding:0 2px;min-width:24px;min-height:24px}
+.files{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.file-line{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:13px}
+.file-name{overflow-wrap:anywhere}
+.file.failed .problem{margin:0}
+.file-pic{display:block;width:240px;height:160px;max-width:100%;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--surf2);cursor:zoom-in;overflow:hidden}
+.file-preview{display:block;width:100%;height:100%;object-fit:contain}
+.viewer{max-width:96vw;max-height:94vh;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surf);color:var(--text)}
+.viewer::backdrop{background:rgba(0,0,0,.8)}
+.viewer-img{display:block;max-width:92vw;max-height:84vh;margin:0 auto 8px;object-fit:contain}

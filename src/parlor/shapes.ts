@@ -147,9 +147,10 @@ export function lineName(text: string): string {
   return one.length <= 60 ? one : one.slice(0, 59).trimEnd() + '…';
 }
 
-export function newLine(text: string, narrator: string | null, parent: string | null, roomOf: string, about: string | null = null): Record<string, unknown> {
+export function newLine(text: string, narrator: string | null, parent: string | null, roomOf: string, about: string | null = null, nameIfNoText = ''): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    name: lineName(text),
+    // A line of files with no words is named by its files (its description stays empty).
+    name: lineName(text.trim() ? text : nameIfNoText),
     description: text,
     supertype: SUPERTYPE.line,
     [ROOM_MARK]: roomOf,

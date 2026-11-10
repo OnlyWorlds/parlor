@@ -6,12 +6,14 @@
  * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, type Switches, type Kind, type BoardColour } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, type Switches, type Kind, type BoardColour } from '../parlor/shapes';
 import { problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot } from './waymark';
 import { afterPress } from './press';
+import { fileKindOf, type OwWorldFileRow } from '@onlyworlds/sdk';
+import { ACCEPT as FILES_ACCEPT, MAX_PICKS, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
 
 export interface SignedInAs {
   /** The account's name; empty when keel named none. */
@@ -49,27 +51,90 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // -------------------------------------------------- the composer (built once)
   const text = h('textarea', { rows: 1, 'aria-label': 'Write a line', placeholder: 'Write a line' });
   const sendBtn = h('button', { class: 'btn std', type: 'submit' }, 'Send');
+  // Files picked for the next line: shown as chips until Send, then they go with the line.
+  let picked: File[] = [];
+  const fileInput = h('input', { type: 'file', multiple: true, accept: FILES_ACCEPT, hidden: true, 'aria-hidden': 'true', tabindex: '-1' });
+  const attachBtn = h('button', { class: 'btn quiet', type: 'button', 'data-part': 'attach', onclick: () => fileInput.click() }, 'Attach');
+  const chips = h('div', { class: 'send-files', hidden: true });
+  function pick(files: Iterable<File>): void {
+    const refused: string[] = [];
+    for (const f of files) {
+      const why = pickRefusal(f);
+      if (why) { refused.push(why); continue; }
+      if (picked.length >= MAX_PICKS) { refused.push(`At most ${MAX_PICKS} files on one line.`); break; }
+      picked.push(f);
+    }
+    if (refused.length) notice(refused.join(' '), true);
+    drawChips();
+  }
+  function drawChips(): void {
+    chips.hidden = picked.length === 0;
+    clear(chips, picked.map((f, i) => h('span', { class: 'chip file-chip' }, `${f.name} · ${sizeWords(f.size)} `,
+      h('button', { class: 'act', type: 'button', 'aria-label': `Drop ${f.name}`, onclick: () => { picked.splice(i, 1); drawChips(); } }, '×'))),
+      picked.some(f => fileKindOf(f.name) === 'jpg')
+        ? h('p', { class: 'sys' }, 'A photo from a phone can carry where it was taken: everyone in this room gets the file as it is.')
+        : null);
+  }
+  fileInput.addEventListener('change', () => { pick(Array.from(fileInput.files ?? [])); fileInput.value = ''; });
+  // A pasted picture (a screenshot) is picked like an attached one.
+  text.addEventListener('paste', e => {
+    if (e.clipboardData?.types.includes('text/plain')) return;
+    const files = Array.from(e.clipboardData?.files ?? []).filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+    const at = new Date();
+    const stamp = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}-${String(at.getHours()).padStart(2, '0')}${String(at.getMinutes()).padStart(2, '0')}${String(at.getSeconds()).padStart(2, '0')}`;
+    pick(files.map((f, i) => {
+      const ext = f.type === 'image/jpeg' ? 'jpg' : f.type.slice(6);
+      return new File([f], `pasted-${stamp}${files.length > 1 ? `-${i + 1}` : ''}.${ext}`, { type: f.type });
+    }));
+  });
+  // A picture full size, in the page (no new tab: a popup blocker, a phone's browser and the page's own
+  // policy all let an in-page view through). Escape or a click closes it.
+  const viewerImg = h('img', { class: 'viewer-img', alt: '' });
+  const viewer = h('dialog', { class: 'viewer', 'aria-label': 'Picture' }, viewerImg,
+    h('button', { class: 'btn quiet', type: 'button', onclick: () => viewer.close() }, 'Close'));
+  viewer.addEventListener('click', e => { if (e.target === viewer || e.target === viewerImg) viewer.close(); });
+  viewer.addEventListener('close', () => { viewerImg.removeAttribute('src'); });
+
+  // A file still on its way is lost if the page goes: the browser asks first.
+  const onLeavePage = (e: BeforeUnloadEvent): void => { if (room.files.sending) e.preventDefault(); };
+  window.addEventListener('beforeunload', onLeavePage);
+
+  // One Send at a time: Enter twice (requestSubmit ignores a disabled button) makes one line, never two (I2).
+  let sending = false;
   const send = h('form', {
     class: 'send',
     onsubmit: async (e: Event) => {
       e.preventDefault();
-      const t = text.value.trim();
-      if (!t) return;
+      if (sending) return;
+      const typed = text.value;
+      const t = typed.trim();
+      const files = picked;
+      if (!t && !files.length) return;
+      const answering = replyTo;
+      sending = true;
       sendBtn.disabled = true;
+      // The chips go at once: what they held now belongs to this line, and the next line starts empty.
+      picked = [];
+      drawChips();
       try {
-        await room.post(t, replyTo?.kind === 'board' ? replyTo.id : null, replyTo?.kind === 'work' ? replyTo.id : null);
-        text.value = '';
-        replyTo = null;
-        drawReply();
+        await room.post(t, answering?.kind === 'board' ? answering.id : null, answering?.kind === 'work' ? answering.id : null, files);
+        if (text.value === typed) { text.value = ''; text.style.height = 'auto'; }
+        if (replyTo === answering) { replyTo = null; drawReply(); }
         stickToEnd = true;
       } catch (err) {
+        // No line was made: the files come back to the composer.
+        picked = [...files, ...picked].slice(0, MAX_PICKS);
+        drawChips();
         notice(problemLine(err, 'sending your line'), true);
       } finally {
+        sending = false;
         sendBtn.disabled = false;
         text.focus();
       }
     },
-  }, text, sendBtn);
+  }, text, attachBtn, sendBtn, fileInput);
   text.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send.requestSubmit(); }
   });
@@ -231,7 +296,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const workMarks = markSet(workList);
   const changeMarks = markSet(changeList);
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? send : null);
+  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
   const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
@@ -349,10 +414,59 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
             hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
             hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
             room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this line') : null),
-          h('div', { class: 'txt' }, l.text)));
+          l.text ? h('div', { class: 'txt' }, l.text) : null,
+          fileBlock(l.id, l.by)));
     }) : h('div', { class: 'sys' }, room.canWrite ? 'No lines yet. Say hello.' : 'No lines yet.'));
     if (stickToEnd) lines.scrollTop = lines.scrollHeight;
     if (room.feed.lastError) roomHead.append(h('p', { class: 'problem' }, problemLine(room.feed.lastError, 'following the room')));
+  }
+
+  /** A line's files under its text: what the world's list holds, then mine still on their way. */
+  function fileBlock(lineId: string, lineBy: string): HTMLElement | null {
+    const rows = room.files.onLine(lineId);
+    const pend = room.files.pendingOn(lineId);
+    if (!rows.length && !pend.length) return null;
+    return h('div', { class: 'files' }, rows.map(r => fileRow(r, lineBy)), pend.map(pendingRow));
+  }
+
+  function fileRow(r: OwWorldFileRow, lineBy: string): HTMLElement {
+    const by = r.added_by.membership ?? OWNER;
+    const img = room.files.preview(r);
+    const pic = img
+      ? h('button', { class: 'file-pic', type: 'button', 'aria-label': `Show ${r.name} full size`, onclick: () => {
+        const url = room.files.previewUrl(r.id);
+        if (!url) return;
+        viewerImg.src = url;
+        viewerImg.alt = r.name;
+        viewer.showModal();
+      } }, img)
+      : room.files.previewLoading(r) ? h('div', { class: 'file-pic', 'aria-hidden': 'true' }) : null;
+    return h('div', { class: 'file', 'data-file': r.id }, pic,
+      h('div', { class: 'file-line' },
+        h('span', { class: 'file-name' }, r.name),
+        h('span', { class: 't' }, ` ${r.kind} · ${sizeWords(r.size)}${by !== lineBy ? ` · added by ${room.name(by)}` : ''}`),
+        h('button', { class: 'act', type: 'button', 'data-act': 'download-file', onclick: async () => {
+          try { await room.files.download(r); } catch (err) { notice(problemLine(err, 'downloading the file'), true); }
+        } }, 'Download'),
+        room.files.mayRemove(r, room.me, room.canWrite)
+          ? h('button', { class: 'act', type: 'button', 'data-act': 'remove-file', onclick: async () => {
+            if (!window.confirm(`Remove ${r.name} from this line? It is deleted from OnlyWorlds for everyone.`)) return;
+            try { await room.files.remove(r); } catch (err) { notice(problemLine(err, 'removing the file'), true); }
+          } }, 'Remove')
+          : null));
+  }
+
+  function pendingRow(p: Pending): HTMLElement {
+    if (p.state === 'failed') {
+      return h('div', { class: 'file failed', 'data-pending': String(p.key) },
+        h('div', { class: 'file-line' }, h('span', { class: 'problem' }, p.problem ?? `${p.name} was not added.`),
+          p.retry ? h('button', { class: 'act', type: 'button', onclick: () => room.files.again(p.key) }, 'Try again') : null,
+          h('button', { class: 'act', type: 'button', onclick: () => room.files.drop(p.key) }, 'Drop')));
+    }
+    const state = h('span', { class: 't' }, progressWords(p));
+    room.files.progressInto(p.key, state);
+    return h('div', { class: 'file sending', 'data-pending': String(p.key) },
+      h('div', { class: 'file-line' }, h('span', { class: 'file-name' }, p.name), state));
   }
 
   function nameForm(): HTMLElement {
@@ -641,6 +755,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   draw();
   return () => {
     gone = true;
+    window.removeEventListener('beforeunload', onLeavePage);
     off();
     root.removeEventListener(WAYMARK_SETTLED, onSettled);
     workMarks.dispose();

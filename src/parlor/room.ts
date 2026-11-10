@@ -16,6 +16,7 @@ import {
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
+import { RoomFiles, filesName } from './files';
 
 function newestOf<T extends { at: string }>(xs: T[]): T | null {
   return [...xs].sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
@@ -45,9 +46,21 @@ export class Room {
   /** The sitting the room shows; null = the newest. */
   showSitting: string | null = null;
 
+  /** The files on the room's lines (keel's files lane; the feed never sees a file arrive). */
+  readonly files: RoomFiles;
+
   private constructor(readonly world: AccountWorld, readonly client: OwV2Client) {
     this.feed = new RoomFeed(client, () => document.visibilityState === 'hidden');
+    this.files = new RoomFiles(client, () => this.feed.changed(), () => document.visibilityState === 'visible');
   }
+
+  /** The lines the room has held: a new one may bring files after it (its writer's upload follows the line). */
+  private linesSeen: Set<string> | null = null;
+  private filesWatch = (): void => {
+    const ids = readLines(this.els.values()).map(l => l.id);
+    if (this.linesSeen && ids.some(id => !this.linesSeen!.has(id))) this.files.soon();
+    this.linesSeen = new Set(ids);
+  };
 
   static async open(world: AccountWorld): Promise<Room> {
     const client = await session.worldClient(world);
@@ -57,7 +70,9 @@ export class Room {
     await room.refreshRoster();
     await room.loadHidden();
     room.feed.subscribe(room.rosterWatch);
+    room.feed.subscribe(room.filesWatch);
     await room.feed.start();
+    room.files.start();
     room.rosterTimer = setInterval(() => { if (document.visibilityState === 'visible') void room.refreshRoster(); }, 30000);
     document.addEventListener('visibilitychange', room.onVisible);
     return room;
@@ -65,6 +80,7 @@ export class Room {
 
   close(): void {
     this.feed.stop();
+    this.files.close();
     if (this.rosterTimer) clearInterval(this.rosterTimer);
     document.removeEventListener('visibilitychange', this.onVisible);
   }
@@ -74,6 +90,7 @@ export class Room {
       this.feed.poke();
       void this.refreshRoster();
       void this.loadHidden();
+      void this.files.read();
     }
   };
 
@@ -313,11 +330,19 @@ export class Room {
     });
   }
 
-  /** A line goes to the newest sitting, so writing one brings the room back to now, where it shows. */
-  post(text: string, parent: string | null = null, about: string | null = null): Promise<void> {
+  /**
+   * A line goes to the newest sitting, so writing one brings the room back to now, where it shows. Its files
+   * go after it, on their own queue (never behind the room's writes), to the line this call made: its id is
+   * captured here, whatever the room shows when they land. Text may be empty when files come with it.
+   */
+  post(text: string, parent: string | null = null, about: string | null = null, files: ReadonlyArray<File> = []): Promise<void> {
     this.showSitting = null;
     return this.serial(async () => {
-      this.landed(await this.client.create('narrative', newLine(text, this.myCharacter(), parent, this.roomOfNow(), about)));
+      const made = await this.client.create('narrative', newLine(text, this.myCharacter(), parent, this.roomOfNow(), about, filesName(files)));
+      // Once the line exists its files go to it, and nothing after can turn this Send into a failure the
+      // composer would answer by giving the files back (a second Send would make the line twice).
+      if (files.length) this.files.attach((made as { id: string }).id, files);
+      try { this.landed(made); } catch { /* the feed brings the line */ }
     });
   }
 

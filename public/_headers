@@ -5,7 +5,7 @@
   Permissions-Policy: microphone=(), camera=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()
   Cross-Origin-Opener-Policy: same-origin
   X-Robots-Tag: noindex
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://www.onlyworlds.com; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.onlyworlds.com https://upload.onlyworlds.com https://files.onlyworlds.com; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
 /index.html
   Cache-Control: no-cache
