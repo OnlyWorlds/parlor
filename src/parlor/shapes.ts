@@ -65,6 +65,8 @@ export const SUPERTYPE = {
   member: 'Member',
   /** One member's take on a work item (the room profile's ninth pair, schema-dist serial 66). */
   take: 'Take',
+  /** What a session or a closed talk leaves behind (the room profile's tenth pair; schema-dist profiles/report.md). */
+  report: 'Report',
 } as const;
 
 /** The room profile's mark: the world's id for a world's parlor, the sitting's for a workshop. */
@@ -120,25 +122,121 @@ export interface Line {
   /** The work item a line answers: a Narrative cannot point at a Relation by parent_narrative, so `relations`. */
   about: string | null;
   at: string;
+  /** A report (the report profile's pair and the mark): its own parts; null for a Message. `text` is its story. */
+  report: ReportPart | null;
   el: El;
 }
 
 export function readLines(els: Iterable<El>): Line[] {
   const out: Line[] = [];
   for (const el of els) {
-    if (!isA(el, 'narrative', SUPERTYPE.line)) continue;
+    const report = isA(el, 'narrative', SUPERTYPE.report);
+    if (!report && !isA(el, 'narrative', SUPERTYPE.line)) continue;
     out.push({
       id: el.id,
-      text: (el.description ?? el.name ?? '').toString(),
+      text: report ? str(el.story) : (el.description ?? el.name ?? '').toString(),
       by: whoMade(el),
       narrator: link(el, 'narrator'),
       parent: link(el, 'parent_narrative'),
       about: links(el, 'relations')[0] ?? null,
       at: el.created_at ?? '',
+      report: report ? readReportPart(el) : null,
       el,
     });
   }
   return out.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+// ---------------------------------------------------------------- reports (schema-dist profiles/report.md)
+
+/** The report profile's one key: the work items a report answers, each also in `relations`. */
+export const REPORT_ANSWERS = 'x_report_answers';
+/** Step 1's word and step 2's, as the profile writes them. */
+export const REPORT_HANDED_IN = 'handed in';
+export const REPORT_COMPLETED = 'completed';
+
+export interface ReportPart {
+  title: string;
+  /** The two words folded; any other word is `other`, shown as written (rule 7). */
+  state: 'handed in' | 'completed' | 'other';
+  /** The subtype as written, for `other`. */
+  word: string;
+  /** The keeper's short human part (step 2); may already be there on a handed-in report. */
+  description: string;
+  /** What changed, one entry per non-empty line, as written (rule 8: a line may have no address). */
+  consequences: string[];
+  /** The ids in `x_report_answers`, non-empty strings, first place; the room keeps the work items it holds (rule 5). */
+  answers: string[];
+}
+
+function readReportPart(el: El): ReportPart {
+  const word = str(el.subtype).trim();
+  const folded = fold(el.subtype);
+  // Rule 5: the ids in the key, and only those; one missing from `relations` is a lint's to report, never dropped here.
+  const answers: string[] = [];
+  const key = el[REPORT_ANSWERS];
+  if (Array.isArray(key)) {
+    for (const id of key) if (typeof id === 'string' && id.trim() && !answers.includes(id)) answers.push(id);
+  }
+  return {
+    title: str(el.name),
+    state: folded === REPORT_HANDED_IN ? 'handed in' : folded === REPORT_COMPLETED ? 'completed' : 'other',
+    word,
+    description: str(el.description),
+    consequences: str(el.consequences).split(/\r?\n/).map(s => s.trim()).filter(Boolean),
+    answers,
+  };
+}
+
+/** A handed-in report's opening in the room: its first three lines, at most 280 characters; `cut` when more remain. */
+export function storyStart(story: string): { text: string; cut: boolean } {
+  const ls = story.split(/\r?\n/);
+  let text = ls.slice(0, 3).join('\n');
+  let cut = ls.length > 3;
+  if (text.length > 280) { text = text.slice(0, 279).trimEnd() + '…'; cut = true; }
+  return { text, cut };
+}
+
+/** The sender's own day, as the report's name carries it. */
+export function localDay(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** "A short title: what the session was, and its day": the text's first line, cut, then the day. */
+export function reportName(text: string, day: string): string {
+  const first = text.split(/\r?\n/).find(s => s.trim()) ?? '';
+  // Cut by code points, so a name never ends in half an emoji.
+  // The line's own closing stop or colon would sit before the day's comma ("Checked it., 2026-11-10").
+  const one = Array.from(first.replace(/\s+/g, ' ').trim().replace(/[\s.,;:!?]+$/, ''));
+  return `${one.length <= 48 ? one.join('') : one.slice(0, 47).join('').trimEnd() + '…'}, ${day}`;
+}
+
+/**
+ * Step 1, handing in: one Narrative with the pair, the mark, `handed in`, the text whole as `story` and the
+ * seat's own Character as `narrator`. On a board entry it hangs by `parent_narrative`; on a work item by
+ * `relations`, and answers it (`x_report_answers`) only when `answers` says so. Never an empty answers list.
+ */
+export function newReport(
+  text: string, narrator: string, roomOf: string, day: string,
+  on: { parent?: string | null; item?: string | null; answers?: boolean } = {},
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    name: reportName(text, day),
+    story: text,
+    supertype: SUPERTYPE.report,
+    subtype: REPORT_HANDED_IN,
+    narrator,
+    [ROOM_MARK]: roomOf,
+  };
+  if (on.parent) body.parent_narrative = on.parent;
+  if (on.item) {
+    body.relations = [on.item];
+    if (on.answers) body[REPORT_ANSWERS] = [on.item];
+  }
+  return body;
 }
 
 /** A Narrative's name is required: the line's first words, the whole line in the description. */

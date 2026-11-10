@@ -133,3 +133,14 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .viewer{max-width:96vw;max-height:94vh;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surf);color:var(--text)}
 .viewer::backdrop{background:rgba(0,0,0,.8)}
 .viewer-img{display:block;max-width:92vw;max-height:84vh;margin:0 auto 8px;object-fit:contain}
+/* A report in the room (profiles/report.md) and the composer's Report toggle. */
+.send [data-part=report][aria-pressed=true]{border-color:var(--accent);background:var(--surf2)}
+.reply .finishes{display:flex;gap:6px;align-items:center;color:var(--text)}
+.line.report .report-title{font-weight:600;margin-top:2px}
+.line.report .report-chip{color:var(--accent);border-color:var(--accent)}
+.line.report .report-changes{margin:6px 0;padding:6px 10px;border-left:2px solid var(--line)}
+.line.report .report-changes .ph{margin-bottom:4px}
+.line.report .report-changes ul{margin:0;padding-left:18px}
+.line.report .report-changes li{overflow-wrap:anywhere}
+/* A phone: the text gets its own row, the buttons under it (Report beside Attach and Send left too little). */
+@media (max-width:560px){.send{flex-wrap:wrap;justify-content:flex-end}.send textarea{flex:1 1 100%}}

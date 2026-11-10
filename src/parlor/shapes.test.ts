@@ -5,6 +5,7 @@ import {
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
+  newReport, reportName, localDay, REPORT_ANSWERS, storyStart,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -43,6 +44,80 @@ describe('lines', () => {
 
   it('a person without a Character sends no narrator', () => {
     expect('narrator' in newLine('hi', null, null, 'w1')).toBe(false);
+  });
+});
+
+describe('reports (schema-dist profiles/report.md)', () => {
+  const rep = (o: Partial<El> & { id: string }): El => el({ type: 'narrative', supertype: 'Report', subtype: 'handed in', story: 'what I did', name: 'r', ...o });
+
+  it('reads a marked Report as a line with its parts; its text is the story', () => {
+    const [l] = readLines([rep({ id: 'r1', narrator: 'c1', created_by: 'm1' })]);
+    expect(l.report).not.toBeNull();
+    expect(l.text).toBe('what I did');
+    expect(l.report!.state).toBe('handed in');
+    expect(l.by).toBe('m1');
+  });
+
+  it('a Report without the mark is lore and never the room', () => {
+    expect(readLines([lore({ id: 'r', type: 'narrative', supertype: 'Report', story: 'a scout' })])).toEqual([]);
+  });
+
+  it('a Message is never a report, and the pair folds as the room profile folds', () => {
+    const ls = readLines([el({ id: 'm', type: 'narrative', supertype: 'Message', description: 'hi' }), rep({ id: 'r', supertype: ' REPORT ' }), rep({ id: 'x', supertype: 'Reports' })]);
+    expect(ls.map(l => [l.id, !!l.report])).toEqual([['m', false], ['r', true]]);
+  });
+
+  it('the subtype decides the state; another word is kept as written (rule 7)', () => {
+    const s = (subtype: unknown) => readLines([rep({ id: 'r', subtype: subtype as string })])[0].report!;
+    expect(s(' Completed ').state).toBe('completed');
+    expect(s('HANDED IN').state).toBe('handed in');
+    expect(s('half done')).toMatchObject({ state: 'other', word: 'half done' });
+    expect(s(null)).toMatchObject({ state: 'other', word: '' });
+  });
+
+  it('answers are the key ids, first place, blanks and non-strings out; one not in relations is kept (rule 5)', () => {
+    const [l] = readLines([rep({ id: 'r', relations: ['w1', 'w2'], x_report_answers: ['w2', '', 'w9', 'w2', 7, 'w1'] })]);
+    expect(l.report!.answers).toEqual(['w2', 'w9', 'w1']);
+    expect(readLines([rep({ id: 'r', x_report_answers: 'w1' })])[0].report!.answers).toEqual([]);
+  });
+
+  it('consequences read one per line, as written, with or without an address (rule 8)', () => {
+    const [l] = readLines([rep({ id: 'r', subtype: 'completed', consequences: 'Renamed the Steinway: ow://object/o1\r\n\n  Set 3 Objects to surveyed  ' })]);
+    expect(l.report!.consequences).toEqual(['Renamed the Steinway: ow://object/o1', 'Set 3 Objects to surveyed']);
+  });
+
+  it('step 1 writes the pair, the mark, the word, the story whole and the narrator in one body', () => {
+    const body = newReport('Line one\nline two', 'c1', 'w1', '2026-11-10');
+    expect(body).toEqual({ name: 'Line one, 2026-11-10', story: 'Line one\nline two', supertype: 'Report', subtype: 'handed in', narrator: 'c1', [ROOM_MARK]: 'w1' });
+    expect(readLines([{ ...el({ id: 'n', type: 'narrative' }), ...body }])[0].report!.state).toBe('handed in');
+  });
+
+  it('on a board entry it hangs by parent; on a work item by relations, answering it only when asked; never an empty key', () => {
+    expect(newReport('t', 'c1', 'w1', 'd', { parent: 'b1' })).toMatchObject({ parent_narrative: 'b1' });
+    const touched = newReport('t', 'c1', 'w1', 'd', { item: 'i1', answers: false });
+    expect(touched.relations).toEqual(['i1']);
+    expect(REPORT_ANSWERS in touched).toBe(false);
+    expect(newReport('t', 'c1', 'w1', 'd', { item: 'i1', answers: true })[REPORT_ANSWERS]).toEqual(['i1']);
+    expect(REPORT_ANSWERS in newReport('t', 'c1', 'w1', 'd', { answers: true })).toBe(false);
+  });
+
+  it("a handed-in report opens on its story's first three lines, at most 280 characters", () => {
+    expect(storyStart('a\nb\nc')).toEqual({ text: 'a\nb\nc', cut: false });
+    expect(storyStart('a\nb\nc\nd')).toEqual({ text: 'a\nb\nc', cut: true });
+    const long = storyStart('y'.repeat(400));
+    expect(long.cut).toBe(true);
+    expect(long.text.length).toBe(280);
+  });
+
+  it('the name is the first line with words, cut, then the day', () => {
+    expect(reportName('\n\n  The Steinway   description \nmore', '2026-11-10')).toBe('The Steinway description, 2026-11-10');
+    expect(reportName('x'.repeat(80), 'd').length).toBeLessThanOrEqual(48 + 3);
+    expect(localDay(new Date(2026, 0, 5))).toBe('2026-01-05');
+    expect(reportName('Checked the ledger.\nmore', '2026-11-10')).toBe('Checked the ledger, 2026-11-10');
+    expect(reportName('Why?!', 'd')).toBe('Why, d');
+    const emoji = reportName('a'.repeat(46) + '🔥🔥🔥', 'd');
+    expect(emoji).toBe('a'.repeat(46) + '🔥…, d');
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(emoji)).toBe(false);
   });
 });
 

@@ -13,6 +13,7 @@ import {
   readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
   readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK, addressOf, type WorkItem,
+  newReport, localDay,
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
@@ -244,7 +245,7 @@ export class Room {
 
   /** The room's lines answering one thing (a board entry by parent, a work item by relations), across every sitting. */
   answers(id: string) {
-    return readLines(this.els.values()).filter(l => l.parent === id || l.about === id);
+    return readLines(this.els.values()).filter(l => l.parent === id || l.about === id || !!l.report?.answers.includes(id));
   }
 
   /** The world's own recent changes (a world's parlor's work surface). */
@@ -343,6 +344,25 @@ export class Room {
       // composer would answer by giving the files back (a second Send would make the line twice).
       if (files.length) this.files.attach((made as { id: string }).id, files);
       try { this.landed(made); } catch { /* the feed brings the line */ }
+    });
+  }
+
+  /**
+   * Hand in a report (the report profile's step 1): one Narrative, made once, in the newest sitting like a line;
+   * its files follow it as a line's do. The seat's own Character is its narrator, so a seat with none hands in
+   * nothing (the name card comes first). What it hangs on is the caller's, captured at the press.
+   */
+  handIn(text: string, on: { parent?: string | null; item?: string | null; answers?: boolean }, files: ReadonlyArray<File> = [], idempotencyKey?: string): Promise<void> {
+    const narrator = this.myCharacter();
+    if (!narrator) return Promise.reject(new Error('no Character'));
+    if (!text.trim()) return Promise.reject(new Error('no text'));
+    this.showSitting = null;
+    return this.serial(async () => {
+      const made = await this.client.create('narrative', newReport(text, narrator, this.world.id, localDay(new Date()), on),
+        // A lost answer's retry of the same draft replays keel's first answer instead of handing it in twice.
+        idempotencyKey ? { idempotencyKey } : undefined);
+      if (files.length) this.files.attach((made as { id: string }).id, files);
+      try { this.landed(made); } catch { /* the feed brings it */ }
     });
   }
 

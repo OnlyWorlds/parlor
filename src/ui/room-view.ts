@@ -6,13 +6,13 @@
  * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, type Switches, type Kind, type BoardColour } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, type Switches, type Kind, type BoardColour, type Line, type ReportPart } from '../parlor/shapes';
 import { problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot } from './waymark';
 import { afterPress } from './press';
-import { fileKindOf, type OwWorldFileRow } from '@onlyworlds/sdk';
+import { OwNetworkError, fileKindOf, type OwWorldFileRow } from '@onlyworlds/sdk';
 import { ACCEPT as FILES_ACCEPT, MAX_PICKS, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
 
 export interface SignedInAs {
@@ -47,6 +47,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let workOpen = false;
   let replyTo: { id: string; title: string; kind: 'board' | 'work' } | null = null;
   let stickToEnd = true;
+  // The reports whose story a person unfolded: kept across redraws, forgotten with the room.
+  const openReports = new Set<string>();
 
   // -------------------------------------------------- the composer (built once)
   const text = h('textarea', { rows: 1, 'aria-label': 'Write a line', placeholder: 'Write a line' });
@@ -56,6 +58,34 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const fileInput = h('input', { type: 'file', multiple: true, accept: FILES_ACCEPT, hidden: true, 'aria-hidden': 'true', tabindex: '-1' });
   const attachBtn = h('button', { class: 'btn quiet', type: 'button', 'data-part': 'attach', onclick: () => fileInput.click() }, 'Attach');
   const chips = h('div', { class: 'send-files', hidden: true });
+  // Handing in a report (schema-dist profiles/report.md, step 1): the same composer, its Send a Hand in.
+  let reporting = false;
+  const reportBtn = h('button', { class: 'btn quiet', type: 'button', 'data-part': 'report', 'aria-pressed': 'false', onclick: () => {
+    reporting = !reporting;
+    drawReportMode();
+    drawReply();
+    text.focus();
+  } }, 'Report');
+  const reportNote = h('p', { class: 'sys', 'data-part': 'report-note', hidden: true },
+    'Handing in a report: your text is kept whole as you wrote it, and a host completes it. Enter starts a new line; press Hand in to send.');
+  // On a work item: whether the report answers it (the profile's x_report_answers), or only touches it.
+  const finishBox = h('input', { type: 'checkbox', id: 'report-finishes', 'data-part': 'report-finishes' });
+  finishBox.checked = false;
+  function drawReportMode(): void {
+    const mine = !!room.myCharacter();
+    // A Character gone mid-draft turns the whole composer back, the reply bar's Report on and its box with it.
+    if (!mine && reporting) { reporting = false; drawReply(); }
+    reportBtn.disabled = !mine;
+    reportBtn.title = mine ? '' : 'Save your name first: a report is handed in as your own Character.';
+    reportBtn.setAttribute('aria-pressed', String(reporting));
+    reportNote.hidden = !reporting;
+    const label = reporting ? 'Hand in' : 'Send';
+    if (sendBtn.textContent !== label) sendBtn.textContent = label;
+    const hint = reporting ? 'Write your report' : 'Write a line';
+    if (text.placeholder !== hint) { text.placeholder = hint; text.setAttribute('aria-label', hint); }
+    const rows = reporting ? 4 : 1;
+    if (text.rows !== rows) { text.rows = rows; text.style.height = 'auto'; }
+  }
   function pick(files: Iterable<File>): void {
     const refused: string[] = [];
     for (const f of files) {
@@ -103,6 +133,14 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
 
   // One Send at a time: Enter twice (requestSubmit ignores a disabled button) makes one line, never two (I2).
   let sending = false;
+  // One key per draft (its text, what it answers, the box): a retry after a lost or failed answer replays keel's
+  // first answer, so a report is never handed in twice by Try again. A changed draft is a new report and a new key.
+  let draft: { sig: string; key: string } | null = null;
+  function handInKey(t: string, answering: typeof replyTo, answers: boolean): string {
+    const sig = JSON.stringify([t, answering?.kind ?? null, answering?.id ?? null, answering?.kind === 'work' && answers]);
+    if (!draft || draft.sig !== sig) draft = { sig, key: crypto.randomUUID() };
+    return draft.key;
+  }
   const send = h('form', {
     class: 'send',
     onsubmit: async (e: Event) => {
@@ -111,6 +149,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       const typed = text.value;
       const t = typed.trim();
       const files = picked;
+      // What this press sends is read now: a toggle, a box or a reply changed during the send changes nothing it sends.
+      const asReport = reporting;
+      const answers = finishBox.checked;
+      if (asReport && !t) { notice('A report needs your text. Files alone go on a line.', true); return; }
       if (!t && !files.length) return;
       const answering = replyTo;
       sending = true;
@@ -119,34 +161,49 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       picked = [];
       drawChips();
       try {
-        await room.post(t, answering?.kind === 'board' ? answering.id : null, answering?.kind === 'work' ? answering.id : null, files);
+        if (asReport) {
+          await room.handIn(t, { parent: answering?.kind === 'board' ? answering.id : null, item: answering?.kind === 'work' ? answering.id : null, answers }, files, handInKey(t, answering, answers));
+        } else {
+          await room.post(t, answering?.kind === 'board' ? answering.id : null, answering?.kind === 'work' ? answering.id : null, files);
+        }
         if (text.value === typed) { text.value = ''; text.style.height = 'auto'; }
         if (replyTo === answering) { replyTo = null; drawReply(); }
+        if (asReport) draft = null;
+        if (asReport && reporting) { reporting = false; finishBox.checked = false; drawReportMode(); drawReply(); }
         stickToEnd = true;
       } catch (err) {
-        // No line was made: the files come back to the composer.
+        // Nothing was made: the files come back to the composer, and the toggle and the box stay as they were.
         picked = [...files, ...picked].slice(0, MAX_PICKS);
         drawChips();
-        notice(problemLine(err, 'sending your line'), true);
+        // A lost answer may still have made the report, and a report is never changed or made twice on purpose.
+        notice(asReport && err instanceof OwNetworkError
+          ? 'OnlyWorlds could not be reached while handing in your report. It may have been handed in: look in the room before handing it in again.'
+          : problemLine(err, asReport ? 'handing in your report' : 'sending your line'), true);
       } finally {
         sending = false;
         sendBtn.disabled = false;
         text.focus();
       }
     },
-  }, text, attachBtn, sendBtn, fileInput);
+  }, text, attachBtn, reportBtn, sendBtn, fileInput);
   text.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send.requestSubmit(); }
+    // A report is long text: Enter starts a new line there, and Ctrl or Cmd with Enter hands it in.
+    if (e.key === 'Enter' && !e.shiftKey && (!reporting || e.ctrlKey || e.metaKey)) { e.preventDefault(); send.requestSubmit(); }
   });
   text.addEventListener('input', () => { text.style.height = 'auto'; text.style.height = `${text.scrollHeight}px`; });
   lines.addEventListener('scroll', () => { stickToEnd = lines.scrollTop + lines.clientHeight >= lines.scrollHeight - 24; });
 
   // Answering a board entry: the composer says so until the line is sent or the answer dropped.
   const replyBar = h('div', { class: 'reply', hidden: true });
+  // The box answers one work item: answering another (or none) starts it unticked again.
+  let finishFor: string | null = null;
   function drawReply(): void {
+    const answeringId = replyTo?.id ?? null;
+    if (answeringId !== finishFor) { finishBox.checked = false; finishFor = answeringId; }
     replyBar.hidden = !replyTo;
     if (!replyTo) { clear(replyBar); return; }
-    clear(replyBar, h('span', null, `Answering: ${replyTo.title}`),
+    clear(replyBar, h('span', null, `${reporting ? 'Report on' : 'Answering'}: ${replyTo.title}`),
+      reporting && replyTo.kind === 'work' ? h('label', { class: 'finishes', for: 'report-finishes' }, finishBox, ' This report is the work the item asked for') : null,
       h('button', { class: 'btn quiet', type: 'button', onclick: () => { replyTo = null; drawReply(); } }, 'Not now'));
   }
 
@@ -296,7 +353,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const workMarks = markSet(workList);
   const changeMarks = markSet(changeList);
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
+  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
   const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
@@ -324,6 +381,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function heldDraw(): void { if (!gone) draw(); }
   function draw(): void {
     drawTop();
+    drawReportMode();
     drawRoom();
     drawHost();
     drawWork();
@@ -395,9 +453,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     nameCard.hidden = !room.needsName();
     const ls = room.lines();
     const entries = new Map<string, { title: string }>(room.board().map(e => [e.id, e]));
-    for (const w of room.work()) entries.set(w.id, w);
+    const workItems = new Map<string, { title: string }>();
+    for (const w of room.work()) { entries.set(w.id, w); workItems.set(w.id, w); }
     room.files.unwatchAll();
     clear(lines, ls.length ? ls.map(l => {
+      if (l.report) return reportLine(l, l.report, entries, workItems);
       const answering = (l.parent ? entries.get(l.parent) : undefined) ?? (l.about ? entries.get(l.about) : undefined);
       const ai = room.isAi(l.by, l.el.changed_via);
       const name = room.name(l.by);
@@ -420,6 +480,54 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     }) : h('div', { class: 'sys' }, room.canWrite ? 'No lines yet. Say hello.' : 'No lines yet.'));
     if (stickToEnd) lines.scrollTop = lines.scrollHeight;
     if (room.feed.lastError) roomHead.append(h('p', { class: 'problem' }, problemLine(room.feed.lastError, 'following the room')));
+  }
+
+  /**
+   * A report in the room (the report profile's rule 3): handed in, its story's first lines and that the keeper
+   * has not completed it; completed, the keeper's description open, What changed beside it, the story folded.
+   * Everything it shows is text. A fold's open state is the room's, so a redraw keeps it.
+   */
+  function reportLine(l: Line, r: ReportPart, entries: Map<string, { title: string }>, workItems: Map<string, { title: string }>): HTMLElement {
+    const ai = room.isAi(l.by, l.el.changed_via);
+    const name = room.name(l.by);
+    const hidden = room.hidden.has(l.id);
+    const hiddenMine = !room.isHost && l.el.hidden === true;
+    const answered = r.answers.filter(id => workItems.has(id));
+    // The anchor a report hangs on: its board entry, or the first of its relations the room holds (step 2 may add others first).
+    const rel = Array.isArray(l.el.relations) ? (l.el.relations as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+    const anchorId = l.parent ?? rel.find(id => entries.has(id)) ?? null;
+    const anchor = anchorId && !answered.includes(anchorId) ? entries.get(anchorId) : undefined;
+    // Keyed by the state too: Show all on a handed-in report is not the completed one's fold of what was handed in.
+    const foldKey = `${l.id}:${r.state}`;
+    const open = openReports.has(foldKey);
+    const fold = (label: string) => h('button', { class: 'act', type: 'button', 'data-act': 'report-fold', 'aria-expanded': String(open), onclick: () => {
+      if (openReports.has(foldKey)) openReports.delete(foldKey); else openReports.add(foldKey);
+      draw();
+    } }, open ? 'Fold' : label);
+    const start = storyStart(l.text);
+    const story = r.state === 'completed'
+      ? [h('div', null, fold('The report as handed in')), open ? h('div', { class: 'txt', 'data-part': 'report-story' }, l.text) : null]
+      : [h('div', { class: 'txt', 'data-part': 'report-story' }, open || !start.cut ? l.text : start.text), start.cut ? h('div', null, fold('Show all')) : null];
+    return h('div', { class: `line report${ai ? ' ai' : ''}${hidden || hiddenMine ? ' hidden' : ''}`, 'data-report': r.state },
+      h('span', { class: ai ? 'bdg a' : 'bdg' }, ai ? 'AI' : initial(name)),
+      h('div', null,
+        h('div', { class: 'meta' }, h('span', { class: 'who' }, name), ai ? h('span', { class: 'chip' }, 'AI') : null,
+          h('span', { class: 't' }, hhmm(l.at)),
+          h('span', { class: 'chip report-chip' }, r.state === 'other' ? (r.word ? `Report · ${r.word}` : 'Report') : `Report · ${r.state}`),
+          ...answered.map(id => h('span', { class: 't' }, `answers ${workItems.get(id)!.title || 'Untitled'}`)),
+          anchor ? h('span', { class: 't' }, `on ${anchor.title || 'Untitled'}`) : null,
+          hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
+          hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
+          room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this report') : null),
+        r.title ? h('div', { class: 'report-title' }, r.title) : null,
+        r.description.trim() ? h('div', { class: 'txt', 'data-part': 'report-description' }, r.description) : null,
+        r.state === 'handed in' ? h('p', { class: 'sys' }, 'Not completed yet: a host reads it next.') : null,
+        r.state === 'completed'
+          ? h('div', { class: 'report-changes', 'data-part': 'report-changes' }, h('div', { class: 'ph' }, 'What changed'),
+            r.consequences.length ? h('ul', null, r.consequences.map(c => h('li', null, c))) : h('p', { class: 'sys' }, 'No changes written.'))
+          : null,
+        ...story,
+        fileBlock(l.id, l.by)));
   }
 
   /** A line's files under its text: what the world's list holds, then mine still on their way. */
