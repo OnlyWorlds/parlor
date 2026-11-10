@@ -97,6 +97,11 @@ try {
   check('a card that names no one says so', (await forLine('Named no one')).startsWith('Not addressed to anyone'), await forLine('Named no one'));
   check('a stray id is not read as a role', (await forLine('Only a stray id')).startsWith('Not addressed to anyone'), await forLine('Only a stray id'));
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: true });
+  // The room mints a world key in this browser: record its last four, so teardown.mjs takes it back by name and last four.
+  const sess = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('parlor.session.v1') ?? 'null'); } catch { return null; } }).catch(() => null);
+  for (const k of [...Object.values(sess?.keys ?? {}), ...Object.values(sess?.readKeys ?? {})]) {
+    if (typeof k === 'string') s.minted.push({ kind: 'browser-key', label: 'crew-walk-c', last4: k.slice(-4) });
+  }
 } finally {
   clearTimeout(timer);
   await browser.close();
