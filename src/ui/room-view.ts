@@ -966,8 +966,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     };
 
     clear(work,
-      charter ? h('details', { class: 'card' }, h('summary', null, charter.name || 'House rules'), h('p', null, charter.text)) : null,
-      // A Law with supertype Charter and no mark is lore (the charter profile): a keeper may mark it, in one write.
+      // The views file's charter row leads with description, drawn open: the house rules are read, never folded.
+      charter ? h('section', { class: 'card', 'data-part': 'house-rules' }, h('h3', null, charter.name || 'House rules'), h('p', null, charter.text)) : null,
       // A Law with supertype Charter and no mark is lore (the charter profile): the keeper names one to mark, in one
       // write; the parlor never picks, so each such Law gets its own button, named.
       !charter && loose.length && room.isKeeper ? h('div', { class: 'card', 'data-part': 'charter-offer' },

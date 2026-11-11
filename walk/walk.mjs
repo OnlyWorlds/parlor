@@ -100,7 +100,9 @@ try {
   pages.push([host, 'crew-walk-c']);
   await host.goto(`${BASE}#/w/${s.worldId}`);
   check('host: the room opens on the host\'s own seat', await until(() => host.getByText('You: host').isVisible()));
-  check('host: the charter is on the work surface', await until(() => host.locator('details.card summary', { hasText: 'House rules' }).isVisible()));
+  check('host: the charter is on the work surface', await until(() => host.locator('[data-part="house-rules"] h3', { hasText: 'House rules' }).isVisible()));
+  // The charter row leads with description, open: its words are on screen without a press.
+  check('host: the house rules read open, their words shown', await until(() => host.locator('[data-part="house-rules"] p').isVisible()));
   if (await host.locator('#my-name').isVisible().catch(() => false)) {
     await host.fill('#my-name', 'Host C');
     await host.getByRole('button', { name: 'Save', exact: true }).click();

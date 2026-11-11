@@ -72,7 +72,7 @@ try {
   const m = await open('crew-walk-b');
   check('member: the room opens', await until(() => m.getByText('You: member').isVisible(), 30000));
   for (const p of [host, m]) await p.getByRole('tab', { name: /^Specs/ }).click().catch(() => {});
-  const rules = p => p.locator('details.card summary', { hasText: 'House rules' });
+  const rules = p => p.locator('[data-part="house-rules"] h3', { hasText: 'House rules' });
   const offer = host.locator('[data-part="charter-offer"]');
   check('host: offered to mark the Law, naming it', await until(() => offer.isVisible(), 15000) && /House rules/.test(await offer.innerText()));
   if (process.env.EXPECT_OLD === '1' && !(await offer.count())) throw new Error('no charter offer on this build (the control)');
@@ -83,6 +83,8 @@ try {
   check('keel: the Law carries the world\'s id as its mark', await until(async () => (await api.get('law', law.id)).x_charter_of === s.worldId, 15000));
   check('host: house rules shown, the offer gone', await until(() => rules(host).isVisible(), 15000) && await offer.count() === 0);
   check('member: house rules shown once the feed brings the mark', await until(() => rules(m).isVisible(), 30000));
+  // The views file's charter row leads with description, drawn open: the words show with no press.
+  check('member: the house rules read open, their words shown', await m.locator('[data-part="house-rules"] p').isVisible());
 } catch (err) {
   check('the walk ran to its end', false, String(err?.message ?? err).slice(0, 300));
 } finally {
