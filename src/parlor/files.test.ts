@@ -89,10 +89,11 @@ describe('a refused file in the person\'s words', () => {
 });
 
 describe('a line of files', () => {
-  it('a line with no words is named by its files and keeps an empty description', () => {
+  it('a line with no words is named by its files and keeps an empty story', () => {
     const body = newLine('', null, null, 'w1', null, filesName([{ name: 'ember.webp' }, { name: 'notes.md' }]));
     expect(body.name).toBe('ember.webp, notes.md');
-    expect(body.description).toBe('');
+    expect(body.story).toBe('');
+    expect('description' in body).toBe(false);
     expect(lineName('x'.repeat(80))).toHaveLength(60);
     expect(newLine('hello', null, null, 'w1', null, 'ignored.png').name).toBe('hello');
   });

@@ -135,7 +135,9 @@ export function readLines(els: Iterable<El>): Line[] {
     if (!report && !isA(el, 'narrative', SUPERTYPE.line)) continue;
     out.push({
       id: el.id,
-      text: report ? str(el.story) : (el.description ?? el.name ?? '').toString(),
+      // A line's body is its `story` (the message profile); a line written before that kept it in
+      // `description`, and a line with neither says its name. An empty body stays empty (a line of files).
+      text: report ? str(el.story) : typeof el.story === 'string' ? el.story : typeof el.description === 'string' ? el.description : str(el.name),
       by: whoMade(el),
       narrator: link(el, 'narrator'),
       parent: link(el, 'parent_narrative'),
@@ -313,7 +315,7 @@ export function newReport(
   return body;
 }
 
-/** A Narrative's name is required: the line's first words, the whole line in the description. */
+/** A Narrative's name is required: the line's first words, the whole line in the story. */
 export function lineName(text: string): string {
   const one = text.replace(/\s+/g, ' ').trim();
   return one.length <= 60 ? one : one.slice(0, 59).trimEnd() + '…';
@@ -321,9 +323,10 @@ export function lineName(text: string): string {
 
 export function newLine(text: string, narrator: string | null, parent: string | null, roomOf: string, about: string | null = null, nameIfNoText = ''): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    // A line of files with no words is named by its files (its description stays empty).
+    // A line of files with no words is named by its files (its story stays empty).
     name: lineName(text.trim() ? text : nameIfNoText),
-    description: text,
+    // The message profile: `story` is the body, verbatim (lines before 2026-11-11 kept it in `description`).
+    story: text,
     supertype: SUPERTYPE.line,
     [ROOM_MARK]: roomOf,
   };

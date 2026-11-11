@@ -36,7 +36,8 @@ describe('lines', () => {
   it('a long line keeps its whole text and a short name', () => {
     const text = 'word '.repeat(40);
     const body = newLine(text, 'c1', 'p1', 's1');
-    expect(body.description).toBe(text);
+    expect(body.story).toBe(text); // the message profile's body
+    expect('description' in body).toBe(false);
     expect((body.name as string).length).toBeLessThanOrEqual(60);
     expect(body.narrator).toBe('c1');
     expect(body.parent_narrative).toBe('p1');
@@ -45,6 +46,24 @@ describe('lines', () => {
 
   it('a person without a Character sends no narrator', () => {
     expect('narrator' in newLine('hi', null, null, 'w1')).toBe(false);
+  });
+
+  it("a line's words are its story; an older line's its description; else its name; an empty story stays empty", () => {
+    const msg = (id: string, o: Partial<El>) => el({ id, type: 'narrative', supertype: 'Message', name: 'A few words', ...o });
+    const texts = readLines([
+      msg('a', { story: 'The whole line, by the message profile.' }),
+      msg('b', { description: 'A line from before 2026-11-11.' }),
+      msg('c', {}),
+      msg('d', { story: '', description: 'never read when a story is there' }),
+      msg('e', { story: 'story wins', description: 'a summary' }),
+    ]).map(l => [l.id, l.text]);
+    expect(Object.fromEntries(texts)).toEqual({
+      a: 'The whole line, by the message profile.',
+      b: 'A line from before 2026-11-11.',
+      c: 'A few words',
+      d: '',
+      e: 'story wins',
+    });
   });
 });
 
