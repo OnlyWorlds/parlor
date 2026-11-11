@@ -136,8 +136,9 @@ export function readLines(els: Iterable<El>): Line[] {
     out.push({
       id: el.id,
       // A line's body is its `story` (the message profile); a line written before that kept it in
-      // `description`, and a line with neither says its name. An empty body stays empty (a line of files).
-      text: report ? str(el.story) : typeof el.story === 'string' ? el.story : typeof el.description === 'string' ? el.description : str(el.name),
+      // `description`, which keel serves beside an empty `story` (read on Parlor ground, 2026-11-11: 320 lines,
+      // each `story: ""`). Both empty is an empty line (a line of files); neither served at all says its name.
+      text: report ? str(el.story) : lineText(el),
       by: whoMade(el),
       narrator: link(el, 'narrator'),
       parent: link(el, 'parent_narrative'),
@@ -313,6 +314,15 @@ export function newReport(
     }
   }
   return body;
+}
+
+/** A line's words: its story, else its description (lines before 2026-11-11), else empty; its name only when neither is served. */
+function lineText(el: El): string {
+  const story = str(el.story);
+  if (story) return story;
+  const description = str(el.description);
+  if (description) return description;
+  return typeof el.story === 'string' || typeof el.description === 'string' ? '' : str(el.name);
 }
 
 /** A Narrative's name is required: the line's first words, the whole line in the story. */

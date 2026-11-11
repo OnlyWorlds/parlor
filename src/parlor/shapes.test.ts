@@ -48,21 +48,25 @@ describe('lines', () => {
     expect('narrator' in newLine('hi', null, null, 'w1')).toBe(false);
   });
 
-  it("a line's words are its story; an older line's its description; else its name; an empty story stays empty", () => {
+  it("a line's words are its story; an older line's its description; empty stays empty (keel serves both, empty as '')", () => {
     const msg = (id: string, o: Partial<El>) => el({ id, type: 'narrative', supertype: 'Message', name: 'A few words', ...o });
     const texts = readLines([
-      msg('a', { story: 'The whole line, by the message profile.' }),
-      msg('b', { description: 'A line from before 2026-11-11.' }),
-      msg('c', {}),
-      msg('d', { story: '', description: 'never read when a story is there' }),
-      msg('e', { story: 'story wins', description: 'a summary' }),
+      // keel's shape: an absent field is served as ''.
+      msg('a', { story: 'The whole line, by the message profile.', description: '' }),
+      msg('b', { story: '', description: 'A line from before 2026-11-11.' }),
+      msg('c', { story: '', description: '' }),
+      msg('d', { story: 'story wins', description: 'a summary' }),
+      // A body with neither field (a fake, a file): its name.
+      msg('e', {}),
+      msg('f', { description: 'old, no story key' }),
     ]).map(l => [l.id, l.text]);
     expect(Object.fromEntries(texts)).toEqual({
       a: 'The whole line, by the message profile.',
       b: 'A line from before 2026-11-11.',
-      c: 'A few words',
-      d: '',
-      e: 'story wins',
+      c: '',
+      d: 'story wins',
+      e: 'A few words',
+      f: 'old, no story key',
     });
   });
 });
