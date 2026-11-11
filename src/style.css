@@ -138,6 +138,10 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .reply .finishes{display:flex;gap:6px;align-items:center;color:var(--text);flex:1 1 auto;min-width:0}
 .reply .finishes input{width:auto;flex:none;padding:0;margin:0}
 .keeper-part{margin-top:8px}
+.card.complete{margin:8px 0}
+.card.complete .complete-story{max-height:12em;overflow:auto;margin:6px 0}
+.card.complete .finishes{display:flex;gap:6px;align-items:center;margin-top:6px}
+.card.complete .finishes input{width:auto;flex:none;padding:0;margin:0}
 .line.report .report-title{font-weight:600;margin-top:2px}
 .line.report .report-chip{color:var(--accent);border-color:var(--accent)}
 .line.report .report-changes{margin:6px 0;padding:6px 10px;border-left:2px solid var(--line)}

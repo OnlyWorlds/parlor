@@ -6,7 +6,7 @@ import {
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
   newReport, reportName, localDay, REPORT_ANSWERS, storyStart, splitConsequence,
-  unmarkedCharter, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED,
+  unmarkedCharters, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -322,15 +322,28 @@ describe('charter', () => {
     for (const v of ['', '  ', [], {}, null]) expect(readCharter([older, law({ id: 'new', x_review_proposed: v })])?.id).toBe('new');
   });
 
-  it('an unmarked Charter is offered to mark only when the room shows none', () => {
+  it('every unmarked Charter is offered to mark, by name, only when the room shows none; none is picked', () => {
     const loose = lore({ id: 'u', type: 'law', supertype: ' charter ', name: 'Our rules' });
-    expect(unmarkedCharter([loose])).toEqual({ id: 'u', name: 'Our rules', text: '' });
-    expect(unmarkedCharter([loose, law({ id: 'm' })])).toBeNull();
-    expect(unmarkedCharter([lore({ id: 'p', type: 'law', supertype: 'Charter', x_review_proposed: { by: 'm1' } })])).toBeNull();
-    expect(unmarkedCharter([lore({ id: 's', type: 'law', supertype: 'Statute' })])).toBeNull();
-    expect(unmarkedCharter([lore({ id: 'd', type: 'law', supertype: 'Charter', x_review_proposed: 'agent' })])).toBeNull();
-    expect(unmarkedCharter([lore({ id: 'h', type: 'law', supertype: 'Charter', hidden: true })])).toBeNull();
-    expect(unmarkedCharter([lore({ id: 'a', type: 'law', supertype: 'Charter', created_at: '2026-10-01T00:00:00Z' }), lore({ id: 'b', type: 'law', supertype: 'Charter', created_at: '2026-11-01T00:00:00Z' })])?.id).toBe('b');
+    expect(unmarkedCharters([loose])).toEqual([{ id: 'u', name: 'Our rules', text: '' }]);
+    expect(unmarkedCharters([loose, law({ id: 'm' })])).toEqual([]);
+    expect(unmarkedCharters([lore({ id: 'p', type: 'law', supertype: 'Charter', x_review_proposed: { by: 'm1' } })])).toEqual([]);
+    expect(unmarkedCharters([lore({ id: 's', type: 'law', supertype: 'Statute' })])).toEqual([]);
+    expect(unmarkedCharters([lore({ id: 'd', type: 'law', supertype: 'Charter', x_review_proposed: 'agent' })])).toEqual([]);
+    expect(unmarkedCharters([lore({ id: 'h', type: 'law', supertype: 'Charter', hidden: true })])).toEqual([]);
+    expect(unmarkedCharters([lore({ id: 'a', type: 'law', supertype: 'Charter', name: 'the Kingdom' }), lore({ id: 'b', type: 'law', supertype: 'Charter', name: 'How we work' })]).map(c => c.id)).toEqual(['b', 'a']);
+  });
+
+  it("completing a report writes step 2's fields only, keeps the reporter's links, and says each item it set done", () => {
+    const report = el({ id: 'r', type: 'narrative', supertype: 'Report', subtype: 'handed in', story: 'S', narrator: 'c0', relations: ['i1'], characters: ['a0'], [REPORT_ANSWERS]: ['i1'] });
+    const body = completionPatch(report, { description: '  Short.  ', changes: ' One\r\n\n Two ', touched: [{ type: 'character', id: 'a1' }, { type: 'character', id: 'a0' }, { type: 'relation', id: 'r9' }, { type: 'map', id: 'm1' }] },
+      [{ id: 'i1', title: 'Fix\nthe  ledger' }]);
+    expect(body).toEqual({
+      subtype: 'completed', description: 'Short.',
+      consequences: 'One\nTwo\nSet the work item Fix the ledger to done: ow://relation/i1',
+      characters: ['a0', 'a1'], relations: ['i1', 'r9'],
+    });
+    for (const k of ['story', 'narrator', ROOM_MARK, REPORT_ANSWERS, 'name']) expect(k in body).toBe(false);
+    expect(completionPatch(report, { description: 'x', changes: '', touched: [] }, []).consequences).toBe(NOTHING_CHANGED);
   });
 });
 

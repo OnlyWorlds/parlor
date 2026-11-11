@@ -892,16 +892,59 @@ export function readCharter(els: Iterable<El>): Charter | null {
 }
 
 /**
- * The Charter a keeper could mark, when the world has no charter the room shows: the newest Law with supertype
- * Charter that carries no mark and is not proposed (newest by created_at, then the higher id). Null otherwise.
+ * The Laws a keeper could mark as the charter, when the world has no charter the room shows: every Law with supertype
+ * Charter that carries no mark, is not proposed or a doubt, and is not hidden, by name. The keeper names one (the
+ * charter profile: a tool never picks; "the keeper names"), so all of them are offered, none by default.
  */
-export function unmarkedCharter(els: Iterable<El>): Charter | null {
+export function unmarkedCharters(els: Iterable<El>): Charter[] {
   const all = [...els];
-  if (readCharter(all)) return null;
-  const loose = all.filter(el => readingAidOf(el) === 'charter' && !isCharterElement(el) && !handsOnAsProposed(el) && el.hidden !== true && el.known_of !== true)
-    .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '') || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
-  const el = loose[0];
-  return el ? { id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() } : null;
+  if (readCharter(all)) return [];
+  return all.filter(el => readingAidOf(el) === 'charter' && !isCharterElement(el) && !handsOnAsProposed(el) && el.hidden !== true && el.known_of !== true)
+    .map(el => ({ id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() }))
+    .sort((a, b) => simpleCaseFold(a.name).localeCompare(simpleCaseFold(b.name)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+// ---------------------------------------------------------------- completing a report (the report profile's step 2)
+
+/** A room report (the pair and the mark), as the room reads one. */
+export function isReport(el: El): boolean {
+  return isA(el, 'narrative', SUPERTYPE.report);
+}
+
+/** A work item by its pair alone, as a reader of reports reads one, with or without the room mark (the report profile). */
+export function isWorkItemPair(el: El): boolean {
+  return isPair(el, 'relation', SUPERTYPE.workItem);
+}
+
+/** A report's own parts, as the room reads them. */
+export function reportPartOf(el: El): ReportPart {
+  return readReportPart(el);
+}
+
+/**
+ * Step 2's write on a handed-in report, read fresh: `completed`, the keeper's `description` (trimmed), `consequences`
+ * (each typed line trimmed, then one line per work item this completion set done; `nothing changed` when none), and
+ * each typed link field the picks touch as the union of what the report holds and the picks, so the reporter's links
+ * stay. Never `story`, `narrator`, the mark or `x_report_answers`.
+ */
+export function completionPatch(
+  report: El, part: { description: string; changes: string; touched: ReadonlyArray<{ type: string; id: string }> },
+  done: ReadonlyArray<{ id: string; title: string }>,
+): Record<string, unknown> {
+  const lines = part.changes.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  for (const d of done) lines.push(`Set the work item ${d.title.replace(/\s+/g, ' ').trim() || 'Untitled'} to done: ow://relation/${d.id}`);
+  const body: Record<string, unknown> = {
+    subtype: REPORT_COMPLETED,
+    description: part.description.trim(),
+    consequences: lines.length ? lines.join('\n') : NOTHING_CHANGED,
+  };
+  for (const t of part.touched) {
+    const field = NARRATIVE_LINKS[fold(t.type)];
+    if (!field) continue;
+    const had = (body[field] as string[] | undefined) ?? links(report, field);
+    if (!had.includes(t.id)) body[field] = [...had, t.id];
+  }
+  return body;
 }
 
 /** The charter profile's mark, as a keeper writes it on the world's charter: the world's id. */

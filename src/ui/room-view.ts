@@ -6,13 +6,13 @@
  * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, splitConsequence, maySetDone, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
-import { DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, problemLine, type Room } from '../parlor/room';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, splitConsequence, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
+import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot } from './waymark';
 import { afterPress } from './press';
-import { OwNetworkError, fileKindOf, type OwWorldFileRow } from '@onlyworlds/sdk';
+import { OwNetworkError, fileKindOf, proposedMarkOf, type OwWorldFileRow } from '@onlyworlds/sdk';
 import { ACCEPT as FILES_ACCEPT, MAX_PICKS, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
 
 /** A press refused before anything was sent, in the person's words. */
@@ -317,6 +317,167 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       h('button', { class: 'btn quiet', type: 'button', onclick: () => { replyTo = null; drawReply(); } }, 'Not now'));
   }
 
+  // -------------------------------------------------- completing a report (the report profile's step 2; built once)
+  // Its own card, fields and button, apart from the composer: nothing typed here is the composer's, and Enter here
+  // sends nothing. The change_seq of the report as the keeper opened it is kept, so a member's edit since refuses.
+  let completing: { id: string; title: string; seq: number | null } | null = null;
+  // The report the fields were last filled for: Not now, then Complete on the same report, keeps what was typed.
+  let lastOpened: string | null = null;
+  // Whether the card shows the set-done box: a box not shown sets nothing.
+  let cSetShown = false;
+  // Reports whose last press may have landed with its answer lost; and the one already said to be completed.
+  const mayHaveLanded = new Set<string>();
+  let saidCompleted: string | null = null;
+  let completeBusy = false;
+  // Per report: the work items this card set done whose completion did not land yet (the next press says them).
+  const completeDone = new Map<string, Set<string>>();
+  const cTitle = h('h3');
+  const cStory = h('div', { class: 'txt complete-story', 'data-part': 'complete-story' });
+  const cShort = h('textarea', { id: 'complete-short', class: 'field', rows: 2, 'data-part': 'complete-short' });
+  const cChanges = h('textarea', { id: 'complete-changes', class: 'field', rows: 3, 'data-part': 'complete-changes',
+    placeholder: 'One line per change. Leave it empty when nothing changed.' });
+  const cFind = h('input', { id: 'complete-touch', type: 'search', autocomplete: 'off', placeholder: 'Type a name from the world' });
+  const cFound = h('ul', { class: 'found' });
+  const cPicked = h('div', { class: 'picked' });
+  let cPicks: { type: string; id: string; name: string }[] = [];
+  const cItems = h('div', { class: 'm', 'data-part': 'complete-items' });
+  const cSetDone = h('input', { type: 'checkbox', id: 'complete-setdone', 'data-part': 'complete-setdone' });
+  const cSetDoneLabel = h('label', { class: 'finishes', for: 'complete-setdone' }, cSetDone, ' The work is there: set them done');
+  const cBtn = h('button', { class: 'btn entry', type: 'button', 'data-part': 'complete-go' }, 'Complete');
+  function drawCPicked(): void {
+    clear(cPicked, cPicks.map(p => h('span', { class: 'chip el' }, `${p.name} · ${kTypeWord(p.type)} `,
+      h('button', { class: 'act', type: 'button', 'aria-label': `Remove ${p.name}`, onclick: () => { cPicks = cPicks.filter(x => x.id !== p.id); drawCPicked(); } }, '×'))));
+  }
+  cFind.addEventListener('input', () => {
+    const hits = room.reportPickable(cFind.value, new Set(cPicks.map(p => p.id)));
+    clear(cFound, hits.map(x => h('li', null, h('button', { type: 'button', onclick: () => {
+      cPicks = [...cPicks, x];
+      cFind.value = '';
+      clear(cFound);
+      drawCPicked();
+      cFind.focus();
+    } }, `${x.name} · ${kTypeWord(x.type)}`))));
+  });
+  for (const field of [cShort, cChanges, cFind]) {
+    field.addEventListener('keydown', (ev: Event) => {
+      const e = ev as KeyboardEvent;
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void completeNow(); }
+      else if (e.key === 'Enter' && field === cFind) e.preventDefault();
+    });
+  }
+  const completeCard = h('div', { class: 'card complete', 'data-part': 'complete', hidden: true },
+    cTitle,
+    h('p', { class: 'sys' }, 'Completing a report: make the changes it calls for first, then write In short and What changed. The reporter\'s text stays as handed in.'),
+    h('details', null, h('summary', null, 'The report as handed in'), cStory),
+    h('label', { for: 'complete-short' }, 'In short'), cShort,
+    h('label', { for: 'complete-changes' }, 'What changed'), cChanges,
+    h('label', { for: 'complete-touch' }, 'What it touched (optional)'), cFind, cFound, cPicked,
+    cItems,
+    h('div', { class: 'btns' }, cBtn, h('button', { class: 'btn quiet', type: 'button', onclick: () => closeComplete() }, 'Not now')));
+  cBtn.addEventListener('click', () => { void completeNow(); });
+  function closeComplete(): void {
+    completing = null;
+    completeCard.hidden = true;
+  }
+  /** Open the card on a handed-in report; a report already open keeps what was typed for it. */
+  function openComplete(l: Line, r: ReportPart): void {
+    // A press under way keeps the card on its report: what it typed stays until the press settles.
+    if (completeBusy) return;
+    if (lastOpened !== l.id) {
+      lastOpened = l.id;
+      cShort.value = r.description;
+      cChanges.value = r.consequences.join('\n');
+      cPicks = [];
+      drawCPicked();
+      cFind.value = '';
+      clear(cFound);
+      cSetDone.checked = true;
+    }
+    completing = { id: l.id, title: r.title || 'Untitled', seq: typeof l.el.change_seq === 'number' ? l.el.change_seq : null };
+    cTitle.textContent = `Completing: ${completing.title}`;
+    cStory.textContent = l.text;
+    completeCard.hidden = false;
+    drawComplete();
+    completeCard.scrollIntoView({ block: 'nearest' });
+    cShort.focus();
+  }
+  /** On each draw: the work items the report answers, and the card closed when the report is no longer handed in. */
+  function drawComplete(): void {
+    if (!completing) return;
+    const id = completing.id;
+    const l = readLines(room.els.values()).find(x => x.id === id);
+    if (!room.isKeeper || !l?.report || l.report.state !== 'handed in') {
+      if (!completeBusy) {
+        closeComplete();
+        if (l?.report?.state === 'completed' && saidCompleted !== id) { saidCompleted = id; notice('That report is completed now.'); }
+      }
+      return;
+    }
+    // Every work item it answers, by its pair, room mark or not (the profile's reader reads one either way).
+    const items = l.report.answers.map(x => room.els.get(x)).filter((el): el is NonNullable<typeof el> => !!el && isWorkItemPair(el));
+    const wordOf = (el: (typeof items)[number]) => String(el.subtype ?? '').trim().toLowerCase();
+    const settable = items.filter(el => maySetDone(el));
+    const words = items.map(el => `${(el.name ?? '').toString().trim() || 'Untitled'} (${wordOf(el) === 'done' ? 'done already' : maySetDone(el) ? (wordOf(el) || 'open') : proposedMarkOf(el) ? 'proposed: left open' : 'left as it is'})`);
+    cSetShown = settable.length > 0;
+    const setWords = settable.length === 1 ? ' The work is there: set it done' : ' The work is there: set them done';
+    if (cSetDoneLabel.lastChild?.textContent !== setWords) cSetDoneLabel.replaceChildren(cSetDone, setWords);
+    clear(cItems, items.length ? [h('span', null, `It answers: ${words.join(', ')}.`), cSetShown ? cSetDoneLabel : null] : []);
+  }
+  async function completeNow(): Promise<void> {
+    if (!completing || completeBusy) return;
+    const target = completing;
+    const typed = { short: cShort.value, changes: cChanges.value, picks: cPicks };
+    completeBusy = true;
+    cBtn.disabled = true;
+    try {
+      await room.readRole();
+      if (!room.isKeeper) throw new Refused('You no longer keep this world, so you cannot complete a report.');
+      if (!typed.short.trim()) throw new Refused('A completed report needs its short part: write it under In short.');
+      const mine = completeDone.get(target.id) ?? new Set<string>();
+      await room.complete(target.id, target.seq, { description: typed.short, changes: typed.changes, touched: typed.picks }, cSetShown && cSetDone.checked, mine, mayHaveLanded.has(target.id));
+      completeDone.delete(target.id);
+      mayHaveLanded.delete(target.id);
+      saidCompleted = target.id;
+      if (completing?.id === target.id) {
+        if (cShort.value === typed.short) cShort.value = '';
+        if (cChanges.value === typed.changes) cChanges.value = '';
+        if (cPicks === typed.picks) { cPicks = []; drawCPicked(); }
+        closeComplete();
+      }
+    } catch (err) {
+      // Only the report's own PATCH with its answer lost may have landed; only a moved report forgets that.
+      if (err instanceof CompletionFailed && err.atPatch && err.failure instanceof OwNetworkError) mayHaveLanded.add(target.id);
+      else if (err instanceof ReportMoved && (err.why === 'changed' || err.why === 'gone')) mayHaveLanded.delete(target.id);
+      if (err instanceof CompletionFailed && err.done.length) {
+        const set = completeDone.get(target.id) ?? new Set<string>();
+        for (const d of err.done) set.add(d.id);
+        completeDone.set(target.id, set);
+      }
+      const failure = err instanceof CompletionFailed ? err.failure : err;
+      const doneWords = err instanceof CompletionFailed && err.done.length
+        ? `Set done: ${err.done.map(d => d.title.trim() || 'Untitled').join(', ')}. The report is not completed yet: press Complete again. ` : '';
+      notice(err instanceof Refused ? err.message
+        : err instanceof KeeperOnly ? 'You no longer keep this world, so you cannot complete a report.'
+        : err instanceof ReportMoved ? {
+          gone: 'That report is gone.',
+          completed: 'That report is completed now.',
+          changed: 'The report changed since you opened it. Read it again, then complete it: what you typed is kept.',
+          hidden: 'That report is hidden. Unhide it first to complete it.',
+        }[err.why]
+        : `${doneWords}${problemLine(failure, 'completing the report')}`, true);
+      if (err instanceof ReportMoved && err.why === 'changed' && completing?.id === target.id) {
+        // Read again: the card takes the report as the server holds it now (the feed may be behind), keeping what
+        // was typed; the next press completes that version.
+        const f = err.fresh;
+        if (f) { completing = { ...target, seq: typeof f.change_seq === 'number' ? f.change_seq : null }; cStory.textContent = typeof f.story === 'string' ? f.story : ''; }
+      }
+    } finally {
+      completeBusy = false;
+      cBtn.disabled = false;
+      drawComplete();
+    }
+  }
+
   // -------------------------------------------------- my spec (built once)
   const specTitle = h('input', { id: 'spec-title', type: 'text', maxlength: 200 });
   const specText = h('textarea', { id: 'spec-text', class: 'field', rows: 6 });
@@ -463,7 +624,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const workMarks = markSet(workList);
   const changeMarks = markSet(changeList);
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
+  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? completeCard : null, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
   const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
@@ -492,6 +653,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function draw(): void {
     drawTop();
     drawReportMode();
+    drawComplete();
     drawRoom();
     drawHost();
     drawWork();
@@ -628,7 +790,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           anchor ? h('span', { class: 't' }, `on ${anchor.title || 'Untitled'}`) : null,
           hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
           hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
-          room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this report') : null),
+          room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this report') : null,
+          // Step 2 in the room: a keeper completes a handed-in report in its own card.
+          room.isKeeper && r.state === 'handed in' && !hidden ? h('button', { class: 'act', type: 'button', 'data-act': 'complete', onclick: () => openComplete(l, r) }, 'Complete this report') : null),
         r.title ? h('div', { class: 'report-title' }, r.title) : null,
         r.description.trim() ? h('div', { class: 'txt', 'data-part': 'report-description' }, r.description) : null,
         r.state === 'handed in' ? h('p', { class: 'sys' }, 'Not completed yet: a host reads it next.') : null,
@@ -761,7 +925,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function drawWork(): void {
     const s = room.sitting();
     const charter = room.charter();
-    const loose = charter ? null : room.unmarkedCharter();
+    const loose = charter ? [] : room.unmarkedCharters();
     const specs = room.specs();
     const shown = s?.specs || room.isHost ? specs : specs.filter(x => x.by === room.meBy);
     const mine = mySpec();
@@ -801,11 +965,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     clear(work,
       charter ? h('details', { class: 'card' }, h('summary', null, charter.name || 'House rules'), h('p', null, charter.text)) : null,
       // A Law with supertype Charter and no mark is lore (the charter profile): a keeper may mark it, in one write.
-      !charter && loose && room.isKeeper ? h('div', { class: 'card', 'data-part': 'charter-offer' },
-        h('p', { class: 'sys' }, `This world has a Law, ${loose.name.trim() || 'Untitled'}, with supertype Charter that is not marked as its charter, so the room does not show it as house rules.`),
-        h('div', { class: 'btns' }, h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
-          try { await room.markCharter(loose.id); } catch (err) { notice(problemLine(err, 'marking the charter'), true); }
-        } }, "Mark it as this world's charter"))) : null,
+      // A Law with supertype Charter and no mark is lore (the charter profile): the keeper names one to mark, in one
+      // write; the parlor never picks, so each such Law gets its own button, named.
+      !charter && loose.length && room.isKeeper ? h('div', { class: 'card', 'data-part': 'charter-offer' },
+        h('p', { class: 'sys' }, loose.length === 1
+          ? `This world has a Law with supertype Charter that is not marked as its charter, so the room does not show it as house rules.`
+          : `This world has ${loose.length} Laws with supertype Charter, none marked as its charter, so the room shows no house rules. Mark the one that holds this world's rules.`),
+        h('div', { class: 'btns' }, loose.map(c => h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
+          try { await room.markCharter(c.id); } catch (err) { notice(problemLine(err, 'marking the charter'), true); }
+        } }, `Mark ${c.name.trim() || 'Untitled'}${loose.filter(o => o.name.trim() === c.name.trim()).length > 1 ? ` (${c.text.replace(/\s+/g, ' ').trim().slice(0, 40) || c.id.slice(0, 8)})` : ''} as this world's charter`)))) : null,
       !s ? h('div', { class: 'empty' }, h('h3', null, 'No sitting yet'), h('p', null, room.isHost ? 'Start the first sitting when people are here.' : 'The host has not started a sitting. The room is open: say hello.')) : null,
       s && !room.isHost ? h('div', { class: 'phases', 'aria-label': 'Phase' }, PHASES.map(p => h('span', { class: p.name === s.phase ? 'pp now' : 'pp' }, p.name))) : null,
       s && !room.isHost ? h('div', { class: 'sw' },

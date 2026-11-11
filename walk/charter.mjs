@@ -79,7 +79,7 @@ try {
   check('host: an unmarked Charter is not shown as house rules', await rules(host).count() === 0);
   check('member: no house rules and no offer', await rules(m).count() === 0 && await m.locator('[data-part="charter-offer"]').count() === 0);
 
-  await offer.getByRole('button', { name: "Mark it as this world's charter" }).click();
+  await offer.getByRole('button', { name: "Mark House rules as this world's charter" }).click();
   check('keel: the Law carries the world\'s id as its mark', await until(async () => (await api.get('law', law.id)).x_charter_of === s.worldId, 15000));
   check('host: house rules shown, the offer gone', await until(() => rules(host).isVisible(), 15000) && await offer.count() === 0);
   check('member: house rules shown once the feed brings the mark', await until(() => rules(m).isVisible(), 30000));

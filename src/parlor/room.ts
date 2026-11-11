@@ -4,7 +4,7 @@
  * result is shown at once and the feed brings the server's copy after.
  */
 
-import { OwApiError, OwNetworkError, type OwMe, type OwMember, type OwV2Client } from '@onlyworlds/sdk';
+import { OwApiError, OwNetworkError, OwPreconditionFailedError, type OwMe, type OwMember, type OwV2Client } from '@onlyworlds/sdk';
 import { RoomFeed } from './feed';
 import { serialQueue } from './serial';
 import { session, type AccountWorld } from './session';
@@ -13,7 +13,8 @@ import {
   readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
   readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK, addressOf, type WorkItem,
-  newReport, localDay, isReportPickable, maySetDone, unmarkedCharter, CHARTER_MARK, REPORT_COMPLETED, type KeeperPart,
+  newReport, localDay, isReportPickable, maySetDone, unmarkedCharters, CHARTER_MARK, REPORT_COMPLETED, type KeeperPart,
+  isReport, isWorkItemPair, reportPartOf, completionPatch,
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
@@ -26,6 +27,15 @@ export class ItemMoved extends Error {}
 /** Reading or setting the work item done failed: nothing was handed in (a lost answer may still have set it done). */
 export class DoneFailed extends Error {
   constructor(readonly failure: unknown) { super('done failed'); }
+}
+/** A report to complete is gone, completed, changed since the keeper opened it, or hidden: nothing was sent. */
+export class ReportMoved extends Error {
+  constructor(readonly why: 'gone' | 'completed' | 'changed' | 'hidden', readonly fresh: El | null = null) { super(`report ${why}`); }
+}
+/** Completing a report failed: `done` names the work items set done before the failure (the next press says them). */
+export class CompletionFailed extends Error {
+  /** `atPatch`: the failure was the report's own PATCH, so with a lost answer it may have landed. */
+  constructor(readonly done: ReadonlyArray<{ id: string; title: string }>, readonly failure: unknown, readonly atPatch = false) { super('completion failed'); }
 }
 /** The work item was set done (or was done already) and the report's create then failed: `failure` is that failure. */
 export class DoneNoReport extends Error {
@@ -447,16 +457,72 @@ export class Room {
     });
   }
 
-  /** A keeper marks a Law with supertype Charter as the world's charter (the charter profile's mark, the world's id). */
+  /** A keeper marks the Law they named as the world's charter (the charter profile's mark, the world's id). */
   markCharter(id: string): Promise<void> {
     return this.serial(async () => {
-      if (!this.isKeeper || unmarkedCharter(this.els.values())?.id !== id) return;
+      if (!this.isKeeper || !unmarkedCharters(this.els.values()).some(c => c.id === id)) return;
       this.landed(await this.client.patch('law', id, { [CHARTER_MARK]: this.world.id }));
     });
   }
 
-  unmarkedCharter() {
-    return unmarkedCharter(this.els.values());
+  unmarkedCharters() {
+    return unmarkedCharters(this.els.values());
+  }
+
+  /**
+   * A keeper completes a handed-in report (the report profile's step 2), one job on the queue:
+   * 1. The report read fresh: it must still be a handed-in room report, not hidden, at the `change_seq` the keeper
+   *    opened it at (a member's edit since then refuses: the keeper completes only what they read). A completed one
+   *    whose description is this completion's is a lost answer that landed: success.
+   * 2. With `setDone`, each id in its `x_report_answers` read fresh: a gone one, or one that is no work item by its pair, is
+   *    skipped (rule 5); an open or taken one, not proposed, is set done; a done one counts only when this composer
+   *    set it (`doneBefore`).
+   * 3. The report patched with `ifMatch` at that `change_seq`: completionPatch's fields, never the story.
+   * A failure after a done is CompletionFailed naming what was set done, so the next press says it.
+   */
+  complete(reportId: string, seq: number | null, part: { description: string; changes: string; touched: ReadonlyArray<{ type: string; id: string }> },
+    setDone: boolean, doneBefore: ReadonlySet<string>, mayHaveLanded = false): Promise<void> {
+    return this.serial(async () => {
+      if (!this.isKeeper) throw new KeeperOnly();
+      if (this.hidden.has(reportId)) throw new ReportMoved('hidden');
+      const gone = (err: unknown) => err instanceof OwApiError && (err.status === 404 || err.status === 410);
+      let fresh: El;
+      try { fresh = await this.client.get('narrative', reportId) as El; } catch (err) { if (gone(err)) throw new ReportMoved('gone'); throw new CompletionFailed([], err); }
+      if (!isReport(fresh)) throw new ReportMoved('gone');
+      const state = reportPartOf(fresh).state;
+      // This card's own earlier press may have landed with its answer lost: that completion is this one.
+      if (state === 'completed' && mayHaveLanded && (fresh.description ?? '') === part.description.trim()) return;
+      if (state !== 'handed in') throw new ReportMoved('completed');
+      if (fresh.hidden === true) throw new ReportMoved('hidden');
+      const at = typeof fresh.change_seq === 'number' ? fresh.change_seq : null;
+      if (seq !== null && at !== null && at !== seq) throw new ReportMoved('changed', fresh);
+      const done: { id: string; title: string }[] = [];
+      // Items this card set done on an earlier press are always said, whatever the box says now; new dones only with it.
+      if (setDone || doneBefore.size) {
+        for (const id of reportPartOf(fresh).answers) {
+          if (!setDone && !doneBefore.has(id)) continue;
+          let item: El;
+          try { item = await this.client.get('relation', id) as El; } catch (err) { if (gone(err)) continue; throw new CompletionFailed(done, err); }
+          // A work item by its pair: the profile's reader reads one with or without the room mark.
+          if (!isWorkItemPair(item)) continue;
+          const title = (item.name ?? '').toString();
+          if (simpleCaseFold(String(item.subtype ?? '').trim()) === 'done') { if (doneBefore.has(id)) done.push({ id, title }); continue; }
+          if (!setDone || !maySetDone(item)) continue;
+          try { this.landed(await this.client.patch('relation', id, { subtype: 'done' })); } catch (err) {
+            // A lost answer may have set it: counted, so the next press says so (the item reads done then).
+            throw new CompletionFailed(err instanceof OwNetworkError ? [...done, { id, title }] : done, err);
+          }
+          done.push({ id, title });
+        }
+      }
+      const body = completionPatch(fresh, part, done);
+      try {
+        this.landed(await this.client.patch('narrative', reportId, body, at !== null ? { ifMatch: at } : undefined));
+      } catch (err) {
+        if (!done.length && err instanceof OwPreconditionFailedError) throw new ReportMoved('changed', (err as OwPreconditionFailedError).current as El ?? null);
+        throw new CompletionFailed(done, err, true);
+      }
+    });
   }
 
   /** A work item, marked like a line; its picks go in the Relation's typed link fields. */

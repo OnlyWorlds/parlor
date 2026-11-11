@@ -180,9 +180,27 @@ try {
     && JSON.stringify(e2.x_report_answers) === JSON.stringify([item.id]) && e2.subtype === 'handed in', JSON.stringify({ relations: e2.relations, answers: e2.x_report_answers }));
   check('keel: the item\'s own state is left alone', (await api.get('relation', item.id)).subtype === 'open');
 
-  // ------------------------------------------------------------ the keeper completes the first (step 2, by API)
+  // ------------------------------------------------------------ the keeper completes the first in the room (step 2)
   const CHANGES = `Renamed the second ship: ow://object/${item.id}\nSet the subtype of 2 Objects to surveyed (a search for every Object finds them)`;
-  await api.patch('narrative', e1.id, { description: `Two ships disagreed (${RUN}); the ledger is now right.`, consequences: CHANGES, subtype: 'completed' });
+  check('member: no Complete on a report', await r1.locator('[data-act="complete"]').count() === 0);
+  const h1 = host.locator('.line.report', { hasText: MARK1 });
+  const completeBtn = h1.locator('[data-act="complete"]');
+  check('keeper: Complete this report on a handed-in report', await until(() => completeBtn.isVisible(), 20000));
+  if (process.env.EXPECT_OLD === '1' && !(await completeBtn.count())) throw new Error('no Complete on this build (the control)');
+  await completeBtn.click();
+  const ccard = host.locator('[data-part="complete"]');
+  check('keeper: the card opens on that report, its story readable', await until(() => ccard.isVisible(), 5000)
+    && /Completing: /.test(await ccard.innerText()) && (await ccard.locator('[data-part="complete-story"]').textContent()).includes(MARK1));
+  // The report moves after the keeper opened it (as a member's own edit would): the press refuses, what was typed stays.
+  await api.patch('narrative', e1.id, { x_walk_touch: RUN });
+  await host.locator('[data-part="complete-short"]').fill(`Two ships disagreed (${RUN}); the ledger is now right.`);
+  await host.locator('[data-part="complete-changes"]').fill(CHANGES);
+  await host.locator('[data-part="complete-go"]').click();
+  check('keeper: a report changed since it was opened is refused, nothing written, the text kept', await until(async () => /changed since you opened it/.test(await notices(host)), 15000)
+    && (await api.get('narrative', e1.id)).subtype === 'handed in' && (await host.locator('[data-part="complete-short"]').inputValue()).includes('Two ships disagreed'), await notices(host));
+  // The refusal hands the card the report as the server holds it now; the next press completes that version.
+  await host.locator('[data-part="complete-go"]').click();
+  check('keeper: pressed again, it completes and the card closes', await until(async () => (await api.get('narrative', e1.id)).subtype === 'completed' && await ccard.isHidden(), 20000), await notices(host));
   for (const [page, who] of [[m, 'member'], [host, 'host']]) {
     const r = page.locator('.line.report', { hasText: `Two ships disagreed (${RUN})` });
     check(`${who}: the completed report shows its description open`, await until(() => r.getAttribute('data-report').then(v => v === 'completed'), 40000));
@@ -196,6 +214,22 @@ try {
   }
   check('keel: the parlor never wrote the story again', (await api.get('narrative', e1.id)).story === STORY.join('\n'));
   await shot(m, 'completed');
+
+  // The second, on the work item it answers: completing it sets the item done and says so.
+  const h2 = host.locator('.line.report', { hasText: MARK2 });
+  await h2.locator('[data-act="complete"]').click();
+  check('keeper: the card names the item it answers and offers to set it done', await until(async () => /It answers: Check the ledger/.test(await ccard.innerText()), 5000)
+    && await host.locator('[data-part="complete-setdone"]').isChecked());
+  await host.locator('[data-part="complete-short"]').fill(`The ledger is checked (${RUN}).`);
+  await shot(host, 'complete-card');
+  await host.locator('[data-part="complete-go"]').click();
+  check('keel: the item it answers is done, the report completed with that line, its story and links kept', await until(async () => (await api.get('narrative', e2.id)).subtype === 'completed', 20000)
+    && await (async () => {
+      const r = await api.get('narrative', e2.id);
+      return (await api.get('relation', item.id)).subtype === 'done' && r.description === `The ledger is checked (${RUN}).`
+        && r.consequences === `Set the work item ${ITEM} to done: ow://relation/${item.id}` && r.story === `Checked the ledger (${MARK2}).`
+        && JSON.stringify(r.relations) === JSON.stringify([item.id]) && JSON.stringify(r.x_report_answers) === JSON.stringify([item.id]);
+    })());
 
   // ------------------------------------------------------------ the keeper's own report: one write, born completed (serial 115)
   // A member never sees the keeper's part.
