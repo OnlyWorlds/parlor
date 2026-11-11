@@ -170,6 +170,11 @@ export interface ReportPart {
   consequences: string[];
   /** The ids in `x_report_answers`, non-empty strings, first place; the room keeps the work items it holds (rule 5). */
   answers: string[];
+  /**
+   * An AI's report written under the review hold (the review profile's rule 1: an object mark is proposed): not part of
+   * the world, nor are the changes it names, until a keeper accepts it; the report page promises nothing of its settling.
+   */
+  proposed: boolean;
 }
 
 function readReportPart(el: El): ReportPart {
@@ -188,6 +193,7 @@ function readReportPart(el: El): ReportPart {
     description: str(el.description),
     consequences: str(el.consequences).split(/\r?\n/).map(s => s.trim()).filter(Boolean),
     answers,
+    proposed: proposedMarkOf(el) !== null,
   };
 }
 

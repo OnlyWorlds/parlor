@@ -59,6 +59,16 @@ describe('reports (schema-dist profiles/report.md)', () => {
     expect(l.by).toBe('m1');
   });
 
+  it('a report written under the review hold reads as proposed (the review profile rules 1 and 5); none, null or an empty object as settled', () => {
+    const p = (mark: unknown) => readLines([rep({ id: 'r', subtype: 'completed', consequences: 'Dock 4 back', x_review_proposed: mark } as Partial<El> & { id: string })])[0].report!.proposed;
+    expect(p({ by: 'm-ai', at: '2026-11-11T07:00:00Z' })).toBe(true);
+    expect(p({ by: null })).toBe(true);
+    expect(p({})).toBe(false);
+    expect(p(null)).toBe(false);
+    expect(p(undefined)).toBe(false);
+    expect(readLines([rep({ id: 'r' })])[0].report!.proposed).toBe(false);
+  });
+
   it('a Report without the mark is lore and never the room', () => {
     expect(readLines([lore({ id: 'r', type: 'narrative', supertype: 'Report', story: 'a scout' })])).toEqual([]);
   });

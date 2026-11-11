@@ -406,7 +406,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     if (!completing) return;
     const id = completing.id;
     const l = readLines(room.els.values()).find(x => x.id === id);
-    if (!room.isKeeper || !l?.report || l.report.state !== 'handed in') {
+    if (!room.isKeeper || !l?.report || l.report.state !== 'handed in' || l.report.proposed) {
       if (!completeBusy) {
         closeComplete();
         if (l?.report?.state === 'completed' && saidCompleted !== id) { saidCompleted = id; notice('That report is completed now.'); }
@@ -786,16 +786,19 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         h('div', { class: 'meta' }, h('span', { class: 'who' }, name), ai ? h('span', { class: 'chip' }, 'AI') : null,
           h('span', { class: 't' }, hhmm(l.at)),
           h('span', { class: 'chip report-chip' }, r.state === 'other' ? (r.word ? `Report · ${r.word}` : 'Report') : `Report · ${r.state}`),
+          r.proposed ? h('span', { class: 'chip prop', 'data-part': 'report-proposed' }, 'Proposed') : null,
           ...answered.map(id => h('span', { class: 't' }, `answers ${workItems.get(id)!.title || 'Untitled'}`)),
           anchor ? h('span', { class: 't' }, `on ${anchor.title || 'Untitled'}`) : null,
           hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
           hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
           room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this report') : null,
           // Step 2 in the room: a keeper completes a handed-in report in its own card.
-          room.isKeeper && r.state === 'handed in' && !hidden ? h('button', { class: 'act', type: 'button', 'data-act': 'complete', onclick: () => openComplete(l, r) }, 'Complete this report') : null),
+          // Not on a proposed report: a keeper's step 2 over a proposal would read as settling it, and nothing rules that.
+          room.isKeeper && r.state === 'handed in' && !hidden && !r.proposed ? h('button', { class: 'act', type: 'button', 'data-act': 'complete', onclick: () => openComplete(l, r) }, 'Complete this report') : null),
         r.title ? h('div', { class: 'report-title' }, r.title) : null,
         r.description.trim() ? h('div', { class: 'txt', 'data-part': 'report-description' }, r.description) : null,
-        r.state === 'handed in' ? h('p', { class: 'sys' }, 'Not completed yet: a host reads it next.') : null,
+        r.proposed ? h('p', { class: 'sys', 'data-part': 'report-proposed-line' }, 'Proposed and not yet reviewed: this report, and any change it names, is not part of the world until a keeper accepts it.') : null,
+        r.state === 'handed in' && !r.proposed ? h('p', { class: 'sys' }, 'Not completed yet: a host reads it next.') : null,
         r.state === 'completed'
           ? h('div', { class: 'report-changes', 'data-part': 'report-changes' }, h('div', { class: 'ph' }, 'What changed'),
             r.consequences.length ? h('ul', null, r.consequences.map(c => { const { words, address } = splitConsequence(c); return h('li', address ? { title: address, 'data-address': address } : null, words); })) : h('p', { class: 'sys' }, 'No changes written.'))
@@ -1060,7 +1063,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       // One name per taker: a double take from two tabs is one person (the Take gate's T2-G1).
       takers: [...new Set(w.takes.map(t => t.by))].map(by => room.name(by)), mine: room.hasTaken(w.id),
       // For a keeper: a completed report answers an item still open (a lost answer, a closed tab, another tool's report).
-      reported: room.isKeeper && w.state !== 'done' && room.answers(w.id).some(l => l.report?.state === 'completed' && l.report.answers.includes(w.id)),
+      reported: room.isKeeper && w.state !== 'done' && room.answers(w.id).some(l => l.report?.state === 'completed' && !l.report.proposed && l.report.answers.includes(w.id)),
     }));
     // For you first, then for others, then addressed to no one; a heading only when there is more than one group.
     const GROUP = { mine: 'For you', others: 'For others', none: 'Not addressed to anyone' } as const;
