@@ -60,8 +60,11 @@ say('the account reads as a guest', me.role === 'guest', `was ${was.role} · cha
 
 // 3. What the guest is served, by id and in its lists.
 for (const [k, v] of Object.entries(made)) {
-  const r = await guest.get(v.type, v.id).then(() => 200, e => e?.status ?? 'error');
-  console.log(`     guest GET ${k} (${v.type}) answers ${r}`);
+  let body = null;
+  const r = await guest.get(v.type, v.id).then(el => { body = el; return 200; }, e => e?.status ?? 'error');
+  // A served element's room mark: does it still name the sitting the guest cannot see?
+  const mark = body ? (body.x_room_of === sitting.id ? 'the sitting' : body.x_room_of === undefined ? 'absent' : JSON.stringify(body.x_room_of)) : '';
+  console.log(`     guest GET ${k} (${v.type}) answers ${r}${body ? ` · x_room_of: ${mark}` : ''}`);
   results.push({ name: `guest by id: ${k}`, served: r === 200 });
 }
 for (const type of ['event', 'narrative', 'construct', 'relation', 'character', 'law']) {
