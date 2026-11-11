@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   OWNER, type El, readLines, lineName, newLine, readHearts, heartCounts, myHearts, readSpecs,
-  readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, readCharter, PHASES, phaseOf,
+  readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, linesOfUnseenSitting, readCharter, PHASES, phaseOf,
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
@@ -315,6 +315,22 @@ describe('sittings', () => {
     expect(linesOfSitting(lines, sittings, 's1').map(l => l.id)).toEqual(['l1']);
     expect(linesOfSitting(lines, sittings, 's2').map(l => l.id)).toEqual(['l2']);
     expect(linesOfSitting(lines, sittings, null).map(l => l.id)).toEqual(['l0', 'l1', 'l2']);
+  });
+
+  it("a watcher sees no sitting: its lines are the newest line's room mark, the world's alone when none names another", () => {
+    const line = (id: string, at: string, mark?: string) =>
+      el({ id, type: 'narrative', supertype: 'Message', created_at: at, x_room_of: mark });
+    const lines = readLines([
+      line('l0', '2026-10-22T08:00:00Z', 'w1'),
+      line('l1', '2026-10-22T10:00:00Z', 's1'),
+      line('l2', '2026-10-22T11:00:00Z', 's2'),
+      line('l3', '2026-10-22T12:00:00Z', 's2'),
+      line('l4', '2026-10-22T12:30:00Z'),
+    ]);
+    expect(linesOfUnseenSitting(lines, 'w1').map(l => l.id)).toEqual(['l2', 'l3']);
+    // A room with no sittings: every line, as before.
+    const team = readLines([line('t0', '2026-10-22T08:00:00Z', 'w1'), line('t1', '2026-10-22T09:00:00Z', 'w1')]);
+    expect(linesOfUnseenSitting(team, 'w1').map(l => l.id)).toEqual(['t0', 't1']);
   });
 });
 

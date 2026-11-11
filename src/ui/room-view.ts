@@ -718,9 +718,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         : null,
     );
     if (!room.canWrite) {
-      roomHead.append(h('p', { class: 'sys' }, room.role !== 'watcher' && room.me.scope === 'read'
-        ? 'You can read this room. To write in it, your account needs a PIN: set one on onlyworlds.com under Account settings, then open the room again.'
-        : 'You can read this room.'));
+      roomHead.append(h('p', { class: 'sys' }, room.sittingUnseen
+        ? 'You can read the talk in this room: the lines of the latest sitting someone has written in. A watcher is not shown the sitting itself, its specs, its votes or its board.'
+        : room.role !== 'watcher' && room.me.scope === 'read'
+          ? 'You can read this room. To write in it, your account needs a PIN: set one on onlyworlds.com under Account settings, then open the room again.'
+          : 'You can read this room.'));
     }
     nameCard.hidden = !room.needsName();
     const ls = room.lines();

@@ -593,6 +593,27 @@ export function starPatch(specId: string): Record<string, unknown> {
   return { [STAR_FIELD]: specId };
 }
 
+/**
+ * A watcher's lines: keel serves a guest the room's lines (mail to everyone) but no sitting, while each
+ * line still carries its room mark. So the lines are grouped by the mark, and the group holding the
+ * newest line is the current sitting's. Where no line names a mark other than the world's (a room with
+ * no sittings), every line.
+ */
+export function linesOfUnseenSitting(lines: readonly Line[], worldId: string): Line[] {
+  const markOf = (l: Line): string | null => {
+    const m = l.el[ROOM_MARK];
+    return typeof m === 'string' && m !== worldId ? m : null;
+  };
+  let newest: Line | null = null;
+  for (const l of lines) {
+    if (markOf(l) === null) continue;
+    if (!newest || l.at > newest.at || (l.at === newest.at && l.id > newest.id)) newest = l;
+  }
+  if (!newest) return [...lines];
+  const mark = markOf(newest);
+  return lines.filter(l => markOf(l) === mark);
+}
+
 /** Lines of one sitting: made at or after its start and before the next one's. */
 export function linesOfSitting(lines: readonly Line[], sittings: readonly Sitting[], sittingId: string | null): Line[] {
   if (!sittingId) return [...lines];

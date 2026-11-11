@@ -10,7 +10,7 @@ import { serialQueue } from './serial';
 import { session, type AccountWorld } from './session';
 import {
   OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readHearts, readSpecs, readVotes,
-  readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
+  readSittings, readCharter, readMemberCharacters, linesOfSitting, linesOfUnseenSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
   readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK, addressOf, type WorkItem,
   newReport, localDay, isReportPickable, maySetDone, unmarkedCharters, CHARTER_MARK, REPORT_COMPLETED, type KeeperPart,
@@ -211,7 +211,15 @@ export class Room {
   /** Lines stay by time: a line written while a new sitting is still on its way keeps its place. */
   lines() {
     const all = this.sittings();
+    // A watcher is served the room's lines but no sitting: the newest sitting's lines by their mark.
+    if (!all.length && this.role === 'watcher') return linesOfUnseenSitting(readLines(this.els.values()), this.world.id);
     return linesOfSitting(readLines(this.els.values()), all, this.sitting()?.id ?? null);
+  }
+
+  /** A watcher in a room with sittings it cannot see: a line names a mark other than the world's. */
+  get sittingUnseen(): boolean {
+    if (this.role !== 'watcher' || this.sittings().length) return false;
+    return readLines(this.els.values()).some(l => typeof l.el[ROOM_MARK] === 'string' && l.el[ROOM_MARK] !== this.world.id);
   }
 
   /** The shown sitting's own specs, hearts and votes, by the mark (the world's before any sitting). */
