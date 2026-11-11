@@ -13,11 +13,24 @@ import {
   readSittings, readCharter, readMemberCharacters, linesOfSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
   readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK, addressOf, type WorkItem,
-  newReport, localDay,
+  newReport, localDay, isReportPickable, maySetDone, unmarkedCharter, CHARTER_MARK, REPORT_COMPLETED, type KeeperPart,
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
 import { RoomFiles, filesName } from './files';
+
+/** A report born completed, pressed by a seat that no longer keeps the world: nothing was sent. */
+export class KeeperOnly extends Error {}
+/** The work item a keeper's report sets done is gone, or no longer open or taken: nothing was sent. */
+export class ItemMoved extends Error {}
+/** Reading or setting the work item done failed: nothing was handed in (a lost answer may still have set it done). */
+export class DoneFailed extends Error {
+  constructor(readonly failure: unknown) { super('done failed'); }
+}
+/** The work item was set done (or was done already) and the report's create then failed: `failure` is that failure. */
+export class DoneNoReport extends Error {
+  constructor(readonly item: { id: string; title: string }, readonly failure: unknown) { super("done, no report"); }
+}
 
 function newestOf<T extends { at: string }>(xs: T[]): T | null {
   return [...xs].sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
@@ -100,7 +113,13 @@ export class Room {
     try {
       const before = JSON.stringify(this.roster);
       this.roster = await this.client.members();
-      if (JSON.stringify(this.roster) !== before) this.feed.changed();
+      // My own row is the server's word on my role now: a keeper who is made a member (or the reverse) reads so
+      // within the roster's round, not only when the room opens.
+      const row = this.roster.find(m => (m.id ?? OWNER) === this.meBy);
+      const role = row ? (row.status === 'active' ? roomRole(row.role) : 'watcher') : this.role;
+      const moved = role !== this.role;
+      this.role = role;
+      if (moved || JSON.stringify(this.roster) !== before) this.feed.changed();
     } catch {
       // A guest may not read the roster: names fall back to Member Characters.
     }
@@ -347,23 +366,97 @@ export class Room {
     });
   }
 
+  /** A keeper of this world (the charter profile's role: the owner or a co-builder) whose key can write. */
+  get isKeeper(): boolean {
+    return this.isHost && this.canWrite;
+  }
+
+  /** Ask the server who I am in this world now (a press that writes by role reads it fresh). */
+  async readRole(): Promise<void> {
+    const me = await this.client.me();
+    this.me = me;
+    const role = roomRole(me.role);
+    if (role !== this.role) { this.role = role; this.feed.changed(); }
+  }
+
   /**
-   * Hand in a report (the report profile's step 1): one Narrative, made once, in the newest sitting like a line;
-   * its files follow it as a line's do. The seat's own Character is its narrator, so a seat with none hands in
-   * nothing (the name card comes first). What it hangs on is the caller's, captured at the press.
+   * A report's body, built once at the press so a retry sends the same body (its day and its name too). A keeper's
+   * part makes it the keeper's own report, born completed; null hands it in. Null when the seat has no Character.
    */
-  handIn(text: string, on: { parent?: string | null; item?: string | null; answers?: boolean }, files: ReadonlyArray<File> = [], idempotencyKey?: string): Promise<void> {
+  reportBody(text: string, on: { parent?: string | null; item?: string | null; answers?: boolean }, keeper: KeeperPart | null): Record<string, unknown> | null {
     const narrator = this.myCharacter();
-    if (!narrator) return Promise.reject(new Error('no Character'));
-    if (!text.trim()) return Promise.reject(new Error('no text'));
+    if (!narrator || !text.trim()) return null;
+    return newReport(text, narrator, this.world.id, localDay(new Date()), on, keeper);
+  }
+
+  /** What a keeper may pick as what a report touched, by name, at most `max`. */
+  reportPickable(query: string, skip: ReadonlySet<string>, max = 8): { type: string; id: string; name: string }[] {
+    const q = simpleCaseFold(query.trim());
+    if (!q) return [];
+    const out: { type: string; id: string; name: string }[] = [];
+    for (const el of this.els.values()) {
+      if (skip.has(el.id) || !isReportPickable(el)) continue;
+      const name = (el.name ?? '').toString();
+      if (!simpleCaseFold(name).includes(q)) continue;
+      out.push({ type: simpleCaseFold(el.type), id: el.id, name });
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+
+  /**
+   * Hand in a report: one Narrative, made once, in the newest sitting like a line; its files follow it as a line's
+   * do. `body` is the press's own (reportBody), sent as it is on every retry of the same draft under the same key,
+   * so a lost answer's retry replays keel's first answer instead of making it twice.
+   *
+   * `setsDone` is the keeper's own report answering a work item: the item is set done FIRST, read at this write's
+   * turn and only while its own word is open or taken, so a report that says it set the item done is never made
+   * with the item left open (a lost answer or a failed done leaves no report, and the same press tries again;
+   * ItemMoved when the item is gone or moved, DoneNoReport when the done stands and the create failed).
+   */
+  handIn(body: Record<string, unknown>, idempotencyKey: string, files: ReadonlyArray<File> = [], setsDone: string | null = null, doneMine = false): Promise<void> {
     this.showSitting = null;
     return this.serial(async () => {
-      const made = await this.client.create('narrative', newReport(text, narrator, this.world.id, localDay(new Date()), on),
-        // A lost answer's retry of the same draft replays keel's first answer instead of handing it in twice.
-        idempotencyKey ? { idempotencyKey } : undefined);
+      // A body born completed is a keeper's alone: a role that moved since the press sends nothing.
+      if (body.subtype === REPORT_COMPLETED && !this.isKeeper) throw new KeeperOnly();
+      let doneHere: { id: string; title: string } | null = null;
+      if (setsDone) {
+        // The body says this press set the item done: it is made only when that is true at this turn, read from the
+        // server (never a feed that may be behind): set now, or done already by this composer's earlier try
+        // (`doneMine`). Gone, moved, or done by another hand: nothing is sent, and the next press says only what is true.
+        const fresh = await this.client.get('relation', setsDone).catch(err => {
+          if (err instanceof OwApiError && (err.status === 404 || err.status === 410)) throw new ItemMoved();
+          throw new DoneFailed(err);
+        }) as El;
+        const done = simpleCaseFold(String(fresh.subtype ?? '').trim()) === 'done';
+        if (done ? !doneMine : !maySetDone(fresh)) throw new ItemMoved();
+        if (!done) {
+          try { this.landed(await this.client.patch('relation', setsDone, { subtype: 'done' })); } catch (err) { throw new DoneFailed(err); }
+        }
+        doneHere = { id: setsDone, title: (fresh.name ?? '').toString() };
+      }
+      let made: unknown;
+      try {
+        made = await this.client.create('narrative', body, { idempotencyKey });
+      } catch (err) {
+        // The item is done and the report is not made: the caller says so, and the same press finishes it.
+        throw doneHere ? new DoneNoReport(doneHere, err) : err;
+      }
       if (files.length) this.files.attach((made as { id: string }).id, files);
       try { this.landed(made); } catch { /* the feed brings it */ }
     });
+  }
+
+  /** A keeper marks a Law with supertype Charter as the world's charter (the charter profile's mark, the world's id). */
+  markCharter(id: string): Promise<void> {
+    return this.serial(async () => {
+      if (!this.isKeeper || unmarkedCharter(this.els.values())?.id !== id) return;
+      this.landed(await this.client.patch('law', id, { [CHARTER_MARK]: this.world.id }));
+    });
+  }
+
+  unmarkedCharter() {
+    return unmarkedCharter(this.els.values());
   }
 
   /** A work item, marked like a line; its picks go in the Relation's typed link fields. */

@@ -6,14 +6,17 @@
  * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, splitConsequence, type Switches, type Kind, type BoardColour, type Line, type ReportPart } from '../parlor/shapes';
-import { problemLine, type Room } from '../parlor/room';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, splitConsequence, maySetDone, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
+import { DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot } from './waymark';
 import { afterPress } from './press';
 import { OwNetworkError, fileKindOf, type OwWorldFileRow } from '@onlyworlds/sdk';
 import { ACCEPT as FILES_ACCEPT, MAX_PICKS, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
+
+/** A press refused before anything was sent, in the person's words. */
+class Refused extends Error {}
 
 export interface SignedInAs {
   /** The account's name; empty when keel named none. */
@@ -66,11 +69,65 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     drawReply();
     text.focus();
   } }, 'Report');
-  const reportNote = h('p', { class: 'sys', 'data-part': 'report-note', hidden: true },
-    'Handing in a report: your text is kept whole as you wrote it, and a host completes it. Enter starts a new line; press Hand in to send.');
+  const MEMBER_NOTE = 'Handing in a report: your text is kept whole as you wrote it, and a host completes it. Enter starts a new line; press Hand in to send.';
+  const KEEPER_NOTE = 'You keep this world, so your report is completed as you hand it in: write In short and What changed here, and what you did in the box below. Enter starts a new line; press Hand in to send.';
+  const reportNote = h('p', { class: 'sys', 'data-part': 'report-note', hidden: true }, MEMBER_NOTE);
   // On a work item: whether the report answers it (the profile's x_report_answers), or only touches it.
   const finishBox = h('input', { type: 'checkbox', id: 'report-finishes', 'data-part': 'report-finishes' });
   finishBox.checked = false;
+  const finishLabel = h('label', { class: 'finishes', for: 'report-finishes' }, finishBox, ' This report is the work the item asked for');
+  // The keeper's part (the report profile, "The keeper's own session"): built once, outside the form, so neither a
+  // redraw nor an Enter in it (a phone's Go) sends anything. Shown only to a keeper with Report on.
+  const kShort = h('textarea', { id: 'report-short', class: 'field', rows: 2, 'data-part': 'report-short' });
+  const kChanges = h('textarea', { id: 'report-changes-in', class: 'field', rows: 3, 'data-part': 'report-changes-in',
+    placeholder: 'One line per change. Leave it empty when nothing changed.' });
+  const kFind = h('input', { id: 'report-touch', type: 'search', autocomplete: 'off', placeholder: 'Type a name from the world' });
+  const kFound = h('ul', { class: 'found' });
+  const kPicked = h('div', { class: 'picked' });
+  let kPicks: { type: string; id: string; name: string }[] = [];
+  const kTypeWord = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+  function drawKPicked(): void {
+    clear(kPicked, kPicks.map(p => h('span', { class: 'chip el' }, `${p.name} · ${kTypeWord(p.type)} `,
+      h('button', { class: 'act', type: 'button', 'aria-label': `Remove ${p.name}`, onclick: () => { kPicks = kPicks.filter(x => x.id !== p.id); drawKPicked(); } }, '×'))));
+  }
+  function drawKFound(): void {
+    const hits = room.reportPickable(kFind.value, new Set(kPicks.map(p => p.id)));
+    clear(kFound, hits.map(x => h('li', null, h('button', { type: 'button', onclick: () => {
+      kPicks = [...kPicks, x];
+      kFind.value = '';
+      drawKFound();
+      drawKPicked();
+      kFind.focus();
+    } }, `${x.name} · ${kTypeWord(x.type)}`))));
+  }
+  kFind.addEventListener('input', drawKFound);
+  for (const field of [kShort, kChanges, kFind]) {
+    field.addEventListener('keydown', (ev: Event) => {
+      const e = ev as KeyboardEvent;
+      // Ctrl or Cmd with Enter hands it in, as in the story's box; a bare Enter in the search box picks nothing and sends nothing.
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send.requestSubmit(); }
+      else if (e.key === 'Enter' && field === kFind) e.preventDefault();
+    });
+  }
+  const keeperPart = h('div', { class: 'keeper-part', 'data-part': 'keeper-part', hidden: true },
+    h('label', { for: 'report-short' }, 'In short'), kShort,
+    h('label', { for: 'report-changes-in' }, 'What changed'), kChanges,
+    h('label', { for: 'report-touch' }, 'What it touched (optional)'), kFind, kFound, kPicked,
+    h('p', { class: 'sys' }, 'A map, a pin, a marker or a story has no link here: name it by its address in What changed, or in In short when you only read it.'));
+  const keeperTyped = (): boolean => !!(kShort.value.trim() || kChanges.value.trim() || kPicks.length);
+  // The work items this composer set done whose report is not made yet (a create that failed after the done): a
+  // changed draft still says it set them done, since it did.
+  const doneByMe = new Set<string>();
+  /** Whether a keeper's report on this work item sets it done: open or taken and not proposed, or done by this composer. */
+  function setsDoneOn(id: string | null): { id: string; title: string; el: unknown } | null {
+    const item = id ? room.work().find(w => w.id === id) ?? null : null;
+    return item && (maySetDone(item.el) || (doneByMe.has(item.id) && item.state === 'done')) ? item : null;
+  }
+  function drawFinishLabel(): void {
+    const sets = room.isKeeper && replyTo?.kind === 'work' && !!setsDoneOn(replyTo.id);
+    const box = sets ? ' This report is the work the item asked for: the item is set done' : ' This report is the work the item asked for';
+    if (finishLabel.lastChild?.textContent !== box) finishLabel.replaceChildren(finishBox, box);
+  }
   function drawReportMode(): void {
     const mine = !!room.myCharacter();
     // A Character gone mid-draft turns the whole composer back, the reply bar's Report on and its box with it.
@@ -79,6 +136,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     reportBtn.title = mine ? '' : 'Save your name first: a report is handed in as your own Character.';
     reportBtn.setAttribute('aria-pressed', String(reporting));
     reportNote.hidden = !reporting;
+    const keeper = room.isKeeper;
+    const note = keeper ? KEEPER_NOTE : MEMBER_NOTE;
+    if (reportNote.textContent !== note) reportNote.textContent = note;
+    keeperPart.hidden = !(reporting && keeper);
+    drawFinishLabel();
     const label = reporting ? 'Hand in' : 'Send';
     if (sendBtn.textContent !== label) sendBtn.textContent = label;
     const hint = reporting ? 'Write your report' : 'Write a line';
@@ -133,14 +195,13 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
 
   // One Send at a time: Enter twice (requestSubmit ignores a disabled button) makes one line, never two (I2).
   let sending = false;
-  // One key per draft (its text, what it answers, the box): a retry after a lost or failed answer replays keel's
-  // first answer, so a report is never handed in twice by Try again. A changed draft is a new report and a new key.
-  let draft: { sig: string; key: string } | null = null;
-  function handInKey(t: string, answering: typeof replyTo, answers: boolean): string {
-    const sig = JSON.stringify([t, answering?.kind ?? null, answering?.id ?? null, answering?.kind === 'work' && answers]);
-    if (!draft || draft.sig !== sig) draft = { sig, key: crypto.randomUUID() };
-    return draft.key;
-  }
+  // One body and one key per draft (everything the press read: its text, what it answers, the box, whether it is a
+  // keeper's and the keeper's part): a retry of the same draft sends the same body under the same key, its day and
+  // name included, so keel replays its first answer and a report is never handed in twice. A changed draft is a new
+  // report, a new body and a new key.
+  let draft: { sig: string; key: string; body: Record<string, unknown>; setsDone: string | null } | null = null;
+  // Set once a seat that no longer keeps the world was told its keeper part would not go: the next press sends without it.
+  let dropKeeperPart = false;
   const send = h('form', {
     class: 'send',
     onsubmit: async (e: Event) => {
@@ -152,6 +213,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       // What this press sends is read now: a toggle, a box or a reply changed during the send changes nothing it sends.
       const asReport = reporting;
       const answers = finishBox.checked;
+      const kTyped = { short: kShort.value, changes: kChanges.value, picks: kPicks };
       if (asReport && !t) { notice('A report needs your text. Files alone go on a line.', true); return; }
       if (!t && !files.length) return;
       const answering = replyTo;
@@ -160,25 +222,72 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       // The chips go at once: what they held now belongs to this line, and the next line starts empty.
       picked = [];
       drawChips();
+      // Where a failure came from: before anything was sent (the role's read, a refusal), or the write itself.
+      let sent = false;
       try {
         if (asReport) {
-          await room.handIn(t, { parent: answering?.kind === 'board' ? answering.id : null, item: answering?.kind === 'work' ? answering.id : null, answers }, files, handInKey(t, answering, answers));
+          // Who I am here decides what the report is: read from the server at the press.
+          await room.readRole();
+          const keeper = room.isKeeper;
+          if (keeper) dropKeeperPart = false;
+          drawReportMode();
+          if (!keeper && keeperTyped() && !dropKeeperPart) { dropKeeperPart = true; throw new Refused('You no longer keep this world, so a report from you goes in as handed in: your short part and what changed would not be sent. Hand in again to send it that way.'); }
+          if (keeper && !kTyped.short.trim()) throw new Refused('A report you complete needs its short part: write it under In short.');
+          const item = keeper && answers && answering?.kind === 'work' ? setsDoneOn(answering.id) : null;
+          const setsDone = item?.id ?? null;
+          const on = { parent: answering?.kind === 'board' ? answering.id : null, item: answering?.kind === 'work' ? answering.id : null, answers };
+          // Not the item's state: once a first press set it done, the retry must still send that press's body and key.
+          const sig = JSON.stringify([t, on, keeper, keeper ? [kTyped.short, kTyped.changes, kTyped.picks.map(p => p.id)] : null]);
+          if (!draft || draft.sig !== sig) {
+            const keeperPart: KeeperPart | null = keeper
+              ? { description: kTyped.short.trim(), changes: kTyped.changes, touched: kTyped.picks, done: item ? { id: item.id, title: item.title } : null }
+              : null;
+            const body = room.reportBody(t, on, keeperPart);
+            if (!body) throw new Refused('Save your name first: a report is handed in as your own Character.');
+            draft = { sig, key: crypto.randomUUID(), body, setsDone };
+          }
+          sent = true;
+          await room.handIn(draft.body, draft.key, files, draft.setsDone, !!draft.setsDone && doneByMe.has(draft.setsDone));
         } else {
+          sent = true;
           await room.post(t, answering?.kind === 'board' ? answering.id : null, answering?.kind === 'work' ? answering.id : null, files);
         }
         if (text.value === typed) { text.value = ''; text.style.height = 'auto'; }
         if (replyTo === answering) { replyTo = null; drawReply(); }
-        if (asReport) draft = null;
+        if (asReport) {
+          if (draft?.setsDone) doneByMe.delete(draft.setsDone);
+          draft = null;
+          dropKeeperPart = false;
+          if (kShort.value === kTyped.short) kShort.value = '';
+          if (kChanges.value === kTyped.changes) kChanges.value = '';
+          if (kPicks === kTyped.picks) { kPicks = []; drawKPicked(); }
+          kFind.value = '';
+          clear(kFound);
+        }
         if (asReport && reporting) { reporting = false; finishBox.checked = false; drawReportMode(); drawReply(); }
         stickToEnd = true;
       } catch (err) {
         // Nothing was made: the files come back to the composer, and the toggle and the box stay as they were.
         picked = [...files, ...picked].slice(0, MAX_PICKS);
         drawChips();
-        // A lost answer may still have made the report, and a report is never changed or made twice on purpose.
-        notice(asReport && err instanceof OwNetworkError
-          ? 'OnlyWorlds could not be reached while handing in your report. It may have been handed in: look in the room before handing it in again.'
-          : problemLine(err, asReport ? 'handing in your report' : 'sending your line'), true);
+        // A body built for a state that moved is built again on the next press.
+        if (err instanceof KeeperOnly) { dropKeeperPart = true; draft = null; }
+        if (err instanceof ItemMoved) draft = null;
+        if (err instanceof DoneNoReport) doneByMe.add(err.item.id);
+        // A lost answer to the done may still have set it: the next press may say this composer set it.
+        if (err instanceof DoneFailed && err.failure instanceof OwNetworkError && draft?.setsDone) doneByMe.add(draft.setsDone);
+        const failure = err instanceof DoneNoReport ? err.failure : err;
+        // A lost answer may still have made the report: the same draft, pressed again, sends the same body under the
+        // same key, so keel answers with the report it made and never makes a second one.
+        const lost = asReport && sent && failure instanceof OwNetworkError
+          ? 'OnlyWorlds could not be reached while handing in your report. It may already be in: press Hand in again with nothing changed, and it is never made twice.'
+          : problemLine(failure, asReport ? 'handing in your report' : 'sending your line');
+        notice(err instanceof Refused ? err.message
+          : err instanceof KeeperOnly ? 'You no longer keep this world, so this report was not sent. Hand in again to send it as handed in.'
+          : err instanceof ItemMoved ? 'The work item changed meanwhile: it is gone, or no longer open or taken. Nothing was handed in; hand in again, and the report says only what is true now.'
+          : err instanceof DoneNoReport ? `The work item ${err.item.title.trim() || 'Untitled'} is set done, and your report is not in yet. ${lost}`
+          : err instanceof DoneFailed ? `The work item could not be set done, so nothing was handed in. ${problemLine(err.failure, 'setting the work item done')} To hand the report in without setting the item done, untick the box.`
+          : lost, true);
       } finally {
         sending = false;
         sendBtn.disabled = false;
@@ -202,8 +311,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     if (answeringId !== finishFor) { finishBox.checked = false; finishFor = answeringId; }
     replyBar.hidden = !replyTo;
     if (!replyTo) { clear(replyBar); return; }
+    drawFinishLabel();
     clear(replyBar, h('span', null, `${reporting ? 'Report on' : 'Answering'}: ${replyTo.title}`),
-      reporting && replyTo.kind === 'work' ? h('label', { class: 'finishes', for: 'report-finishes' }, finishBox, ' This report is the work the item asked for') : null,
+      reporting && replyTo.kind === 'work' ? finishLabel : null,
       h('button', { class: 'btn quiet', type: 'button', onclick: () => { replyTo = null; drawReply(); } }, 'Not now'));
   }
 
@@ -353,7 +463,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const workMarks = markSet(workList);
   const changeMarks = markSet(changeList);
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
+  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
   const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
@@ -506,7 +616,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     } }, open ? 'Fold' : label);
     const start = storyStart(l.text);
     const story = r.state === 'completed'
-      ? [h('div', null, fold('The report as handed in')), open ? h('div', { class: 'txt', 'data-part': 'report-story' }, l.text) : null]
+      ? [h('div', null, fold('The report as written')), open ? h('div', { class: 'txt', 'data-part': 'report-story' }, l.text) : null]
       : [h('div', { class: 'txt', 'data-part': 'report-story' }, open || !start.cut ? l.text : start.text), start.cut ? h('div', null, fold('Show all')) : null];
     return h('div', { class: `line report${ai ? ' ai' : ''}${hidden || hiddenMine ? ' hidden' : ''}`, 'data-report': r.state },
       h('span', { class: ai ? 'bdg a' : 'bdg' }, ai ? 'AI' : initial(name)),
@@ -651,6 +761,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function drawWork(): void {
     const s = room.sitting();
     const charter = room.charter();
+    const loose = charter ? null : room.unmarkedCharter();
     const specs = room.specs();
     const shown = s?.specs || room.isHost ? specs : specs.filter(x => x.by === room.meBy);
     const mine = mySpec();
@@ -689,6 +800,12 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
 
     clear(work,
       charter ? h('details', { class: 'card' }, h('summary', null, charter.name || 'House rules'), h('p', null, charter.text)) : null,
+      // A Law with supertype Charter and no mark is lore (the charter profile): a keeper may mark it, in one write.
+      !charter && loose && room.isKeeper ? h('div', { class: 'card', 'data-part': 'charter-offer' },
+        h('p', { class: 'sys' }, `This world has a Law, ${loose.name.trim() || 'Untitled'}, with supertype Charter that is not marked as its charter, so the room does not show it as house rules.`),
+        h('div', { class: 'btns' }, h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
+          try { await room.markCharter(loose.id); } catch (err) { notice(problemLine(err, 'marking the charter'), true); }
+        } }, "Mark it as this world's charter"))) : null,
       !s ? h('div', { class: 'empty' }, h('h3', null, 'No sitting yet'), h('p', null, room.isHost ? 'Start the first sitting when people are here.' : 'The host has not started a sitting. The room is open: say hello.')) : null,
       s && !room.isHost ? h('div', { class: 'phases', 'aria-label': 'Phase' }, PHASES.map(p => h('span', { class: p.name === s.phase ? 'pp now' : 'pp' }, p.name))) : null,
       s && !room.isHost ? h('div', { class: 'sw' },
@@ -774,6 +891,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       els: w.elements.map(x => ({ ...x, name: w.otherWorld ? null : room.elementName(x.id) })),
       // One name per taker: a double take from two tabs is one person (the Take gate's T2-G1).
       takers: [...new Set(w.takes.map(t => t.by))].map(by => room.name(by)), mine: room.hasTaken(w.id),
+      // For a keeper: a completed report answers an item still open (a lost answer, a closed tab, another tool's report).
+      reported: room.isKeeper && w.state !== 'done' && room.answers(w.id).some(l => l.report?.state === 'completed' && l.report.answers.includes(w.id)),
     }));
     // For you first, then for others, then addressed to no one; a heading only when there is more than one group.
     const GROUP = { mine: 'For you', others: 'For others', none: 'Not addressed to anyone' } as const;
@@ -781,7 +900,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       const order = (['mine', 'others', 'none'] as const).filter(g => rows.some(r => r.addr === g));
       return order.flatMap(g => [...(order.length > 1 ? [h('h3', { class: 'wgroup' }, GROUP[g])] : []), ...rows.filter(r => r.addr === g).map(card)]);
     };
-    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.addr, v.by, v.answers, v.els, v.takers, v.mine]),
+    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.addr, v.by, v.answers, v.els, v.takers, v.mine, v.reported]),
       room.canWrite, room.isHost, room.needsName(), workOpen, deleting]);
     if (key === workKey) return;
     // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.
@@ -791,7 +910,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const world = { id: room.world.id, name: room.world.name };
     clear(workList,
       h('p', { class: 'sys' }, 'Work on this world: each item says what it is about, and opens in the room when you answer it.'),
-      view.length ? grouped(view, ({ w, can, hidden, who, by, answers, els, takers, mine }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
+      view.length ? grouped(view, ({ w, can, hidden, who, by, answers, els, takers, mine, reported }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
         h('div', { class: 'ttl' }, h('span', { class: `chip s-${w.state}` }, STATE_WORD[w.state]), w.proposed ? h('span', { class: 'chip prop' }, 'Proposed') : null,
           h('h3', null, w.title || 'Untitled')),
         h('div', { class: 'm', 'data-part': 'for' }, `${who ? `For ${who}` : 'Not addressed to anyone'} · made by ${by}`),
@@ -807,6 +926,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           x.reason ? h('span', { class: 'why' }, x.reason) : null))) : null,
         answers || hidden ? h('div', { class: 'm' }, [answers ? `${answers} answer${answers === 1 ? '' : 's'} in the room` : '',
           hidden ? (room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : ''].filter(Boolean).join(' · ')) : null,
+        reported ? h('div', { class: 'm', 'data-part': 'reported' }, 'A completed report answers this item: Mark done once the work is there.') : null,
         deleting === w.id
           ? h('div', { class: 'btns' }, h('span', { class: 'sys' }, 'Delete this work item for everyone?'),
             h('button', { class: 'btn std', type: 'button', onclick: async () => {

@@ -22,11 +22,12 @@
  * The room mark (schema-dist profiles/room.md): every room element the parlor
  * makes carries `x_room_of` in its first write, and the room reads only room
  * elements (the pair and the mark), so a world's own lore Messages, Votes or
- * Sittings never show as the room. The charter is lore: read without the mark,
- * never written with one.
+ * Sittings never show as the room. The charter is no room element: the charter
+ * profile's own mark (`x_charter_of`) makes it the world's charter, and a keeper
+ * may write that mark, never the room's.
  */
 
-import { isRoomElement, simpleCaseFold } from '@onlyworlds/sdk';
+import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
 
 export interface El {
   id: string;
@@ -227,19 +228,62 @@ export function reportName(text: string, day: string): string {
 }
 
 /**
- * Step 1, handing in: one Narrative with the pair, the mark, `handed in`, the text whole as `story` and the
- * seat's own Character as `narrator`. On a board entry it hangs by `parent_narrative`; on a work item by
+ * The Narrative's multi-link field for each type it can link, read from the SDK's schema (never a copied list).
+ * A Map, Pin or Marker has none, and another Narrative only `parent_narrative`: the report profile names those by
+ * address in a line instead.
+ */
+export const NARRATIVE_LINKS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(FIELD_SCHEMA.narrative as Record<string, { type: string; target?: string }>)
+    .filter(([, f]) => f.type === 'multi_link' && typeof f.target === 'string')
+    .map(([field, f]) => [f.target as string, field]),
+);
+
+/** What a keeper may pick as what a report touched: the world's own elements of a type the Narrative links, never a room element, a hidden one, a stub or a reading aid. */
+export function isReportPickable(el: El): boolean {
+  return !!NARRATIVE_LINKS[fold(el.type)] && !isRoomElement(el as Parameters<typeof isRoomElement>[0]) && !isCharterElement(el)
+    && el.hidden !== true && el.known_of !== true;
+}
+
+/** The profile's words for a keeper's report that changed nothing. */
+export const NOTHING_CHANGED = 'nothing changed';
+
+/** The keeper's part of a report born completed (the report profile, "The keeper's own session"). */
+export interface KeeperPart {
+  /** The short human part, as typed. */
+  description: string;
+  /** What changed, as typed: one change per line. */
+  changes: string;
+  /** What it touched, each linked in the Narrative's field for its type. */
+  touched: ReadonlyArray<{ type: string; id: string }>;
+  /** The work item this report sets done, by its title, when it does: said as a line of what changed. */
+  done?: { id: string; title: string } | null;
+}
+
+/** A work item's own word lets a keeper's report set it done: open or taken (or none, read as open), and not proposed. */
+export function maySetDone(el: El): boolean {
+  const word = fold(el.subtype);
+  return (word === '' || word === 'open' || word === 'taken') && proposedMarkOf(el) === null;
+}
+
+/**
+ * A report. Step 1, handing in: one Narrative with the pair, the mark, `handed in`, the text whole as `story` and
+ * the seat's own Character as `narrator`. On a board entry it hangs by `parent_narrative`; on a work item by
  * `relations`, and answers it (`x_report_answers`) only when `answers` says so. Never an empty answers list.
+ *
+ * With a keeper's part it is the keeper's own report: the same body, born `completed` in one write with its
+ * `description`, its `consequences` (each typed line trimmed, then the item it set done, or `nothing changed`) and
+ * the elements it touched in their typed links.
  */
 export function newReport(
   text: string, narrator: string, roomOf: string, day: string,
   on: { parent?: string | null; item?: string | null; answers?: boolean } = {},
+  keeper: KeeperPart | null = null,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     name: reportName(text, day),
     story: text,
     supertype: SUPERTYPE.report,
-    subtype: REPORT_HANDED_IN,
+    subtype: keeper ? REPORT_COMPLETED : REPORT_HANDED_IN,
     narrator,
     [ROOM_MARK]: roomOf,
   };
@@ -247,6 +291,18 @@ export function newReport(
   if (on.item) {
     body.relations = [on.item];
     if (on.answers) body[REPORT_ANSWERS] = [on.item];
+  }
+  if (keeper) {
+    body.description = keeper.description;
+    const lines = keeper.changes.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (keeper.done) lines.push(`Set the work item ${keeper.done.title.replace(/\s+/g, ' ').trim() || 'Untitled'} to done: ow://relation/${keeper.done.id}`);
+    body.consequences = lines.length ? lines.join('\n') : NOTHING_CHANGED;
+    for (const t of keeper.touched) {
+      const field = NARRATIVE_LINKS[fold(t.type)];
+      if (!field) continue;
+      const had = (body[field] as string[] | undefined) ?? [];
+      if (!had.includes(t.id)) body[field] = [...had, t.id];
+    }
   }
   return body;
 }
@@ -748,7 +804,9 @@ export function readWork(els: Iterable<El>, worldId: string, live: (by: string) 
       at: el.created_at ?? '',
       elements,
       otherWorld: !!packet && !!source && typeof source.world === 'string' && source.world !== worldId,
-      proposed: el.x_review_proposed !== undefined && el.x_review_proposed !== null,
+      // The review profile's reading for a page people read (rule 1 and 4): an object mark is proposed; an empty
+      // mark is settled, and any other value a doubt, shown settled (a lint's to report).
+      proposed: proposedMarkOf(el) !== null,
       takes: taken,
       el,
     });
@@ -821,14 +879,33 @@ export interface Charter {
   text: string;
 }
 
+/**
+ * The room's house rules: the world's charter as the charter profile reads it, by the SDK's own `charterOf` (the
+ * newest marked Charter, a proposed one out), over what this seat was served (Lantern's reading: the copy already is
+ * what the seat sees). A Law with supertype Charter and no mark is lore, and is not the room's charter.
+ */
 export function readCharter(els: Iterable<El>): Charter | null {
-  for (const el of els) {
-    if (isPair(el, 'law', SUPERTYPE.charter)) {
-      return { id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() };
-    }
-  }
-  return null;
+  const all = [...els];
+  const id = charterOf({ elements: all }, { rung: 'owner' }).charter?.id ?? null;
+  const el = id ? all.find(e => e.id === id) : undefined;
+  return el ? { id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() } : null;
 }
+
+/**
+ * The Charter a keeper could mark, when the world has no charter the room shows: the newest Law with supertype
+ * Charter that carries no mark and is not proposed (newest by created_at, then the higher id). Null otherwise.
+ */
+export function unmarkedCharter(els: Iterable<El>): Charter | null {
+  const all = [...els];
+  if (readCharter(all)) return null;
+  const loose = all.filter(el => readingAidOf(el) === 'charter' && !isCharterElement(el) && !handsOnAsProposed(el) && el.hidden !== true && el.known_of !== true)
+    .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '') || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  const el = loose[0];
+  return el ? { id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() } : null;
+}
+
+/** The charter profile's mark, as a keeper writes it on the world's charter: the world's id. */
+export const CHARTER_MARK = 'x_charter_of';
 
 // ---------------------------------------------------------------- members' own Characters
 

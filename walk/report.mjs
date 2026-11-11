@@ -191,11 +191,82 @@ try {
       && await r.locator('[data-part="report-changes"] li').first().getAttribute('data-address') === `ow://object/${item.id}`
       && await r.locator('[data-part="report-changes"] li').nth(1).getAttribute('data-address') === null
       && await r.locator('[data-part="report-changes"] a').count() === 0);
-    check(`${who}: the story is folded under The report as handed in`, await r.locator('[data-part="report-story"]').count() === 0
-      && /The report as handed in/.test(await r.innerText()));
+    check(`${who}: the story is folded under The report as written`, await r.locator('[data-part="report-story"]').count() === 0
+      && /The report as written/.test(await r.innerText()));
   }
   check('keel: the parlor never wrote the story again', (await api.get('narrative', e1.id)).story === STORY.join('\n'));
   await shot(m, 'completed');
+
+  // ------------------------------------------------------------ the keeper's own report: one write, born completed (serial 115)
+  // A member never sees the keeper's part.
+  if (await toggle.getAttribute('aria-pressed') !== 'true') await toggle.click();
+  check('member: reporting shows no keeper part', await m.locator('[data-part="keeper-part"]:visible').count() === 0);
+  await toggle.click();
+  const ITEM2 = `Mark the harbour (${RUN})`;
+  const item2 = await api.create('relation', { name: ITEM2, supertype: 'Work item', subtype: 'open', x_room_of: s.worldId });
+  record('relation', item2.id);
+  const touched = await api.create('character', { name: `Harbour master ${RUN}` });
+  record('character', touched.id);
+  const hToggle = host.locator('form.send [data-part="report"]');
+  const hBox = host.locator('form.send textarea');
+  await host.getByRole('tab', { name: /^Work/ }).click().catch(() => {});
+  const card2 = host.locator('.card', { has: host.locator('h3', { hasText: ITEM2 }) });
+  check('keeper: the new work item shows', await until(() => card2.isVisible(), 30000));
+  await card2.getByRole('button', { name: 'Answer' }).click();
+  await hToggle.click();
+  const kpart = host.locator('[data-part="keeper-part"]');
+  check('keeper: reporting shows the keeper part and says it is completed as handed in', await until(() => kpart.isVisible(), 5000)
+    && /completed as you hand it in/.test(await host.locator('[data-part="report-note"]').innerText()));
+  await host.locator('[data-part="report-finishes"]').check();
+  const MARK3 = `keeper-${RUN}`;
+  await hBox.fill(`What I did (${MARK3})\nMarked the harbour on the map.`);
+  await host.locator('form.send button[type="submit"]').click();
+  {
+    const refused = await until(async () => /short part/.test(await notices(host)), 5000);
+    // A build that hands it in anyway (the control) made a report: recorded, so teardown takes it.
+    const early = await reportsWith(MARK3);
+    for (const e of early) record('narrative', e.id);
+    check('keeper: no short part, nothing handed in', refused && early.length === 0, await notices(host));
+  }
+  const SHORT = `The harbour is marked (${RUN}).`;
+  const LINES = [`Gave the Harbour master a title: ow://character/${touched.id}`, 'Set the subtype of 2 Locations to surveyed'];
+  await host.locator('[data-part="report-short"]').fill(SHORT);
+  await host.locator('[data-part="report-changes-in"]').fill(`  ${LINES[0]}  \n\n${LINES[1]}\n`);
+  await host.locator('[data-part="keeper-part"] input[type="search"]').fill(`Harbour master ${RUN}`);
+  const hit = host.locator('[data-part="keeper-part"] .found button', { hasText: `Harbour master ${RUN}` });
+  check('keeper: What it touched finds the Character', await until(() => hit.isVisible(), 8000));
+  await hit.click();
+  await shot(host, 'keeper-part');
+  await host.locator('form.send button[type="submit"]').click();
+  await host.locator('form.send button[type="submit"]').click().catch(() => {});
+  const r3 = host.locator('.line.report', { hasText: SHORT });
+  check('keeper: it shows completed at once, What changed beside it', await until(() => r3.getAttribute('data-report').then(v => v === 'completed'), 30000)
+    && await r3.locator('[data-part="report-changes"] li').count() === 3);
+  const made3 = await reportsWith(MARK3);
+  for (const e of made3) record('narrative', e.id);
+  const e3 = made3[0] ?? {};
+  check('keel: one report for one Hand in, pressed twice', made3.length === 1, `${made3.length}`);
+  check('keel: born completed in one write, with its short part, what changed and its links', e3.subtype === 'completed' && e3.supertype === 'Report'
+    && e3.x_room_of === s.worldId && e3.description === SHORT && e3.consequences === [...LINES, `Set the work item ${ITEM2} to done: ow://relation/${item2.id}`].join('\n')
+    && JSON.stringify(e3.characters) === JSON.stringify([touched.id]) && JSON.stringify(e3.relations) === JSON.stringify([item2.id])
+    && JSON.stringify(e3.x_report_answers) === JSON.stringify([item2.id]) && e3.story === `What I did (${MARK3})\nMarked the harbour on the map.`
+    && typeof e3.narrator === 'string' && !!e3.narrator && Math.abs(Date.parse(e3.updated_at) - Date.parse(e3.created_at)) < 1000,
+    JSON.stringify({ subtype: e3.subtype, description: e3.description, consequences: e3.consequences, characters: e3.characters, relations: e3.relations, answers: e3.x_report_answers, created: e3.created_at, updated: e3.updated_at }));
+  check('keel: the work item it answers is done', await until(async () => (await api.get('relation', item2.id)).subtype === 'done', 15000));
+  check('keeper: the item shows Done on the board', await until(async () => /Done/.test(await card2.innerText()), 30000));
+  // A keeper's report with nothing written under What changed says so, in the profile's words.
+  const MARK4 = `keeper-free-${RUN}`;
+  await hToggle.click();
+  await hBox.fill(`Read the room (${MARK4}).`);
+  await host.locator('[data-part="report-short"]').fill(`Read only (${RUN}).`);
+  await host.locator('form.send button[type="submit"]').click();
+  check('keeper: the free report shows completed', await until(() => host.locator('.line.report', { hasText: `Read only (${RUN})` }).getAttribute('data-report').then(v => v === 'completed'), 30000));
+  const made4 = await reportsWith(MARK4);
+  for (const e of made4) record('narrative', e.id);
+  check('keel: an empty What changed is written nothing changed', made4.length === 1 && made4[0].consequences === 'nothing changed' && made4[0].subtype === 'completed'
+    && !('x_report_answers' in made4[0] && made4[0].x_report_answers), JSON.stringify(made4.map(e => e.consequences)));
+  check('member: the keeper\'s report reads completed in the member\'s room', await until(() => m.locator('.line.report', { hasText: SHORT }).getAttribute('data-report').then(v => v === 'completed'), 30000));
+  await shot(host, 'keeper');
 
   // A phone: the text keeps its own row with Report on (the code gate's M1: 18 px at 320 before the fix).
   await m.setViewportSize({ width: 360, height: 760 });
@@ -210,6 +281,8 @@ try {
 } catch (err) {
   check('the walk ran to its end', false, String(err?.message ?? err).slice(0, 300));
 } finally {
+  // A walk that threw between a press and its read leaves what the page made: this run's own marker finds it, for teardown.
+  await reportsWith(RUN).then(es => { for (const e of es) record('narrative', e.id); }).catch(() => {});
   for (const [p, label] of pages) await recordMinted(p, label).catch(() => {});
   await browser.close();
   clearTimeout(watchdog);

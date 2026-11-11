@@ -135,7 +135,9 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .viewer-img{display:block;max-width:92vw;max-height:84vh;margin:0 auto 8px;object-fit:contain}
 /* A report in the room (profiles/report.md) and the composer's Report toggle. */
 .send [data-part=report][aria-pressed=true]{border-color:var(--accent);background:var(--surf2)}
-.reply .finishes{display:flex;gap:6px;align-items:center;color:var(--text)}
+.reply .finishes{display:flex;gap:6px;align-items:center;color:var(--text);flex:1 1 auto;min-width:0}
+.reply .finishes input{width:auto;flex:none;padding:0;margin:0}
+.keeper-part{margin-top:8px}
 .line.report .report-title{font-weight:600;margin-top:2px}
 .line.report .report-chip{color:var(--accent);border-color:var(--accent)}
 .line.report .report-changes{margin:6px 0;padding:6px 10px;border-left:2px solid var(--line)}

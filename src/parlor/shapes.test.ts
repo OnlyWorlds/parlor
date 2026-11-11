@@ -6,6 +6,7 @@ import {
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
   newReport, reportName, localDay, REPORT_ANSWERS, storyStart, splitConsequence,
+  unmarkedCharter, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -90,6 +91,36 @@ describe('reports (schema-dist profiles/report.md)', () => {
     const body = newReport('Line one\nline two', 'c1', 'w1', '2026-11-10');
     expect(body).toEqual({ name: 'Line one, 2026-11-10', story: 'Line one\nline two', supertype: 'Report', subtype: 'handed in', narrator: 'c1', [ROOM_MARK]: 'w1' });
     expect(readLines([{ ...el({ id: 'n', type: 'narrative' }), ...body }])[0].report!.state).toBe('handed in');
+  });
+
+  it("a keeper's own report is born completed in one body: its short part, what changed and its typed links", () => {
+    const body = newReport('Did it\nall', 'c1', 'w1', '2026-11-11', { item: 'i1', answers: true }, {
+      description: 'In short.', changes: '  Renamed Ada: ow://character/a1  \r\n\n Set 2 Objects to surveyed\n',
+      touched: [{ type: 'character', id: 'a1' }, { type: 'Location', id: 'l1' }, { type: 'character', id: 'a1' }, { type: 'map', id: 'm1' }, { type: 'relation', id: 'r1' }, { type: 'law', id: 'law1' }],
+      done: { id: 'i1', title: 'Check the ledger' },
+    });
+    expect(body).toEqual({
+      name: 'Did it, 2026-11-11', story: 'Did it\nall', supertype: 'Report', subtype: 'completed', narrator: 'c1', [ROOM_MARK]: 'w1',
+      relations: ['i1', 'r1'], [REPORT_ANSWERS]: ['i1'], description: 'In short.',
+      consequences: 'Renamed Ada: ow://character/a1\nSet 2 Objects to surveyed\nSet the work item Check the ledger to done: ow://relation/i1',
+      characters: ['a1'], locations: ['l1'], laws: ['law1'],
+    });
+    expect(readLines([{ ...el({ id: 'n', type: 'narrative' }), ...body }])[0].report!.state).toBe('completed');
+    // Nothing typed under What changed, nothing set done: the profile's words.
+    expect(newReport('t', 'c1', 'w1', 'd', {}, { description: 'x', changes: ' \n ', touched: [] }).consequences).toBe(NOTHING_CHANGED);
+    for (const t of ['map', 'pin', 'marker', 'narrative']) expect(NARRATIVE_LINKS[t]).toBeUndefined();
+    expect(NARRATIVE_LINKS.character).toBe('characters');
+  });
+
+  it('a keeper picks what a report touched from the world, never the room, a hidden element, a stub or a reading aid', () => {
+    expect(isReportPickable(lore({ id: 'c', type: 'character' }))).toBe(true);
+    expect(isReportPickable(lore({ id: 'l', type: 'law', supertype: 'Statute' }))).toBe(true);
+    expect(isReportPickable(lore({ id: 'm', type: 'map' }))).toBe(false);
+    expect(isReportPickable(lore({ id: 'n', type: 'narrative' }))).toBe(false);
+    expect(isReportPickable(el({ id: 'w', type: 'relation', supertype: 'Work item' }))).toBe(false);
+    expect(isReportPickable(lore({ id: 'h', type: 'character', hidden: true }))).toBe(false);
+    expect(isReportPickable(lore({ id: 'k', type: 'character', known_of: true }))).toBe(false);
+    expect(isReportPickable(lore({ id: 'g', type: 'construct', supertype: 'Guide', x_charter_of: 'w1' }))).toBe(false);
   });
 
   it('on a board entry it hangs by parent; on a work item by relations, answering it only when asked; never an empty key', () => {
@@ -188,8 +219,9 @@ describe('the room mark (schema-dist profiles/room.md)', () => {
     expect(readSpecs(ofRoom(els, 'w1'), []).map(s => s.id)).toEqual(['c']);
   });
 
-  it('the charter is lore: read without the mark', () => {
-    expect(readCharter([lore({ id: 'x', type: 'law', supertype: 'Charter', name: 'House rules' })])?.id).toBe('x');
+  it("the charter is read by the charter profile's mark, never the room's", () => {
+    expect(readCharter([lore({ id: 'x', type: 'law', supertype: 'Charter', name: 'House rules', x_charter_of: 'w1' })])?.id).toBe('x');
+    expect(readCharter([lore({ id: 'x', type: 'law', supertype: 'Charter', name: 'House rules' })])).toBeNull();
   });
 });
 
@@ -277,10 +309,28 @@ describe('sittings', () => {
 });
 
 describe('charter', () => {
-  it('reads the Law with supertype Charter', () => {
-    expect(readCharter([el({ id: 'x', type: 'law', supertype: 'Charter', name: 'House rules', description: 'Be kind' })]))
-      .toEqual({ id: 'x', name: 'House rules', text: 'Be kind' });
-    expect(readCharter([el({ id: 'x', type: 'law', supertype: 'Statute' })])).toBeNull();
+  const law = (o: Partial<El> & { id: string }): El => lore({ type: 'law', supertype: 'Charter', x_charter_of: 'w1', ...o });
+  it('reads the newest marked Law with supertype Charter', () => {
+    expect(readCharter([law({ id: 'x', name: 'House rules', description: 'Be kind' })])).toEqual({ id: 'x', name: 'House rules', text: 'Be kind' });
+    expect(readCharter([law({ id: 'x', supertype: 'Statute' })])).toBeNull();
+    expect(readCharter([law({ id: 'a', created_at: '2026-10-01T00:00:00Z' }), law({ id: 'b', created_at: '2026-11-01T00:00:00Z' }), law({ id: 'c', created_at: '2026-09-01T00:00:00Z' })])?.id).toBe('b');
+  });
+
+  it("a proposed charter is not the room's, and an empty mark is settled (review rule 1)", () => {
+    const older = law({ id: 'old', created_at: '2026-10-01T00:00:00Z' });
+    expect(readCharter([older, law({ id: 'new', x_review_proposed: { by: 'm1' } })])?.id).toBe('old');
+    for (const v of ['', '  ', [], {}, null]) expect(readCharter([older, law({ id: 'new', x_review_proposed: v })])?.id).toBe('new');
+  });
+
+  it('an unmarked Charter is offered to mark only when the room shows none', () => {
+    const loose = lore({ id: 'u', type: 'law', supertype: ' charter ', name: 'Our rules' });
+    expect(unmarkedCharter([loose])).toEqual({ id: 'u', name: 'Our rules', text: '' });
+    expect(unmarkedCharter([loose, law({ id: 'm' })])).toBeNull();
+    expect(unmarkedCharter([lore({ id: 'p', type: 'law', supertype: 'Charter', x_review_proposed: { by: 'm1' } })])).toBeNull();
+    expect(unmarkedCharter([lore({ id: 's', type: 'law', supertype: 'Statute' })])).toBeNull();
+    expect(unmarkedCharter([lore({ id: 'd', type: 'law', supertype: 'Charter', x_review_proposed: 'agent' })])).toBeNull();
+    expect(unmarkedCharter([lore({ id: 'h', type: 'law', supertype: 'Charter', hidden: true })])).toBeNull();
+    expect(unmarkedCharter([lore({ id: 'a', type: 'law', supertype: 'Charter', created_at: '2026-10-01T00:00:00Z' }), lore({ id: 'b', type: 'law', supertype: 'Charter', created_at: '2026-11-01T00:00:00Z' })])?.id).toBe('b');
   });
 });
 
@@ -470,8 +520,21 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
   });
 
   it("an agent's proposed item says so; a lore Work item never shows", () => {
-    const w = readWork([item({ id: 'p', x_review_proposed: 'agent' }), lore({ id: 'l', type: 'relation', supertype: 'Work item' })], 'w1');
+    const w = readWork([item({ id: 'p', x_review_proposed: { by: 'm1', expires: '2099-01-01' } }), lore({ id: 'l', type: 'relation', supertype: 'Work item' })], 'w1');
     expect(w.map(x => [x.id, x.proposed])).toEqual([['p', true]]);
+  });
+
+  it('an empty mark is settled, and a doubt shows settled on a page people read (review rules 1 and 4)', () => {
+    for (const v of ['', '   ', [], {}, null, undefined, 'agent', 0, false, ['m1']]) {
+      expect(readWork([item({ id: 'p', x_review_proposed: v })], 'w1')[0].proposed).toBe(false);
+    }
+  });
+
+  it('a keeper may set done only an open or taken item, never a proposed one or a third word', () => {
+    for (const w of ['open', ' Taken ', '', undefined]) expect(maySetDone(item({ id: 'p', subtype: w }))).toBe(true);
+    for (const w of ['done', 'blocked']) expect(maySetDone(item({ id: 'p', subtype: w }))).toBe(false);
+    expect(maySetDone(item({ id: 'p', subtype: 'open', x_review_proposed: { by: 'm1' } }))).toBe(false);
+    expect(maySetDone(item({ id: 'p', subtype: 'open', x_review_proposed: '' }))).toBe(true);
   });
 
   it("only the world's own elements of a linkable type can be picked", () => {
