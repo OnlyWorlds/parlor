@@ -13,7 +13,7 @@ import { h, clear, notice, hhmm, initial } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot } from './waymark';
 import { afterPress } from './press';
 import { OwNetworkError, fileKindOf, proposedMarkOf, type OwWorldFileRow } from '@onlyworlds/sdk';
-import { ACCEPT as FILES_ACCEPT, MAX_PICKS, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
+import { ACCEPT as FILES_ACCEPT, MAX_PICKS, adderOf, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
 
 /** A press refused before anything was sent, in the person's words. */
 class Refused extends Error {}
@@ -813,7 +813,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   }
 
   function fileRow(r: OwWorldFileRow, lineBy: string): HTMLElement {
-    const by = r.added_by.membership ?? OWNER;
+    const by = adderOf(r, OWNER); // null: a former member, never the owner
     const img = room.files.preview(r);
     const pic = img
       ? h('button', { class: 'file-pic', type: 'button', 'aria-label': `Show ${r.name} full size`, onclick: () => {
@@ -827,7 +827,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     return h('div', { class: 'file', 'data-file': r.id }, pic,
       h('div', { class: 'file-line' },
         h('span', { class: 'file-name' }, r.name),
-        h('span', { class: 't' }, ` ${r.kind} · ${sizeWords(r.size)}${by !== lineBy ? ` · added by ${room.name(by)}` : ''}`),
+        h('span', { class: 't' }, ` ${r.kind} · ${sizeWords(r.size)}${by !== lineBy ? ` · added by ${by === null ? 'a former member' : room.name(by)}` : ''}`),
         h('button', { class: 'act', type: 'button', 'data-act': 'download-file', onclick: async () => {
           try { await room.files.download(r); } catch (err) { notice(problemLine(err, 'downloading the file'), true); }
         } }, 'Download'),

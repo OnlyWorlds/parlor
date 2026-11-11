@@ -27,6 +27,19 @@ const IMAGE_TYPE: Partial<Record<OwFileKind, string>> = { png: 'image/png', jpg:
 export const isImage = (kind: string): boolean => kind in IMAGE_TYPE;
 
 /** "12.4 MB", "340 KB", "300 bytes", by binary units as keel counts. */
+/**
+ * Who added a file, as the room names seats: its membership id, OWNER for the world's owner, or null for a former member
+ * (since 2026-11-11 keel serves `added_by.owner`: `membership` is null for the owner's files and for a file whose membership no longer exists, and
+ * `added_by.owner` tells the two apart). A keel from before the flag serves no `owner` key: a null membership is then read
+ * as the owner's, the reading of every earlier release.
+ */
+export function adderOf(row: OwWorldFileRow, owner: string): string | null {
+  const by = row.added_by as (OwWorldFileRow['added_by'] & { owner?: unknown }) | null | undefined;
+  if (by && typeof by.membership === 'string' && by.membership) return by.membership;
+  if (by && by.owner === false) return null;
+  return owner;
+}
+
 export function sizeWords(bytes: number): string {
   if (bytes < 1024) return `${bytes} byte${bytes === 1 ? '' : 's'}`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;

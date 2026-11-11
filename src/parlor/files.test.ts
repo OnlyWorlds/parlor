@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OwApiError, OwNetworkError, type OwMe, type OwWorldFileRow } from '@onlyworlds/sdk';
-import { MAX_BYTES, RoomFiles, fileProblem, filesName, pickRefusal, sizeWords } from './files';
+import { MAX_BYTES, RoomFiles, adderOf, fileProblem, filesName, pickRefusal, sizeWords } from './files';
 import { lineName, newLine } from './shapes';
 
 const apiError = (status: number, code: string) => new OwApiError(status, code, 'raw keel text', null, null);
@@ -9,6 +9,22 @@ const row = (id: string, line: string, membership: string | null = 'm-ada', size
   added_at: `2026-11-10T20:0${id.length % 10}:00Z`, element_type: 'narrative', element_id: line,
 } as OwWorldFileRow);
 const blob = (name: string, size = 10) => new File([new Uint8Array(size)], name);
+
+describe('adderOf (the owner flag on a file row)', () => {
+  const by = (membership: string | null, owner?: boolean) =>
+    ({ ...row('f', 'l', membership), added_by: { name: 'x', membership, agent: false, ...(owner === undefined ? {} : { owner }) } } as OwWorldFileRow);
+  it("a seat's file is its membership, whatever the flag", () => {
+    expect(adderOf(by('m-ada', false), 'OWN')).toBe('m-ada');
+    expect(adderOf(by('m-ada'), 'OWN')).toBe('m-ada');
+  });
+  it('a null membership is the owner only when keel says so', () => {
+    expect(adderOf(by(null, true), 'OWN')).toBe('OWN');
+    expect(adderOf(by(null, false), 'OWN')).toBeNull();
+  });
+  it('a keel from before the flag reads a null membership as the owner, as before', () => {
+    expect(adderOf(by(null), 'OWN')).toBe('OWN');
+  });
+});
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 /** A fake keel: tickets by file id, an upload that can lose its answer after storing the bytes. */
