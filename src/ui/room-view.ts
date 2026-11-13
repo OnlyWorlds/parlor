@@ -7,6 +7,7 @@
  */
 
 import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, splitConsequence, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
+import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
@@ -1137,7 +1138,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   /** The world's recent changes: who, which door, an AI's rows marked (sheet §2). Drawn only when the list moved. */
   let changesKey = '';
   function drawChanges(): void {
-    const rows = room.changes().map(c => ({ c, who: room.name(c.by), ai: room.isAi(c.by, c.el.changed_via), door: doorLine(c.el), fresh: !!seenBefore && c.at > seenBefore }));
+    const rows = room.changes().map(c => ({ c, who: room.name(c.by), ai: room.isAi(c.by, c.el.changed_via), door: doorLine(c.el), fresh: isAfter(c.at, seenBefore) }));
     const key = JSON.stringify(rows.map(r => [r.c.id, r.c.name, r.c.at, r.who, r.ai, r.door, r.fresh]));
     if (key === changesKey) return;
     // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.

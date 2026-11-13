@@ -15,6 +15,7 @@ import {
   type OwFileKind, type OwFileTicket, type OwMe, type OwV2Client, type OwWorldFileRow,
 } from '@onlyworlds/sdk';
 import { serialQueue } from './serial';
+import { earlierFirst } from './when';
 
 /** keel's 25 MB is binary: 26,214,400 bytes. */
 export const MAX_BYTES = 25 * 1024 * 1024;
@@ -189,7 +190,7 @@ export class RoomFiles {
   /** The files on one line, oldest first, as the list holds them. */
   onLine(lineId: string): OwWorldFileRow[] {
     return this.rows.filter(r => r.element_id === lineId && r.element_type === 'narrative')
-      .sort((a, b) => a.added_at.localeCompare(b.added_at) || a.id.localeCompare(b.id));
+      .sort((a, b) => earlierFirst(a.added_at, b.added_at) || a.id.localeCompare(b.id));
   }
 
   /** My files still on their way to a line (or landed and not listed yet). */

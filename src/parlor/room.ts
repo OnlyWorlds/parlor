@@ -7,9 +7,10 @@
 import { OwApiError, OwNetworkError, OwPreconditionFailedError, type OwMe, type OwMember, type OwV2Client } from '@onlyworlds/sdk';
 import { RoomFeed } from './feed';
 import { serialQueue } from './serial';
+import { newestFirst } from './when';
 import { session, type AccountWorld } from './session';
 import {
-  OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readHearts, readSpecs, readVotes,
+  OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readLinesAsGiven, orderLines, readHearts, readSpecs, readVotes,
   readSittings, readCharter, readMemberCharacters, linesOfSitting, linesOfUnseenSitting, myHearts, tally, newLine, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
   readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK, addressOf, type WorkItem,
@@ -43,7 +44,7 @@ export class DoneNoReport extends Error {
 }
 
 function newestOf<T extends { at: string }>(xs: T[]): T | null {
-  return [...xs].sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
+  return [...xs].sort((a, b) => newestFirst(a.at, b.at))[0] ?? null;
 }
 
 /** A refusal in the person's words. Never keel's raw text. */
@@ -282,7 +283,8 @@ export class Room {
 
   /** The room's lines answering one thing (a board entry by parent, a work item by relations), across every sitting. */
   answers(id: string) {
-    return readLines(this.els.values()).filter(l => l.parent === id || l.about === id || !!l.report?.answers.includes(id));
+    // Only the few that answer are ordered: a sort of every line per board entry and work item cost each render (the S598 code gate).
+    return orderLines(readLinesAsGiven(this.els.values()).filter(l => l.parent === id || l.about === id || !!l.report?.answers.includes(id)));
   }
 
   /** The world's own recent changes (a world's parlor's work surface). */

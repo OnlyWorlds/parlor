@@ -28,6 +28,7 @@
  */
 
 import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
+import { earlierFirst, isAfter, newestFirst } from './when';
 
 export interface El {
   id: string;
@@ -129,6 +130,16 @@ export interface Line {
 }
 
 export function readLines(els: Iterable<El>): Line[] {
+  return orderLines(readLinesAsGiven(els));
+}
+
+/** Lines in the room's order: by instant, a tie by id. */
+export function orderLines(lines: Line[]): Line[] {
+  return lines.sort((a, b) => earlierFirst(a.at, b.at) || a.id.localeCompare(b.id));
+}
+
+/** The room's lines as the iterable gives them, unordered: a caller that keeps a few orders only those. */
+export function readLinesAsGiven(els: Iterable<El>): Line[] {
   const out: Line[] = [];
   for (const el of els) {
     const report = isA(el, 'narrative', SUPERTYPE.report);
@@ -148,7 +159,7 @@ export function readLines(els: Iterable<El>): Line[] {
       el,
     });
   }
-  return out.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  return out;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -415,7 +426,7 @@ export const OLD_STAR_BEFORE = '2026-10-26T00:00:00Z';
 export function starOf(sitting: { star: string | null; at: string } | null): string | null {
   if (!sitting) return null;
   if (sitting.star) return sitting.star;
-  return sitting.at && sitting.at < OLD_STAR_BEFORE ? OLD_STAR : null;
+  return isAfter(OLD_STAR_BEFORE, sitting.at) ? OLD_STAR : null;
 }
 export const OLD_STAR = 'subtype';
 
@@ -439,7 +450,7 @@ export function readSpecs(els: Iterable<El>, hearts: readonly Heart[], star: str
       at: el.created_at ?? '',
     });
   }
-  return out.sort((a, b) => Number(b.star) - Number(a.star) || b.hearts - a.hearts || a.at.localeCompare(b.at));
+  return out.sort((a, b) => Number(b.star) - Number(a.star) || b.hearts - a.hearts || earlierFirst(a.at, b.at));
 }
 
 export function newSpec(title: string, text: string, kind: Kind, roomOf: string): Record<string, unknown> {
@@ -480,7 +491,7 @@ export function tally(votes: readonly Vote[]): Map<string, number> {
   const newest = new Map<string, Vote>();
   for (const v of votes) {
     const had = newest.get(v.by);
-    if (!had || v.at > had.at) newest.set(v.by, v);
+    if (!had || newestFirst(v.at, had.at) < 0) newest.set(v.by, v);
   }
   const score = new Map<string, number>();
   for (const v of newest.values()) {
@@ -567,7 +578,7 @@ export function readSittings(els: Iterable<El>): Sitting[] {
       by: whoMade(el),
     });
   }
-  return out.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  return out.sort((a, b) => earlierFirst(a.at, b.at) || a.id.localeCompare(b.id));
 }
 
 /** A sitting belongs to the workshop's world: its mark is the world's id. */
@@ -620,7 +631,7 @@ export function linesOfUnseenSitting(lines: readonly Line[], worldId: string): L
   let newest: Line | null = null;
   for (const l of lines) {
     if (markOf(l) === null) continue;
-    if (!newest || l.at > newest.at || (l.at === newest.at && l.id > newest.id)) newest = l;
+    if (!newest || (newestFirst(l.at, newest.at) || newest.id.localeCompare(l.id)) < 0) newest = l;
   }
   if (!newest) return [...lines];
   const mark = markOf(newest);
@@ -634,7 +645,8 @@ export function linesOfSitting(lines: readonly Line[], sittings: readonly Sittin
   if (i < 0) return [...lines];
   const from = sittings[i].at;
   const to = sittings[i + 1]?.at ?? null;
-  return lines.filter(l => l.at >= from && (to === null || l.at < to));
+  // An unreadable time comes after every readable one (the message profile): such a line is in the last sitting.
+  return lines.filter(l => earlierFirst(l.at, from) >= 0 && (to === null || earlierFirst(l.at, to) < 0));
 }
 
 // ---------------------------------------------------------------- the board
@@ -673,7 +685,7 @@ export function readBoard(els: Iterable<El>): BoardEntry[] {
     });
   }
   const rank = (c: BoardColour | null) => (c ? BOARD_COLOURS.indexOf(c) : BOARD_COLOURS.length);
-  return out.sort((a, b) => rank(a.colour) - rank(b.colour) || b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+  return out.sort((a, b) => rank(a.colour) - rank(b.colour) || newestFirst(a.at, b.at) || a.id.localeCompare(b.id));
 }
 
 export function newBoardEntry(
@@ -756,7 +768,7 @@ export function readTakes(els: Iterable<El>, live: (by: string) => boolean = () 
     list.push({ id: el.id, by, at: el.created_at ?? '' });
     out.set(item, list);
   }
-  for (const list of out.values()) list.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  for (const list of out.values()) list.sort((a, b) => earlierFirst(a.at, b.at) || a.id.localeCompare(b.id));
   return out;
 }
 
@@ -852,7 +864,7 @@ export function readWork(els: Iterable<El>, worldId: string, live: (by: string) 
     });
   }
   const rank = (s: WorkState) => (s === 'done' ? 1 : 0);
-  return out.sort((a, b) => rank(a.state) - rank(b.state) || b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+  return out.sort((a, b) => rank(a.state) - rank(b.state) || newestFirst(a.at, b.at) || a.id.localeCompare(b.id));
 }
 
 /** A new work item: the picked elements in their typed link fields (a type with no field is left out), subtype open. */
@@ -908,7 +920,7 @@ export function readChanges(els: Iterable<El>, max = 40): Change[] {
     const by = 'changed_by' in el ? (typeof el.changed_by === 'string' && el.changed_by ? el.changed_by : OWNER) : whoMade(el);
     out.push({ id: el.id, type: fold(el.type), name: (el.name ?? '').toString().trim() || 'Untitled', by, at, made: !!el.created_at && el.created_at === el.updated_at, el });
   }
-  return out.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id)).slice(0, max);
+  return out.sort((a, b) => newestFirst(a.at, b.at) || a.id.localeCompare(b.id)).slice(0, max);
 }
 
 // ---------------------------------------------------------------- the charter
@@ -1000,7 +1012,7 @@ export function readMemberCharacters(els: Iterable<El>): Map<string, { id: strin
     const by = whoMade(el);
     const at = el.created_at ?? '';
     const had = out.get(by);
-    if (!had || at < had.at) out.set(by, { id: el.id, name: (el.name ?? '').toString(), at });
+    if (!had || earlierFirst(at, had.at) < 0) out.set(by, { id: el.id, name: (el.name ?? '').toString(), at });
   }
   return new Map([...out].map(([k, v]) => [k, { id: v.id, name: v.name }]));
 }
