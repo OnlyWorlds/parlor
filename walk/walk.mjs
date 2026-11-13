@@ -9,6 +9,8 @@ import { chromium, firefox } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { OwV2Client } from '@onlyworlds/sdk';
 import { account, readState, writeState, API } from './accounts.mjs';
+// A line's words are its story since 240c9c6 (the message profile); a line made before kept them in description.
+const words = e => (typeof e.story === 'string' && e.story) || e.description;
 
 const engine = process.argv[2] === 'firefox' ? firefox : chromium;
 const engineName = process.argv[2] === 'firefox' ? 'firefox' : 'chromium';
@@ -192,7 +194,7 @@ try {
   // script (the SDK's default client, the pair and the mark) shows in the room, saying so.
   {
     let mine = null;
-    for await (const e of api.listAll('narrative')) if (e.description === lineText) mine = e;
+    for await (const e of api.listAll('narrative')) if (words(e) === lineText) mine = e;
     check('door: the member\'s line reads back changed_client parlor', mine?.changed_client === 'parlor', String(mine?.changed_client));
     let sittingId = null;
     for await (const e of api.listAll('event')) if ((e.supertype ?? '').toLowerCase() === 'sitting' && e.x_room_of && (!sittingId || e.created_at > sittingId.at)) sittingId = { id: e.id, at: e.created_at };
@@ -290,7 +292,7 @@ try {
     let entry = null, answer = null, sitting = null;
     for await (const e of api.listAll('narrative')) {
       if (e.name === entryTitle) entry = e;
-      if (e.description === answerText) answer = e;
+      if (words(e) === answerText) answer = e;
     }
     for await (const e of api.listAll('event')) if ((e.supertype ?? '').toLowerCase() === 'sitting' && e.x_room_of && (!sitting || e.created_at > sitting.created_at)) sitting = e;
     const roster = await api.members();
@@ -387,7 +389,7 @@ try {
   {
     let item = null, answer = null, sitting = null, hostCard = null;
     for await (const e of api.listAll('relation')) if (e.name === workTitle) item = e;
-    for await (const e of api.listAll('narrative')) if (e.description === workAnswer) answer = e;
+    for await (const e of api.listAll('narrative')) if (words(e) === workAnswer) answer = e;
     for await (const e of api.listAll('event')) if ((e.supertype ?? '').toLowerCase() === 'sitting' && e.x_room_of && (!sitting || e.created_at > sitting.created_at)) sitting = e;
     for await (const e of api.listAll('character')) if ((e.supertype ?? '').toLowerCase() === 'member' && e.x_room_of && !e.created_by && (!hostCard || e.created_at < hostCard.created_at)) hostCard = e;
     const hostWho = (await api.members()).find(r => r.id === null)?.character ?? hostCard?.id ?? null;
@@ -457,7 +459,7 @@ try {
     const sup = (el, w) => (el.supertype ?? '').trim().toLowerCase() === w;
     const sittings = (await all('event')).filter(e => sup(e, 'sitting') && e.x_room_of).sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
     const sitting = sittings[sittings.length - 1];
-    const line = (await all('narrative')).find(e => e.description === lineText);
+    const line = (await all('narrative')).find(e => words(e) === lineText);
     const spec = (await all('construct')).find(e => e.name === specTitle);
     const rels = await all('relation');
     const heart = rels.find(e => sup(e, 'heart') && e.x_room_of && (e.constructs ?? []).includes(spec?.id));
