@@ -181,6 +181,9 @@ describe('reports (schema-dist profiles/report.md)', () => {
     expect(splitConsequence('Set the subtype of 3 Objects to surveyed')).toEqual({ words: 'Set the subtype of 3 Objects to surveyed', address: null });
     expect(splitConsequence('ow://object/o1')).toEqual({ words: 'ow://object/o1', address: null });
     expect(splitConsequence('nothing changed')).toEqual({ words: 'nothing changed', address: null });
+    // A full stop or a bracket after the address is prose, never part of it.
+    expect(splitConsequence('Renamed the Steinway: ow://object/o1.')).toEqual({ words: 'Renamed the Steinway', address: 'ow://object/o1' });
+    expect(splitConsequence('Linked Ada (ow://w1/character/c1).')).toEqual({ words: 'Linked Ada', address: 'ow://w1/character/c1' });
   });
 
   it("a handed-in report opens on its story's first three lines, at most 280 characters", () => {

@@ -215,9 +215,10 @@ function readReportPart(el: El): ReportPart {
  * A line of `consequences` as a person reads it: its words, and the address that follows them (the report
  * profile: "the element named in words before its address"), kept apart so the room shows the words and
  * keeps the address beside them. A line with no address is all words (rule 8); one with only an address keeps it.
+ * The address ends at its last letter or digit: a full stop or a bracket after it is the writer's prose, never part of it.
  */
 export function splitConsequence(line: string): { words: string; address: string | null } {
-  const m = /^(.*?)[\s:]*(ow:\/\/\S+)\s*$/.exec(line);
+  const m = /^(.*?)[\s:(]*(ow:\/\/\S*[A-Za-z0-9])[^\sA-Za-z0-9]*\s*$/.exec(line);
   if (!m) return { words: line, address: null };
   const words = m[1].trim();
   return words ? { words, address: m[2] } : { words: m[2], address: null };
