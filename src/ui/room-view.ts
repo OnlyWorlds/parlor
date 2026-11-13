@@ -730,9 +730,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const entries = new Map<string, { title: string }>(room.board().map(e => [e.id, e]));
     const workItems = new Map<string, { title: string }>();
     for (const w of room.work()) { entries.set(w.id, w); workItems.set(w.id, w); }
+    const sittingIds = new Set(room.sittings().map(s => s.id));
     room.files.unwatchAll();
     clear(lines, ls.length ? ls.map(l => {
-      if (l.report) return reportLine(l, l.report, entries, workItems);
+      if (l.report) return reportLine(l, l.report, entries, workItems, sittingIds);
       const answering = (l.parent ? entries.get(l.parent) : undefined) ?? (l.about ? entries.get(l.about) : undefined);
       const ai = room.isAi(l.by, l.el.changed_via);
       const name = room.name(l.by);
@@ -762,7 +763,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
    * has not completed it; completed, the keeper's description open, What changed beside it, the story folded.
    * Everything it shows is text. A fold's open state is the room's, so a redraw keeps it.
    */
-  function reportLine(l: Line, r: ReportPart, entries: Map<string, { title: string }>, workItems: Map<string, { title: string }>): HTMLElement {
+  function reportLine(l: Line, r: ReportPart, entries: Map<string, { title: string }>, workItems: Map<string, { title: string }>, sittingIds: ReadonlySet<string>): HTMLElement {
     const ai = room.isAi(l.by, l.el.changed_via);
     const name = room.name(l.by);
     const hidden = room.hidden.has(l.id);
@@ -772,6 +773,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const rel = Array.isArray(l.el.relations) ? (l.el.relations as unknown[]).filter((x): x is string => typeof x === 'string') : [];
     const anchorId = l.parent ?? rel.find(id => entries.has(id)) ?? null;
     const anchor = anchorId && !answered.includes(anchorId) ? entries.get(anchorId) : undefined;
+    // Free talk's anchor (the report profile's third): the room's sitting it links in `events`, by that sitting's name.
+    // Only a board entry or a work item the room holds stands in its place; a parent that is a report (a thread) does not.
+    const evs = Array.isArray(l.el.events) ? (l.el.events as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+    const sitId = anchorId && entries.has(anchorId) ? null : evs.find(id => sittingIds.has(id)) ?? null;
+    const sitName = sitId ? String(room.els.get(sitId)?.name ?? '').replace(/\s+/g, ' ').trim() || 'Untitled' : null;
     // Keyed by the state too: Show all on a handed-in report is not the completed one's fold of what was handed in.
     const foldKey = `${l.id}:${r.state}`;
     const open = openReports.has(foldKey);
@@ -792,6 +798,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           r.proposed ? h('span', { class: 'chip prop', 'data-part': 'report-proposed' }, 'Proposed') : null,
           ...answered.map(id => h('span', { class: 't' }, `answers ${workItems.get(id)!.title || 'Untitled'}`)),
           anchor ? h('span', { class: 't' }, `on ${anchor.title || 'Untitled'}`) : null,
+          sitName ? h('span', { class: 't', 'data-part': 'report-sitting' }, `said in the sitting ${sitName}`) : null,
           hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
           hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
           room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this report') : null,

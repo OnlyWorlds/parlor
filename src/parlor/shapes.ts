@@ -289,6 +289,7 @@ export function maySetDone(el: El): boolean {
  * A report. Step 1, handing in: one Narrative with the pair, the mark, `handed in`, the text whole as `story` and
  * the seat's own Character as `narrator`. On a board entry it hangs by `parent_narrative`; on a work item by
  * `relations`, and answers it (`x_report_answers`) only when `answers` says so. Never an empty answers list.
+ * On neither, it hangs on the sitting it was said in, by `events`, when the room has one.
  *
  * With a keeper's part it is the keeper's own report: the same body, born `completed` in one write with its
  * `description`, its `consequences` (each typed line trimmed, then the item it set done, or `nothing changed`) and
@@ -296,7 +297,7 @@ export function maySetDone(el: El): boolean {
  */
 export function newReport(
   text: string, narrator: string, roomOf: string, day: string,
-  on: { parent?: string | null; item?: string | null; answers?: boolean } = {},
+  on: { parent?: string | null; item?: string | null; answers?: boolean; sitting?: string | null } = {},
   keeper: KeeperPart | null = null,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -312,6 +313,9 @@ export function newReport(
     body.relations = [on.item];
     if (on.answers) body[REPORT_ANSWERS] = [on.item];
   }
+  // Free talk (the report profile's closed talk, its third anchor): no board entry and no work item under it, so it
+  // hangs on the sitting it was said in, linked in `events`. A keeper's touched Events join after it, never in place of it.
+  if (on.sitting && !on.parent && !on.item) body.events = [on.sitting];
   if (keeper) {
     body.description = keeper.description;
     const lines = keeper.changes.split(/\r?\n/).map(s => s.trim()).filter(Boolean);

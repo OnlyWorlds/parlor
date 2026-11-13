@@ -141,6 +141,17 @@ try {
     JSON.stringify({ name: e1.name, subtype: e1.subtype, mark: e1.x_room_of === s.worldId, narrator: !!e1.narrator, description: e1.description, relations: e1.relations }));
   const narrator = e1.narrator ? await api.get('character', e1.narrator).catch(() => null) : null;
   check('keel: its narrator is a Character in the world', !!narrator?.id);
+  // Free talk's anchor (the report profile's third): the newest sitting, by events, read as the parlor orders sittings.
+  {
+    const sits = [];
+    for await (const e of api.listAll('event')) if (String(e.supertype ?? '').trim().toLowerCase() === 'sitting' && e.x_room_of === s.worldId) sits.push(e);
+    sits.sort((a, b) => (Date.parse(a.created_at) - Date.parse(b.created_at)) || a.id.localeCompare(b.id));
+    const newest = sits.at(-1);
+    check('keel: a report on no entry or item hangs on the newest sitting by events', !!newest && JSON.stringify(e1.events) === JSON.stringify([newest.id]),
+      JSON.stringify({ events: e1.events, newest: newest?.id, sittings: sits.length }));
+    const said = `said in the sitting ${String(newest?.name ?? '').replace(/\s+/g, ' ').trim() || 'Untitled'}`;
+    check('member: the report says the sitting it was said in', await until(async () => (await r1.locator('[data-part="report-sitting"]').innerText({ timeout: 1000 }).catch(() => '')) === said, 10000), said);
+  }
   { const title = await r1.locator('.report-title').innerText(); check('member: its title carries the day', [...days()].some(d => title.endsWith(`, ${d}`))); }
   check('member: the first three lines show, and that a host reads it next', (await r1.locator('[data-part="report-story"]').innerText()).trim() === STORY.slice(0, 3).join('\n')
     && /Not completed yet: a host reads it next\./.test(await r1.innerText()));
@@ -179,6 +190,7 @@ try {
   check('keel: it hangs on the item and answers it', made2.length === 1 && JSON.stringify(e2.relations) === JSON.stringify([item.id])
     && JSON.stringify(e2.x_report_answers) === JSON.stringify([item.id]) && e2.subtype === 'handed in', JSON.stringify({ relations: e2.relations, answers: e2.x_report_answers }));
   check('keel: the item\'s own state is left alone', (await api.get('relation', item.id)).subtype === 'open');
+  check('keel: a report on a work item links no sitting', !(e2.events ?? []).length, JSON.stringify(e2.events));
 
   // ------------------------------------------------------------ the keeper completes the first in the room (step 2)
   const CHANGES = `Renamed the second ship: ow://object/${item.id}\nSet the subtype of 2 Objects to surveyed (a search for every Object finds them)`;

@@ -165,6 +165,16 @@ describe('reports (schema-dist profiles/report.md)', () => {
     expect(REPORT_ANSWERS in newReport('t', 'c1', 'w1', 'd', { answers: true })).toBe(false);
   });
 
+  it('free talk hangs on its sitting by events; on a board entry or a work item the sitting is left out', () => {
+    expect(newReport('t', 'c1', 'w1', 'd', { sitting: 's1' }).events).toEqual(['s1']);
+    expect('events' in newReport('t', 'c1', 'w1', 'd', { sitting: 's1', parent: 'b1' })).toBe(false);
+    expect('events' in newReport('t', 'c1', 'w1', 'd', { sitting: 's1', item: 'i1' })).toBe(false);
+    expect('events' in newReport('t', 'c1', 'w1', 'd', { sitting: null })).toBe(false);
+    // A keeper's touched Event joins after the sitting, never in its place.
+    const kept = newReport('t', 'c1', 'w1', 'd', { sitting: 's1' }, { description: 'x', changes: '', touched: [{ type: 'event', id: 'e9' }], done: null });
+    expect(kept.events).toEqual(['s1', 'e9']);
+  });
+
   it('a change reads as its words, its address kept apart; no address, or only one, as written', () => {
     expect(splitConsequence('Renamed the Steinway: ow://object/o1')).toEqual({ words: 'Renamed the Steinway', address: 'ow://object/o1' });
     expect(splitConsequence('Linked Ada ow://w1/character/c1')).toEqual({ words: 'Linked Ada', address: 'ow://w1/character/c1' });

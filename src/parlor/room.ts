@@ -406,7 +406,10 @@ export class Room {
   reportBody(text: string, on: { parent?: string | null; item?: string | null; answers?: boolean }, keeper: KeeperPart | null): Record<string, unknown> | null {
     const narrator = this.myCharacter();
     if (!narrator || !text.trim()) return null;
-    return newReport(text, narrator, this.world.id, localDay(new Date()), on, keeper);
+    // Said now, so in the newest sitting (where a report shows once sent, as a line does), never one being browsed.
+    const all = this.sittings();
+    const sitting = all[all.length - 1]?.id ?? null;
+    return newReport(text, narrator, this.world.id, localDay(new Date()), { ...on, sitting }, keeper);
   }
 
   /** What a keeper may pick as what a report touched, by name, at most `max`. */
