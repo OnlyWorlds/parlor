@@ -28,7 +28,7 @@
  */
 
 import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
-import { earlierFirst, isAfter, newestFirst } from './when';
+import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when';
 
 export interface El {
   id: string;
@@ -135,7 +135,7 @@ export function readLines(els: Iterable<El>): Line[] {
 
 /** Lines in the room's order: by instant, a tie by id. */
 export function orderLines(lines: Line[]): Line[] {
-  return lines.sort((a, b) => earlierFirst(a.at, b.at) || a.id.localeCompare(b.id));
+  return lines.sort((a, b) => earlierFirst(a.at, b.at) || byCodePoint(a.id, b.id));
 }
 
 /** The room's lines as the iterable gives them, unordered: a caller that keeps a few orders only those. */
@@ -583,7 +583,7 @@ export function readSittings(els: Iterable<El>): Sitting[] {
       by: whoMade(el),
     });
   }
-  return out.sort((a, b) => earlierFirst(a.at, b.at) || a.id.localeCompare(b.id));
+  return out.sort((a, b) => earlierFirst(a.at, b.at) || byCodePoint(a.id, b.id));
 }
 
 /** A sitting belongs to the workshop's world: its mark is the world's id. */
@@ -636,7 +636,7 @@ export function linesOfUnseenSitting(lines: readonly Line[], worldId: string): L
   let newest: Line | null = null;
   for (const l of lines) {
     if (markOf(l) === null) continue;
-    if (!newest || (newestFirst(l.at, newest.at) || newest.id.localeCompare(l.id)) < 0) newest = l;
+    if (!newest || (newestFirst(l.at, newest.at) || byCodePoint(newest.id, l.id)) < 0) newest = l;
   }
   if (!newest) return [...lines];
   const mark = markOf(newest);
@@ -690,7 +690,7 @@ export function readBoard(els: Iterable<El>): BoardEntry[] {
     });
   }
   const rank = (c: BoardColour | null) => (c ? BOARD_COLOURS.indexOf(c) : BOARD_COLOURS.length);
-  return out.sort((a, b) => rank(a.colour) - rank(b.colour) || newestFirst(a.at, b.at) || a.id.localeCompare(b.id));
+  return out.sort((a, b) => rank(a.colour) - rank(b.colour) || newestFirst(a.at, b.at) || byCodePoint(a.id, b.id));
 }
 
 export function newBoardEntry(
@@ -773,7 +773,7 @@ export function readTakes(els: Iterable<El>, live: (by: string) => boolean = () 
     list.push({ id: el.id, by, at: el.created_at ?? '' });
     out.set(item, list);
   }
-  for (const list of out.values()) list.sort((a, b) => earlierFirst(a.at, b.at) || a.id.localeCompare(b.id));
+  for (const list of out.values()) list.sort((a, b) => earlierFirst(a.at, b.at) || byCodePoint(a.id, b.id));
   return out;
 }
 
@@ -869,7 +869,7 @@ export function readWork(els: Iterable<El>, worldId: string, live: (by: string) 
     });
   }
   const rank = (s: WorkState) => (s === 'done' ? 1 : 0);
-  return out.sort((a, b) => rank(a.state) - rank(b.state) || newestFirst(a.at, b.at) || a.id.localeCompare(b.id));
+  return out.sort((a, b) => rank(a.state) - rank(b.state) || newestFirst(a.at, b.at) || byCodePoint(a.id, b.id));
 }
 
 /** A new work item: the picked elements in their typed link fields (a type with no field is left out), subtype open. */
@@ -925,7 +925,7 @@ export function readChanges(els: Iterable<El>, max = 40): Change[] {
     const by = 'changed_by' in el ? (typeof el.changed_by === 'string' && el.changed_by ? el.changed_by : OWNER) : whoMade(el);
     out.push({ id: el.id, type: fold(el.type), name: (el.name ?? '').toString().trim() || 'Untitled', by, at, made: !!el.created_at && el.created_at === el.updated_at, el });
   }
-  return out.sort((a, b) => newestFirst(a.at, b.at) || a.id.localeCompare(b.id)).slice(0, max);
+  return out.sort((a, b) => newestFirst(a.at, b.at) || byCodePoint(a.id, b.id)).slice(0, max);
 }
 
 // ---------------------------------------------------------------- the charter
@@ -958,7 +958,7 @@ export function unmarkedCharters(els: Iterable<El>): Charter[] {
   if (readCharter(all)) return [];
   return all.filter(el => readingAidOf(el) === 'charter' && !isCharterElement(el) && !handsOnAsProposed(el) && el.hidden !== true && el.known_of !== true)
     .map(el => ({ id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() }))
-    .sort((a, b) => simpleCaseFold(a.name).localeCompare(simpleCaseFold(b.name)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    .sort((a, b) => simpleCaseFold(a.name).localeCompare(simpleCaseFold(b.name)) || byCodePoint(a.id, b.id));
 }
 
 // ---------------------------------------------------------------- completing a report (the report profile's step 2)

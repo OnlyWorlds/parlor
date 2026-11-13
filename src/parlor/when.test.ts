@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { earlierFirst, isAfter, newestFirst } from './when';
+import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when';
 import { OLD_STAR, ROOM_MARK, linesOfSitting, linesOfUnseenSitting, readLines, readMemberCharacters, readSittings, readTakes, readChanges, starOf, tally, type El, type Vote } from './shapes';
 // schema-dist's message profile (v0.34.0-dist.121, profiles/message.fixture.json, copied whole).
 import fixture from './fixtures/message.fixture.json';
@@ -148,5 +148,24 @@ describe('the room\'s readers order by instants, a tie by id', () => {
       { id: 'b', type: 'character', name: 'B', updated_at: AT.half, created_at: AT.half },
     ] as El[]).map(c => c.id);
     expect(ids[0]).toBe('b');
+  });
+});
+
+describe('byCodePoint: an id tie in code point order (serial 123 point 4)', () => {
+  it('upper case before lower, never folded', () => {
+    expect(['a-1', 'B-1', 'A-1', 'b-1'].sort(byCodePoint)).toEqual(['A-1', 'B-1', 'a-1', 'b-1']);
+    expect(byCodePoint('a', 'a')).toBe(0);
+    expect(byCodePoint('a', 'ab')).toBe(-1);
+    // Past the basic plane: by code point, not by UTF-16 unit (U+1F600 after U+FFFD).
+    expect(byCodePoint('\u{1F600}', '\uFFFD')).toBe(1);
+  });
+
+  it("a line's tie at one instant goes by code point: an upper-case id first", () => {
+    const els = [
+      el({ id: 'a-line', type: 'narrative', supertype: 'Message', description: 'a', created_at: AT.half }),
+      el({ id: 'B-line', type: 'narrative', supertype: 'Message', description: 'b', created_at: AT.half }),
+    ];
+    expect(readLines(els).map(l => l.id)).toEqual(['B-line', 'a-line']);
+    expect(readLines([...els].reverse()).map(l => l.id)).toEqual(['B-line', 'a-line']);
   });
 });

@@ -27,3 +27,19 @@ export function newestFirst(a: unknown, b: unknown): number {
   const x = instantOf(a), y = instantOf(b);
   return x === null || y === null ? compareInstants(x, y) : compareInstants(y, x);
 }
+
+/**
+ * Two ids in code point order (serial 123 point 4): the tie every sort here breaks by id. Never
+ * `localeCompare`, which folds case and reads by a locale's collation, so an id in upper case sorted
+ * apart from where every other reader of the standard puts it.
+ */
+export function byCodePoint(a: string, b: string): number {
+  if (a === b) return 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n;) {
+    const x = a.codePointAt(i)!, y = b.codePointAt(i)!;
+    if (x !== y) return x < y ? -1 : 1;
+    i += x > 0xffff ? 2 : 1;
+  }
+  return a.length < b.length ? -1 : a.length > b.length ? 1 : 0;
+}
