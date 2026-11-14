@@ -232,12 +232,13 @@ const UUID_RUN = '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0
 /**
  * A cheap look at one start, sticky (`lastIndex` = the start), before `readOwLinkAt` is asked: a start no address
  * can begin at is passed over. The text form: `ow://`, then a type word, `/` and an id, or a world's id. The site's
- * form: its prefix, then a run that is an id or may be a slug, not cut inside a word. Everything `readOwLinkAt` reads
+ * form: its prefix, then a run that is an id or may be a slug, not cut inside a word (a letter, a combining mark or
+ * an underscore after it, the SDK's own class: never stricter, so a number after it is not). Everything `readOwLinkAt` reads
  * passes; what passes is still read by it, which decides whether there is an address and where it ends.
  */
 const MAY_BE_ADDRESS = new RegExp(
   `ow://(?:(?:${ELEMENT_TYPES.join('|')})/)?${UUID_RUN}`
-  + `|https://www\\.onlyworlds\\.com/w/(?:${UUID_RUN}|[a-z0-9-]{3,40})(?![\\p{L}\\p{M}\\p{N}_-])`,
+  + `|https://www\\.onlyworlds\\.com/w/(?:${UUID_RUN}|[a-z0-9-]{3,40})(?![\\p{L}\\p{M}_])`,
   'uy',
 );
 

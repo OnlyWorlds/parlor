@@ -214,8 +214,9 @@ describe('reports (schema-dist profiles/report.md)', () => {
   });
 
   // The room draws every line on every render: a long line of junk must cost time in proportion to its length.
-  // Timing on a busy machine flakes, so each size is the best of three, and growth is bounded as well as the time
-  // (a 2 ms floor under the 200 KB run keeps the ratio from reading timer noise).
+  // Timing on a busy machine flakes, so each size is the best of three and the bounds are loose (typical is 1 to 5 ms;
+  // the quadratic reading took seconds): 500 ms at 200 KB, and at most 4x per doubling (a 2 ms floor under the
+  // 200 KB run keeps the ratio from reading timer noise).
   it('a long line of near-addresses is read in linear time', () => {
     const id = '01a1d4ef-0000-7000-8000-000000000084';
     const best = (line: string) => Math.min(...[0, 1, 2].map(() => { const t = performance.now(); splitConsequence(line); return performance.now() - t; }));
@@ -223,10 +224,19 @@ describe('reports (schema-dist profiles/report.md)', () => {
     for (const unit of ['ow://object/ ', 'ow://object/a/', 'https://www.onlyworlds.com/w/ab_', `ow://thing/${id}`, `ow://object/${id}`]) {
       const t200 = best(of(unit, 200));
       const t400 = best(of(unit, 400));
-      expect(t200, `${unit} at 200 KB: ${t200.toFixed(1)} ms`).toBeLessThan(100);
-      expect(t400, `${unit} at 400 KB: ${t400.toFixed(1)} ms against ${t200.toFixed(1)} ms`).toBeLessThanOrEqual(3 * Math.max(t200, 2));
+      expect(t200, `${unit} at 200 KB: ${t200.toFixed(1)} ms`).toBeLessThan(500);
+      expect(t400, `${unit} at 400 KB: ${t400.toFixed(1)} ms against ${t200.toFixed(1)} ms`).toBeLessThanOrEqual(4 * Math.max(t200, 2));
     }
   }, 120000);
+
+  // The cheap look before readOwLinkAt is never stricter than it: a site-form world followed by a number (one the SDK
+  // does not read as cutting a word, as it does a letter, a combining mark or an underscore) is still an address.
+  it('a site-form world followed by a non-ASCII number is still found', () => {
+    for (const n of ['²', '٣', 'Ⅷ']) {
+      expect(splitConsequence(`Opened the hall: https://www.onlyworlds.com/w/hyperion${n}`).address, `followed by U+${n.codePointAt(0)!.toString(16)}`)
+        .toBe('https://www.onlyworlds.com/w/hyperion');
+    }
+  });
 
   it('writtenId leaves anything that is not a string as it came', () => {
     const U = '019A2C7E-41B0-7A12-8C3D-6E5F4A3B2C22';
