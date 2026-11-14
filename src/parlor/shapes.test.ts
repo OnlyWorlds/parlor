@@ -176,14 +176,41 @@ describe('reports (schema-dist profiles/report.md)', () => {
   });
 
   it('a change reads as its words, its address kept apart; no address, or only one, as written', () => {
-    expect(splitConsequence('Renamed the Steinway: ow://object/o1')).toEqual({ words: 'Renamed the Steinway', address: 'ow://object/o1' });
-    expect(splitConsequence('Linked Ada ow://w1/character/c1')).toEqual({ words: 'Linked Ada', address: 'ow://w1/character/c1' });
+    const O = 'ow://object/01a1d4ef-0000-7000-8000-000000000084';
+    const C = 'ow://0193a1c2-7d3e-7f00-8a11-3c5e7b9d2f40/character/01a1d4ef-0000-7000-8000-000000000085';
+    expect(splitConsequence(`Renamed the Steinway: ${O}`)).toEqual({ words: 'Renamed the Steinway', address: O });
+    expect(splitConsequence(`Linked Ada ${C}`)).toEqual({ words: 'Linked Ada', address: C });
     expect(splitConsequence('Set the subtype of 3 Objects to surveyed')).toEqual({ words: 'Set the subtype of 3 Objects to surveyed', address: null });
-    expect(splitConsequence('ow://object/o1')).toEqual({ words: 'ow://object/o1', address: null });
+    expect(splitConsequence(O)).toEqual({ words: O, address: null });
     expect(splitConsequence('nothing changed')).toEqual({ words: 'nothing changed', address: null });
     // A full stop or a bracket after the address is prose, never part of it.
-    expect(splitConsequence('Renamed the Steinway: ow://object/o1.')).toEqual({ words: 'Renamed the Steinway', address: 'ow://object/o1' });
-    expect(splitConsequence('Linked Ada (ow://w1/character/c1).')).toEqual({ words: 'Linked Ada', address: 'ow://w1/character/c1' });
+    expect(splitConsequence(`Renamed the Steinway: ${O}.`)).toEqual({ words: 'Renamed the Steinway', address: O });
+    expect(splitConsequence(`Linked Ada (${C}).`)).toEqual({ words: 'Linked Ada', address: C });
+  });
+
+  // The address profile's "An address in prose" (serial 123) and the report profile's rule 8: the address ends where
+  // its own reading ends (the SDK's readOwLinkAt), and what follows is prose, a full stop included.
+  it('the address in a line ends where its reading ends; what follows is prose', () => {
+    const id = '01a1d4ef-0000-7000-8000-000000000084';
+    // The page's own example: the full stop is the line's, never the address's.
+    expect(splitConsequence(`Built the gate: ow://object/${id}.`)).toEqual({ words: 'Built the gate', address: `ow://object/${id}` });
+    // Prose after the address stays with the words; the address alone is kept apart.
+    expect(splitConsequence(`Moved ow://object/${id} to the hall.`)).toEqual({ words: 'Moved to the hall.', address: `ow://object/${id}` });
+    expect(splitConsequence(`Renamed the gate: ow://object/${id}, then hung it.`)).toEqual({ words: 'Renamed the gate, then hung it.', address: `ow://object/${id}` });
+    // Letters run on after the id: the address ends with its 36 characters.
+    expect(splitConsequence(`Built the gate: ow://object/${id}abc`)).toEqual({ words: 'Built the gate abc', address: `ow://object/${id}` });
+    // A fragment or another query key is not part of an address found in prose; a moment and a lens are.
+    expect(splitConsequence(`Built the gate: ow://object/${id}#notes`).address).toBe(`ow://object/${id}`);
+    expect(splitConsequence(`Built the gate: ow://object/${id}@12.`).address).toBe(`ow://object/${id}@12`);
+    // An id in upper case reads (an address is read in either case); the line keeps it as written.
+    expect(splitConsequence(`Built the gate: ow://object/${id.toUpperCase()}.`)).toEqual({ words: 'Built the gate', address: `ow://object/${id.toUpperCase()}` });
+    // What does not read as an address is words: no id, a short id, an upper-case prefix, an unknown type word.
+    for (const line of ['Renamed the Steinway: ow://object/o1.', `Built: ow://object/${id.slice(0, 13)}.`, `Built: OW://object/${id}`, `Built: ow://thing/${id}`]) {
+      expect(splitConsequence(line)).toEqual({ words: line, address: null });
+    }
+    // The site's form is an address too.
+    expect(splitConsequence(`Opened the hall: https://www.onlyworlds.com/w/hyperion/event/${id}.`))
+      .toEqual({ words: 'Opened the hall', address: `https://www.onlyworlds.com/w/hyperion/event/${id}` });
   });
 
   it("a handed-in report opens on its story's first three lines, at most 280 characters", () => {

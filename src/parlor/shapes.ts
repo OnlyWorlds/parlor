@@ -27,7 +27,7 @@
  * may write that mark, never the room's.
  */
 
-import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
+import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readOwLinkAt, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
 import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when';
 
 export interface El {
@@ -227,17 +227,40 @@ function readReportPart(el: El): ReportPart {
   };
 }
 
+const ADDRESS_PREFIXES = ['ow://', 'https://www.onlyworlds.com/w/'];
+const HAS_WORDS = /[\p{L}\p{N}]/u;
+
 /**
  * A line of `consequences` as a person reads it: its words, and the address that follows them (the report
  * profile: "the element named in words before its address"), kept apart so the room shows the words and
- * keeps the address beside them. A line with no address is all words (rule 8); one with only an address keeps it.
- * The address ends at its last letter or digit: a full stop or a bracket after it is the writer's prose, never part of it.
+ * keeps the address beside them, as written. A line with no address is all words (rule 8); one with only an
+ * address keeps it.
+ *
+ * The address is found as the address profile reads one in prose (serial 123), by the SDK's `readOwLinkAt`: it
+ * ends where its own reading ends, and what follows is prose, a full stop included. Of several, the line's last.
+ * Text that does not read as an address (`ow://object/o1`: no id) is words. In the words, the separator before
+ * the address goes (`: `, a bracket opened on it) and so does the line's closing punctuation after it; prose after
+ * it stays.
  */
 export function splitConsequence(line: string): { words: string; address: string | null } {
-  const m = /^(.*?)[\s:(]*(ow:\/\/\S*[A-Za-z0-9])[^\sA-Za-z0-9]*\s*$/.exec(line);
-  if (!m) return { words: line, address: null };
-  const words = m[1].trim();
-  return words ? { words, address: m[2] } : { words: m[2], address: null };
+  let at = -1;
+  let end = -1;
+  for (const prefix of ADDRESS_PREFIXES) {
+    for (let i = line.indexOf(prefix); i !== -1; i = line.indexOf(prefix, i + 1)) {
+      const found = readOwLinkAt(line, i);
+      if (found && i > at) { at = i; end = found.end; }
+    }
+  }
+  if (at < 0) return { words: line, address: null };
+  const address = line.slice(at, end);
+  const head = line.slice(0, at);
+  const before = head.replace(/[\s:(]+$/, '').trim();
+  let after = line.slice(end).trim();
+  if (!HAS_WORDS.test(after)) after = '';
+  else if (/\(\s*$/.test(head)) after = after.replace(/^\)\s*/, '');
+  if (!before) return { words: after ? line.trim() : address, address: null };
+  if (!after) return { words: before, address };
+  return { words: `${before}${/^[,.;:!?)\]]/.test(after) ? '' : ' '}${after}`, address };
 }
 
 /** A handed-in report's opening in the room: its first three lines, at most 280 characters; `cut` when more remain. */
