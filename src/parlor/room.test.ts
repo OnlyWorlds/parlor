@@ -20,7 +20,7 @@ import type { El } from './shapes';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
 
-type Call = { op: 'get' | 'patch'; type: string; id: string; body?: Record<string, unknown>; ifMatch?: number };
+type Call = { op: 'get' | 'patch' | 'create'; type: string; id: string; body?: Record<string, unknown>; ifMatch?: number };
 
 let calls: Call[];
 let rows: Map<string, El>;
@@ -45,6 +45,11 @@ const fake = {
     const row = { ...rows.get(id)!, ...body, change_seq: (rows.get(id)!.change_seq as number ?? 0) + 1 } as El;
     rows.set(id, row);
     return { ...row };
+  },
+  async create(type: string, body: Record<string, unknown>) {
+    const id = `new-${calls.length}`;
+    calls.push({ op: 'create', type, id, body });
+    return { ...body, id, type } as El;
   },
 };
 
@@ -212,5 +217,39 @@ describe('Room.complete', () => {
     rows.set('r1', report({ change_seq: undefined }));
     await room().complete('r1', null, part, false, new Set());
     expect(patches()[0].ifMatch).toBeUndefined();
+  });
+
+  // The address profile's "The same id" (serial 122): keel reads an id sent in upper case at its own door and serves the
+  // item lowercase; the request goes as written, and the address the completion writes is lowercase in the form.
+  it('an answer held in upper case is fetched and set done as written, and its address is written lowercase', async () => {
+    const U = '019A2C7E-41B0-7A12-8C3D-6E5F4A3B2C22';
+    rows.set('r1', report({ relations: [U.toLowerCase()], x_report_answers: [U] }));
+    rows.set(U, item(U.toLowerCase()));
+    await room().complete('r1', 7, part, true, new Set());
+    const p = patches();
+    expect(p.map(c => `${c.type}:${c.id}`)).toEqual([`relation:${U}`, 'narrative:r1']);
+    expect(p[1].body!.consequences).toBe(`Dock 4 back in service\nSet the work item Item ${U.toLowerCase()} to done: ow://relation/${U.toLowerCase()}`);
+  });
+});
+
+describe('Room.take', () => {
+  const take = async (mark: unknown) => {
+    const r = room();
+    r.feed.els.set('i1', item('i1', { x_room_of: mark }));
+    await r.take('i1');
+    return calls.filter(c => c.op === 'create');
+  };
+
+  it("copies the item's mark lowercase when it is an id in the form in another case", async () => {
+    const U = '019A2C7E-41B0-7A12-8C3D-6E5F4A3B2C22';
+    const made = await take(U);
+    expect(made).toHaveLength(1);
+    expect(made[0].body!.x_room_of).toBe(U.toLowerCase());
+    expect(made[0].body!.x_room_item).toBe('i1');
+  });
+
+  it('copies any other mark exactly as written (no hyphens is no id in the form)', async () => {
+    const odd = '019A2C7E41B07A128C3D6E5F4A3B2C22';
+    expect((await take(odd))[0].body!.x_room_of).toBe(odd);
   });
 });

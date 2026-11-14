@@ -407,6 +407,22 @@ describe('charter', () => {
     for (const k of ['story', 'narrator', ROOM_MARK, REPORT_ANSWERS, 'name']) expect(k in body).toBe(false);
     expect(completionPatch(report, { description: 'x', changes: '', touched: [] }, []).consequences).toBe(NOTHING_CHANGED);
   });
+
+  // The address profile's "The same id" (serial 122): a writer writes an id lowercase in the form, and an address is
+  // written in the address page's own form. An answer held in upper case is still that item's address once written.
+  it('a done item answered in upper case is written into consequences as its address, lowercase in the form', () => {
+    const U = '019A2C7E-41B0-7A12-8C3D-6E5F4A3B2C22';
+    const report = el({ id: 'r', type: 'narrative', supertype: 'Report', subtype: 'handed in', story: 'S', [REPORT_ANSWERS]: [U] });
+    expect(completionPatch(report, { description: 'x', changes: '', touched: [] }, [{ id: U, title: 'Fix the ledger' }]).consequences)
+      .toBe(`Set the work item Fix the ledger to done: ow://relation/${U.toLowerCase()}`);
+    // A keeper's own report, born completed, writes the same line.
+    const kept = newReport('t', 'c1', 'w1', 'd', { item: U, answers: true }, { description: 'x', changes: '', touched: [], done: { id: U, title: 'Fix the ledger' } });
+    expect(kept.consequences).toBe(`Set the work item Fix the ledger to done: ow://relation/${U.toLowerCase()}`);
+    // Text that is no id in the form is written exactly as it came: never re-spelled into one.
+    const NO_HYPHENS = U.replace(/-/g, '');
+    expect(completionPatch(report, { description: 'x', changes: '', touched: [] }, [{ id: NO_HYPHENS, title: 'T' }]).consequences)
+      .toBe(`Set the work item T to done: ow://relation/${NO_HYPHENS}`);
+  });
 });
 
 describe("a spec's kind and the sitting's star (sheet §6 point 13, draft 7)", () => {
@@ -511,6 +527,13 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
       const body = newTake({ id: 'i1', title: 'Tie the guild in', roomOf: 's1' }, 'c1');
       expect(body).toEqual({ name: 'Take: Tie the guild in', supertype: 'Take', subtype: 'taken', [ROOM_MARK]: 's1', [ROOM_ITEM]: 'i1', actor: 'c1' });
       expect('actor' in newTake({ id: 'i1', title: 't', roomOf: 's1' }, null)).toBe(false);
+    });
+    it("a take copies its item's mark lowercase when it is an id in the form, any other mark exactly as written", () => {
+      const U = '019A2C7E-41B0-7A12-8C3D-6E5F4A3B2C22';
+      expect(newTake({ id: 'i1', title: 't', roomOf: U }, null)[ROOM_MARK]).toBe(U.toLowerCase());
+      expect(newTake({ id: 'i1', title: 't', roomOf: U.toLowerCase() }, null)[ROOM_MARK]).toBe(U.toLowerCase());
+      // Not an id in the form: never re-spelled into one (no hyphens, braces, a padded id, a word).
+      for (const odd of [U.replace(/-/g, ''), `{${U}}`, ` ${U}`, 'S1']) expect(newTake({ id: 'i1', title: 't', roomOf: odd }, null)[ROOM_MARK]).toBe(odd);
     });
     it('taken by a live take, by its maker; done wins; lore, unmarked, removed and orphan takes never count', () => {
       const els = [

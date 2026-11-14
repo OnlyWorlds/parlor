@@ -78,6 +78,22 @@ export const ROOM_ITEM = 'x_room_item';
 
 const fold = (s: unknown): string => (typeof s === 'string' ? simpleCaseFold(s.trim()) : '');
 
+const ID_FORM = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
+
+/**
+ * An id as a writer writes it into a world (the address profile's "The same id"): one in the form, in any case,
+ * lowercase; any other text exactly as it came, never re-spelled into an id it was not. A reader never calls this:
+ * inside a world two ids are the same only when written the same.
+ */
+export function writtenId(id: string): string {
+  return ID_FORM.test(id) ? id.toLowerCase() : id;
+}
+
+/** The line a completion writes for a work item it set done: the item named in words, then its address. */
+function doneLine(item: { id: string; title: string }): string {
+  return `Set the work item ${item.title.replace(/\s+/g, ' ').trim() || 'Untitled'} to done: ow://relation/${writtenId(item.id)}`;
+}
+
 /** The pair alone, folded as the profile folds it: what the charter (lore) is read by. */
 function isPair(el: El, type: string, supertype: string): boolean {
   return fold(el.type) === type && fold(el.supertype) === fold(supertype);
@@ -320,7 +336,7 @@ export function newReport(
   if (keeper) {
     body.description = keeper.description;
     const lines = keeper.changes.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    if (keeper.done) lines.push(`Set the work item ${keeper.done.title.replace(/\s+/g, ' ').trim() || 'Untitled'} to done: ow://relation/${keeper.done.id}`);
+    if (keeper.done) lines.push(doneLine(keeper.done));
     body.consequences = lines.length ? lines.join('\n') : NOTHING_CHANGED;
     for (const t of keeper.touched) {
       const field = NARRATIVE_LINKS[fold(t.type)];
@@ -785,13 +801,17 @@ export function deletableTakes(els: Iterable<El>, itemId: string, me: string, is
   return (readTakes(els).get(itemId) ?? []).filter(t => isHost || t.by === me).map(t => t.id);
 }
 
-/** My take on a work item: the taker's own Relation, in the item's own scope; the item is never edited by it. */
+/**
+ * My take on a work item: the taker's own Relation, in the item's own scope; the item is never edited by it.
+ * The scope is the item's mark copied as a writer writes an id (`writtenId`): a mark in the form in another case
+ * is not carried on into the Take.
+ */
 export function newTake(item: { id: string; title: string; roomOf: string }, character: string | null): Record<string, unknown> {
   const body: Record<string, unknown> = {
     name: `Take: ${item.title}`.slice(0, 200),
     supertype: SUPERTYPE.take,
     subtype: 'taken',
-    [ROOM_MARK]: item.roomOf,
+    [ROOM_MARK]: writtenId(item.roomOf),
     [ROOM_ITEM]: item.id,
   };
   if (character) body.actor = character;
@@ -989,7 +1009,7 @@ export function completionPatch(
   done: ReadonlyArray<{ id: string; title: string }>,
 ): Record<string, unknown> {
   const lines = part.changes.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  for (const d of done) lines.push(`Set the work item ${d.title.replace(/\s+/g, ' ').trim() || 'Untitled'} to done: ow://relation/${d.id}`);
+  for (const d of done) lines.push(doneLine(d));
   const body: Record<string, unknown> = {
     subtype: REPORT_COMPLETED,
     description: part.description.trim(),
