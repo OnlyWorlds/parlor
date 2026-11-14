@@ -27,7 +27,7 @@
  * may write that mark, never the room's.
  */
 
-import { ELEMENT_TYPES, FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readOwLinkAt, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
+import { FIELD_SCHEMA, charterOf, findOwLinks, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
 import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when';
 
 export interface El {
@@ -228,58 +228,43 @@ function readReportPart(el: El): ReportPart {
 }
 
 const HAS_WORDS = /[\p{L}\p{N}]/u;
-const UUID_RUN = '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}';
-/**
- * A cheap look at one start, sticky (`lastIndex` = the start), before `readOwLinkAt` is asked: a start no address
- * can begin at is passed over. The text form: `ow://`, then a type word, `/` and an id, or a world's id. The site's
- * form: its prefix, then a run that is an id or may be a slug, not cut inside a word (a letter, a combining mark or
- * an underscore after it, the SDK's own class: never stricter, so a number after it is not). Everything `readOwLinkAt` reads
- * passes; what passes is still read by it, which decides whether there is an address and where it ends.
- */
-const MAY_BE_ADDRESS = new RegExp(
-  `ow://(?:(?:${ELEMENT_TYPES.join('|')})/)?${UUID_RUN}`
-  + `|https://www\\.onlyworlds\\.com/w/(?:${UUID_RUN}|[a-z0-9-]{3,40})(?![\\p{L}\\p{M}_])`,
-  'uy',
-);
+
+/** Opening marks an address may follow, each with its closing mark. */
+const PAIRS = new Map([['(', ')'], ['[', ']'], ['"', '"'], ['\'', '\''], ['“', '”'], ['‘', '’'], ['«', '»']]);
 
 /**
  * A line of `consequences` as a person reads it: its words, and the address that follows them (the report
  * profile: "the element named in words before its address"), kept apart so the room shows the words and
- * keeps the address beside them, as written. A line with no address is all words (rule 8); one with only an
- * address keeps it.
+ * keeps the address beside them, as written. A line with no address is all words (rule 8); one that starts with
+ * its address keeps the whole line as its words, the address still kept apart.
  *
- * The address is found as the address profile reads one in prose (serial 123), by the SDK's `readOwLinkAt`: it
- * ends where its own reading ends, and what follows is prose, a full stop included. Of several, the line's last.
- * Text that does not read as an address (`ow://object/o1`: no id) is words. In the words, the separator before
- * the address goes (`: `, a bracket opened on it) and so does the line's closing punctuation after it; prose after
- * it stays.
+ * Addresses are found as the address profile reads them in prose (serial 127), by the SDK's `findOwLinks`, in both
+ * forms: one glued to a word before it ("elbow://…") is none, and each ends where its own reading ends, so what
+ * follows is prose, a full stop included. Of several, the line's last. Text that does not read as an address
+ * (`ow://object/o1`: no id) is words. The address leaves the words only when it stands apart (at the line's start,
+ * after a space or a colon, or after an opening bracket or quote); after a hyphen, a digit or another mark the whole
+ * line is the words. In the words, the separator before the address goes (`: `, a bracket or quote opened on it),
+ * with that opener's closer right after the address, and so does the line's closing punctuation after it; prose
+ * after it stays.
  */
 export function splitConsequence(line: string): { words: string; address: string | null } {
-  // One pass for the starts that may hold an address; then the last of them that reads, read from the line's end.
-  const starts: number[] = [];
-  for (const prefix of ['ow://', 'https://www.onlyworlds.com/w/']) {
-    for (let i = line.indexOf(prefix); i !== -1; i = line.indexOf(prefix, i + prefix.length)) {
-      MAY_BE_ADDRESS.lastIndex = i;
-      if (MAY_BE_ADDRESS.test(line)) starts.push(i);
-    }
-  }
-  starts.sort((a, b) => b - a);
-  let at = -1;
-  let end = -1;
-  for (const i of starts) {
-    const found = readOwLinkAt(line, i);
-    if (found) { at = i; end = found.end; break; }
-  }
-  if (at < 0) return { words: line, address: null };
+  const all = findOwLinks(line);
+  if (!all.length) return { words: line, address: null };
+  const { start: at, end } = all[all.length - 1];
   const address = line.slice(at, end);
+  const opener = at > 0 && PAIRS.has(line[at - 1]) ? line[at - 1] : null;
+  // Glued to a hyphen, a digit or another mark (`x-ow://…`): cutting it out would leave the mark in the words.
+  if (at > 0 && !opener && line[at - 1] !== ':' && !/\s/.test(line[at - 1])) return { words: line, address };
   // The separator before the address, walked back by hand (a trailing-anchored pattern is quadratic on a long run).
-  let k = at;
+  let k = opener ? at - 1 : at;
   while (k > 0 && (line[k - 1] === ':' || line[k - 1] === '(' || /\s/.test(line[k - 1]))) k--;
   const before = line.slice(0, k).trim();
   let after = line.slice(end).trim();
+  // The closer of the bracket or quote the separator opened leaves with the address.
+  const closer = PAIRS.get(line.slice(k, at).trimEnd().slice(-1));
+  if (closer && after.startsWith(closer)) after = after.slice(closer.length).trimStart();
   if (!HAS_WORDS.test(after)) after = '';
-  else if (line.slice(k, at).trimEnd().endsWith('(')) after = after.replace(/^\)\s*/, '');
-  if (!before) return { words: after ? line.trim() : address, address: null };
+  if (!before) return { words: line.trim(), address };
   if (!after) return { words: before, address };
   return { words: `${before}${/^[,.;:!?)\]]/.test(after) ? '' : ' '}${after}`, address };
 }

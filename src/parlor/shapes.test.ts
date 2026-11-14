@@ -181,7 +181,8 @@ describe('reports (schema-dist profiles/report.md)', () => {
     expect(splitConsequence(`Renamed the Steinway: ${O}`)).toEqual({ words: 'Renamed the Steinway', address: O });
     expect(splitConsequence(`Linked Ada ${C}`)).toEqual({ words: 'Linked Ada', address: C });
     expect(splitConsequence('Set the subtype of 3 Objects to surveyed')).toEqual({ words: 'Set the subtype of 3 Objects to surveyed', address: null });
-    expect(splitConsequence(O)).toEqual({ words: O, address: null });
+    // A line that starts with its address keeps the whole line as its words, the address kept apart.
+    expect(splitConsequence(O)).toEqual({ words: O, address: O });
     expect(splitConsequence('nothing changed')).toEqual({ words: 'nothing changed', address: null });
     // A full stop or a bracket after the address is prose, never part of it.
     expect(splitConsequence(`Renamed the Steinway: ${O}.`)).toEqual({ words: 'Renamed the Steinway', address: O });
@@ -229,8 +230,8 @@ describe('reports (schema-dist profiles/report.md)', () => {
     }
   }, 120000);
 
-  // The cheap look before readOwLinkAt is never stricter than it: a site-form world followed by a number (one the SDK
-  // does not read as cutting a word, as it does a letter, a combining mark or an underscore) is still an address.
+  // A site-form world followed by a number (one the SDK does not read as cutting a word, as it does a letter, a
+  // combining mark or an underscore) is still an address.
   it('a site-form world followed by a non-ASCII number is still found', () => {
     for (const n of ['²', '٣', 'Ⅷ']) {
       expect(splitConsequence(`Opened the hall: https://www.onlyworlds.com/w/hyperion${n}`).address, `followed by U+${n.codePointAt(0)!.toString(16)}`)
