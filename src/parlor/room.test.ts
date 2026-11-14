@@ -230,6 +230,18 @@ describe('Room.complete', () => {
     expect(p.map(c => `${c.type}:${c.id}`)).toEqual([`relation:${U}`, 'narrative:r1']);
     expect(p[1].body!.consequences).toBe(`Dock 4 back in service\nSet the work item Item ${U.toLowerCase()} to done: ow://relation/${U.toLowerCase()}`);
   });
+
+  it('an answer with no hyphens is sent as written, and consequences names the id keel served for it', async () => {
+    const served = '019a2c7e-41b0-7a12-8c3d-6e5f4a3b2c22';
+    const NO_HYPHENS = served.replace(/-/g, '').toUpperCase();
+    rows.set('r1', report({ relations: [served], x_report_answers: [NO_HYPHENS, 'i-gone'] }));
+    rows.set(NO_HYPHENS, item(served));
+    await room().complete('r1', 7, part, true, new Set());
+    const p = patches();
+    expect(p.map(c => `${c.type}:${c.id}`)).toEqual([`relation:${NO_HYPHENS}`, 'narrative:r1']);
+    // The gone answer (keel returned nothing for it) writes no line.
+    expect(p[1].body!.consequences).toBe(`Dock 4 back in service\nSet the work item Item ${served} to done: ow://relation/${served}`);
+  });
 });
 
 // Pins (nothing moves): the report fixture's two cases of the address profile's "The same id" (serial 122), as the

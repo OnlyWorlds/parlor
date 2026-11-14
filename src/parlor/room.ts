@@ -509,7 +509,11 @@ export class Room {
       if (fresh.hidden === true) throw new ReportMoved('hidden');
       const at = typeof fresh.change_seq === 'number' ? fresh.change_seq : null;
       if (seq !== null && at !== null && at !== seq) throw new ReportMoved('changed', fresh);
+      // `done` holds each answer as written (what this card's next press matches); `said` the same items by the id
+      // keel served for them, which is what `consequences` names (the address profile's "The same id": a writer
+      // writes the element's own id, never an answer's other spelling). An answer keel did not return says nothing.
       const done: { id: string; title: string }[] = [];
+      const said: { id: string; title: string }[] = [];
       // Items this card set done on an earlier press are always said, whatever the box says now; new dones only with it.
       if (setDone || doneBefore.size) {
         for (const id of reportPartOf(fresh).answers) {
@@ -519,16 +523,20 @@ export class Room {
           // A work item by its pair: the profile's reader reads one with or without the room mark.
           if (!isWorkItemPair(item)) continue;
           const title = (item.name ?? '').toString();
-          if (simpleCaseFold(String(item.subtype ?? '').trim()) === 'done') { if (doneBefore.has(id)) done.push({ id, title }); continue; }
+          if (simpleCaseFold(String(item.subtype ?? '').trim()) === 'done') {
+            if (doneBefore.has(id)) { done.push({ id, title }); said.push({ id: item.id, title }); }
+            continue;
+          }
           if (!setDone || !maySetDone(item)) continue;
           try { this.landed(await this.client.patch('relation', id, { subtype: 'done' })); } catch (err) {
             // A lost answer may have set it: counted, so the next press says so (the item reads done then).
             throw new CompletionFailed(err instanceof OwNetworkError ? [...done, { id, title }] : done, err);
           }
           done.push({ id, title });
+          said.push({ id: item.id, title });
         }
       }
-      const body = completionPatch(fresh, part, done);
+      const body = completionPatch(fresh, part, said);
       try {
         this.landed(await this.client.patch('narrative', reportId, body, at !== null ? { ifMatch: at } : undefined));
       } catch (err) {
