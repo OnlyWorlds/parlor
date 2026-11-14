@@ -27,7 +27,7 @@
  * may write that mark, never the room's.
  */
 
-import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readOwLinkAt, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
+import { ELEMENT_TYPES, FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readOwLinkAt, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
 import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when';
 
 export interface El {
@@ -86,7 +86,7 @@ const ID_FORM = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0
  * inside a world two ids are the same only when written the same.
  */
 export function writtenId(id: string): string {
-  return ID_FORM.test(id) ? id.toLowerCase() : id;
+  return typeof id === 'string' && ID_FORM.test(id) ? id.toLowerCase() : id;
 }
 
 /** The line a completion writes for a work item it set done: the item named in words, then its address. */
@@ -227,8 +227,19 @@ function readReportPart(el: El): ReportPart {
   };
 }
 
-const ADDRESS_PREFIXES = ['ow://', 'https://www.onlyworlds.com/w/'];
 const HAS_WORDS = /[\p{L}\p{N}]/u;
+const UUID_RUN = '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}';
+/**
+ * A cheap look at one start, sticky (`lastIndex` = the start), before `readOwLinkAt` is asked: a start no address
+ * can begin at is passed over. The text form: `ow://`, then a type word, `/` and an id, or a world's id. The site's
+ * form: its prefix, then a run that is an id or may be a slug, not cut inside a word. Everything `readOwLinkAt` reads
+ * passes; what passes is still read by it, which decides whether there is an address and where it ends.
+ */
+const MAY_BE_ADDRESS = new RegExp(
+  `ow://(?:(?:${ELEMENT_TYPES.join('|')})/)?${UUID_RUN}`
+  + `|https://www\\.onlyworlds\\.com/w/(?:${UUID_RUN}|[a-z0-9-]{3,40})(?![\\p{L}\\p{M}\\p{N}_-])`,
+  'uy',
+);
 
 /**
  * A line of `consequences` as a person reads it: its words, and the address that follows them (the report
@@ -243,21 +254,30 @@ const HAS_WORDS = /[\p{L}\p{N}]/u;
  * it stays.
  */
 export function splitConsequence(line: string): { words: string; address: string | null } {
+  // One pass for the starts that may hold an address; then the last of them that reads, read from the line's end.
+  const starts: number[] = [];
+  for (const prefix of ['ow://', 'https://www.onlyworlds.com/w/']) {
+    for (let i = line.indexOf(prefix); i !== -1; i = line.indexOf(prefix, i + prefix.length)) {
+      MAY_BE_ADDRESS.lastIndex = i;
+      if (MAY_BE_ADDRESS.test(line)) starts.push(i);
+    }
+  }
+  starts.sort((a, b) => b - a);
   let at = -1;
   let end = -1;
-  for (const prefix of ADDRESS_PREFIXES) {
-    for (let i = line.indexOf(prefix); i !== -1; i = line.indexOf(prefix, i + 1)) {
-      const found = readOwLinkAt(line, i);
-      if (found && i > at) { at = i; end = found.end; }
-    }
+  for (const i of starts) {
+    const found = readOwLinkAt(line, i);
+    if (found) { at = i; end = found.end; break; }
   }
   if (at < 0) return { words: line, address: null };
   const address = line.slice(at, end);
-  const head = line.slice(0, at);
-  const before = head.replace(/[\s:(]+$/, '').trim();
+  // The separator before the address, walked back by hand (a trailing-anchored pattern is quadratic on a long run).
+  let k = at;
+  while (k > 0 && (line[k - 1] === ':' || line[k - 1] === '(' || /\s/.test(line[k - 1]))) k--;
+  const before = line.slice(0, k).trim();
   let after = line.slice(end).trim();
   if (!HAS_WORDS.test(after)) after = '';
-  else if (/\(\s*$/.test(head)) after = after.replace(/^\)\s*/, '');
+  else if (line.slice(k, at).trimEnd().endsWith('(')) after = after.replace(/^\)\s*/, '');
   if (!before) return { words: after ? line.trim() : address, address: null };
   if (!after) return { words: before, address };
   return { words: `${before}${/^[,.;:!?)\]]/.test(after) ? '' : ' '}${after}`, address };

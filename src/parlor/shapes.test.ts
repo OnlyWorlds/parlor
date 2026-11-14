@@ -6,7 +6,7 @@ import {
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
   newReport, reportName, localDay, REPORT_ANSWERS, storyStart, splitConsequence,
-  unmarkedCharters, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED,
+  unmarkedCharters, writtenId, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
@@ -211,6 +211,28 @@ describe('reports (schema-dist profiles/report.md)', () => {
     // The site's form is an address too.
     expect(splitConsequence(`Opened the hall: https://www.onlyworlds.com/w/hyperion/event/${id}.`))
       .toEqual({ words: 'Opened the hall', address: `https://www.onlyworlds.com/w/hyperion/event/${id}` });
+  });
+
+  // The room draws every line on every render: a long line of junk must cost time in proportion to its length.
+  // Timing on a busy machine flakes, so each size is the best of three, and growth is bounded as well as the time
+  // (a 2 ms floor under the 200 KB run keeps the ratio from reading timer noise).
+  it('a long line of near-addresses is read in linear time', () => {
+    const id = '01a1d4ef-0000-7000-8000-000000000084';
+    const best = (line: string) => Math.min(...[0, 1, 2].map(() => { const t = performance.now(); splitConsequence(line); return performance.now() - t; }));
+    const of = (unit: string, kb: number) => unit.repeat(Math.ceil((kb * 1024) / unit.length));
+    for (const unit of ['ow://object/ ', 'ow://object/a/', 'https://www.onlyworlds.com/w/ab_', `ow://thing/${id}`, `ow://object/${id}`]) {
+      const t200 = best(of(unit, 200));
+      const t400 = best(of(unit, 400));
+      expect(t200, `${unit} at 200 KB: ${t200.toFixed(1)} ms`).toBeLessThan(100);
+      expect(t400, `${unit} at 400 KB: ${t400.toFixed(1)} ms against ${t200.toFixed(1)} ms`).toBeLessThanOrEqual(3 * Math.max(t200, 2));
+    }
+  }, 120000);
+
+  it('writtenId leaves anything that is not a string as it came', () => {
+    const U = '019A2C7E-41B0-7A12-8C3D-6E5F4A3B2C22';
+    expect(writtenId(U)).toBe(U.toLowerCase());
+    const odd = [U] as unknown as string;
+    expect(writtenId(odd)).toBe(odd);
   });
 
   it("a handed-in report opens on its story's first three lines, at most 280 characters", () => {

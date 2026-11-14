@@ -242,6 +242,15 @@ describe('Room.complete', () => {
     // The gone answer (keel returned nothing for it) writes no line.
     expect(p[1].body!.consequences).toBe(`Dock 4 back in service\nSet the work item Item ${served} to done: ow://relation/${served}`);
   });
+
+  it('a served body with no id falls back to the answer itself, never an undefined address', async () => {
+    const noId = item('i-open') as Partial<El>;
+    delete noId.id;
+    rows.set('i-open', noId as El);
+    rows.set('r1', report({ x_report_answers: ['i-open'] }));
+    await room().complete('r1', 7, part, true, new Set());
+    expect(patches()[1].body!.consequences).toBe('Dock 4 back in service\nSet the work item Item i-open to done: ow://relation/i-open');
+  });
 });
 
 // Pins (nothing moves): the report fixture's two cases of the address profile's "The same id" (serial 122), as the

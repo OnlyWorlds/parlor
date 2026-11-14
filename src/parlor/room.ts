@@ -522,9 +522,11 @@ export class Room {
           try { item = await this.client.get('relation', id) as El; } catch (err) { if (gone(err)) continue; throw new CompletionFailed(done, err); }
           // A work item by its pair: the profile's reader reads one with or without the room mark.
           if (!isWorkItemPair(item)) continue;
+          // The id keel served; a body with none falls back to the answer itself, never `undefined`.
+          const servedId = typeof item.id === 'string' && item.id ? item.id : id;
           const title = (item.name ?? '').toString();
           if (simpleCaseFold(String(item.subtype ?? '').trim()) === 'done') {
-            if (doneBefore.has(id)) { done.push({ id, title }); said.push({ id: item.id, title }); }
+            if (doneBefore.has(id)) { done.push({ id, title }); said.push({ id: servedId, title }); }
             continue;
           }
           if (!setDone || !maySetDone(item)) continue;
@@ -533,7 +535,7 @@ export class Room {
             throw new CompletionFailed(err instanceof OwNetworkError ? [...done, { id, title }] : done, err);
           }
           done.push({ id, title });
-          said.push({ id: item.id, title });
+          said.push({ id: servedId, title });
         }
       }
       const body = completionPatch(fresh, part, said);
