@@ -232,6 +232,30 @@ describe('Room.complete', () => {
   });
 });
 
+// Pins (nothing moves): the report fixture's two cases of the address profile's "The same id" (serial 122), as the
+// room reads a report's parent. Inside a world two ids are the same only when written the same.
+describe('a report\'s parent and its id, as written', () => {
+  const report2 = (id: string, parent: string | null, at: string): El =>
+    ({ id, type: 'narrative', supertype: 'Report', x_room_of: WORLD, parent_narrative: parent, relations: [], created_at: at } as El);
+  const roomOf = (els: El[]) => { const r = room(); for (const e of els) r.feed.els.set(e.id, e); return r; };
+
+  it('I1: a parent that is a held report\'s id in upper case names no report', () => {
+    const A = '019a7120-0000-7000-8000-000000002801';
+    const r = roomOf([report2(A, null, '2026-11-12T09:00:00Z'), report2('019a7120-0000-7000-8000-000000002802', A.toUpperCase(), '2026-11-12T09:10:00Z')]);
+    expect(r.answers(A)).toEqual([]);
+    expect(r.lines().find(l => l.id.endsWith('2802'))!.parent).toBe(A.toUpperCase());
+  });
+
+  it('I2: one id held twice, the second copy in upper case, is two reports; a parent in lowercase names the first alone', () => {
+    const A = '019a7120-0000-7000-8000-000000002901';
+    const C = '019a7120-0000-7000-8000-000000002902';
+    const r = roomOf([report2(A, null, '2026-11-12T09:00:00Z'), report2(A.toUpperCase(), null, '2026-11-12T09:05:00Z'), report2(C, A, '2026-11-12T09:10:00Z')]);
+    expect(r.lines().map(l => l.id)).toEqual([A, A.toUpperCase(), C]);
+    expect(r.answers(A).map(l => l.id)).toEqual([C]);
+    expect(r.answers(A.toUpperCase())).toEqual([]);
+  });
+});
+
 describe('Room.take', () => {
   const take = async (mark: unknown) => {
     const r = room();
