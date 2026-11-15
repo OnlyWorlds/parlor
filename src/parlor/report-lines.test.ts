@@ -34,9 +34,22 @@ describe('the report lines fixture (rule 10, serial 129)', () => {
     expect(fixture.texts).toHaveLength(16);
   });
 
-  describe('each line: its address and the words shown', () => {
+  describe('each line: its address and the words shown, through the report as the room reads it', () => {
+    // A line the fixture gives untrimmed is read as given by the reader, but a report's text is trimmed into lines
+    // first (part 1), so the room never holds it: through the report it is its trimmed self, whole.
+    const untrimmed = fixture.cases.filter(c => c.line !== c.line.trim());
+    it('one case only is given untrimmed, and its words are its whole line', () => {
+      expect(untrimmed).toHaveLength(1);
+      expect(untrimmed[0].words).toBe(untrimmed[0].line);
+    });
     fixture.cases.forEach((c, i) => {
       it(`${i + 1} ${c.kind}`, () => {
+        const part = readLines([report(c.line)])[0].report!;
+        expect(part.consequences).toHaveLength(1);
+        const line = part.consequences[0];
+        const words = c.line === c.line.trim() ? c.words : line;
+        expect(consequenceLine(line, fixture.world)).toEqual({ words, address: c.address });
+        // The reader itself, handed the line as given.
         expect(consequenceLine(c.line, fixture.world)).toEqual({ words: c.words, address: c.address });
       });
     });
