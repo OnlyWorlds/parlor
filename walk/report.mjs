@@ -193,7 +193,8 @@ try {
   check('keel: a report on a work item links no sitting', !(e2.events ?? []).length, JSON.stringify(e2.events));
 
   // ------------------------------------------------------------ the keeper completes the first in the room (step 2)
-  const CHANGES = `Renamed the second ship: ow://object/${item.id}\nSet the subtype of 2 Objects to surveyed (a search for every Object finds them)`;
+  // The first line ends in a full stop, which the report profile's rule 10 keeps (a build before it dropped it).
+  const CHANGES = `Renamed the second ship: ow://object/${item.id}.\nSet the subtype of 2 Objects to surveyed (a search for every Object finds them)`;
   check('member: no Complete on a report', await r1.locator('[data-act="complete"]').count() === 0);
   const h1 = host.locator('.line.report', { hasText: MARK1 });
   const completeBtn = h1.locator('[data-act="complete"]');
@@ -217,7 +218,7 @@ try {
     const r = page.locator('.line.report', { hasText: `Two ships disagreed (${RUN})` });
     check(`${who}: the completed report shows its description open`, await until(() => r.getAttribute('data-report').then(v => v === 'completed'), 40000));
     check(`${who}: What changed, one row per line, its words shown and its address kept apart`, await r.locator('[data-part="report-changes"] li').count() === 2
-      && (await r.locator('[data-part="report-changes"] li').first().innerText()).trim() === 'Renamed the second ship'
+      && (await r.locator('[data-part="report-changes"] li').first().innerText()).trim() === 'Renamed the second ship.'
       && await r.locator('[data-part="report-changes"] li').first().getAttribute('data-address') === `ow://object/${item.id}`
       && await r.locator('[data-part="report-changes"] li').nth(1).getAttribute('data-address') === null
       && await r.locator('[data-part="report-changes"] a').count() === 0);
