@@ -5,11 +5,15 @@ import {
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
-  newReport, reportName, localDay, REPORT_ANSWERS, storyStart, splitConsequence,
+  newReport, reportName, localDay, REPORT_ANSWERS, storyStart, consequenceLine,
   unmarkedCharters, writtenId, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
+// schema-dist's report lines (v0.34.1-dist.129, profiles/report-lines.fixture.json): its world reads every line here.
+import reportLines from './fixtures/report-lines.fixture.json';
+
+const W = reportLines.world;
 
 /** A room element as the parlor makes it: the pair and the mark. */
 const el = (o: Partial<El> & { id: string; type: string }): El => ({ created_at: '2026-10-22T10:00:00Z', [ROOM_MARK]: 'w1', ...o });
@@ -175,43 +179,45 @@ describe('reports (schema-dist profiles/report.md)', () => {
     expect(kept.events).toEqual(['s1', 'e9']);
   });
 
-  it('a change reads as its words, its address kept apart; no address, or only one, as written', () => {
+  // The report profile's rule 10 (serial 129), read with the report lines fixture's own world: an address with no world
+  // names an element here, one of another world is prose.
+  it('a change reads as its words and the element it names in this world; no address, or another world\'s, as written', () => {
     const O = 'ow://object/01a1d4ef-0000-7000-8000-000000000084';
     const C = 'ow://0193a1c2-7d3e-7f00-8a11-3c5e7b9d2f40/character/01a1d4ef-0000-7000-8000-000000000085';
-    expect(splitConsequence(`Renamed the Steinway: ${O}`)).toEqual({ words: 'Renamed the Steinway', address: O });
-    expect(splitConsequence(`Linked Ada ${C}`)).toEqual({ words: 'Linked Ada', address: C });
-    expect(splitConsequence('Set the subtype of 3 Objects to surveyed')).toEqual({ words: 'Set the subtype of 3 Objects to surveyed', address: null });
-    // A line that starts with its address keeps the whole line as its words, the address kept apart.
-    expect(splitConsequence(O)).toEqual({ words: O, address: O });
-    expect(splitConsequence('nothing changed')).toEqual({ words: 'nothing changed', address: null });
-    // A full stop or a bracket after the address is prose, never part of it.
-    expect(splitConsequence(`Renamed the Steinway: ${O}.`)).toEqual({ words: 'Renamed the Steinway', address: O });
-    expect(splitConsequence(`Linked Ada (${C}).`)).toEqual({ words: 'Linked Ada', address: C });
+    expect(consequenceLine(`Renamed the Steinway: ${O}`, W)).toEqual({ words: 'Renamed the Steinway', address: O });
+    expect(consequenceLine(`Linked Ada ${C}`, W)).toEqual({ words: `Linked Ada ${C}`, address: null });
+    expect(consequenceLine('Set the subtype of 3 Objects to surveyed', W)).toEqual({ words: 'Set the subtype of 3 Objects to surveyed', address: null });
+    // A line that starts with its address keeps the whole line as its words, still naming its element.
+    expect(consequenceLine(O, W)).toEqual({ words: O, address: O });
+    expect(consequenceLine('nothing changed', W)).toEqual({ words: 'nothing changed', address: null });
+    // A full stop after the address is the line's, never the address's, and stays with the words.
+    expect(consequenceLine(`Renamed the Steinway: ${O}.`, W)).toEqual({ words: 'Renamed the Steinway.', address: O });
+    expect(consequenceLine(`Linked Ada (${C}).`, W)).toEqual({ words: `Linked Ada (${C}).`, address: null });
   });
 
-  // The address profile's "An address in prose" (serial 123) and the report profile's rule 8: the address ends where
-  // its own reading ends (the SDK's readOwLinkAt), and what follows is prose, a full stop included.
-  it('the address in a line ends where its reading ends; what follows is prose', () => {
+  // The address profile's "An address in prose" (serial 123): the address ends where its own reading ends (the SDK's
+  // readOwLinkAt). The report profile's rule 10: it leaves the words only when nothing the writer wrote is lost.
+  it('the address in a line ends where its reading ends; it leaves the words only when nothing is lost', () => {
     const id = '01a1d4ef-0000-7000-8000-000000000084';
     // The page's own example: the full stop is the line's, never the address's.
-    expect(splitConsequence(`Built the gate: ow://object/${id}.`)).toEqual({ words: 'Built the gate', address: `ow://object/${id}` });
-    // Prose after the address stays with the words; the address alone is kept apart.
-    expect(splitConsequence(`Moved ow://object/${id} to the hall.`)).toEqual({ words: 'Moved to the hall.', address: `ow://object/${id}` });
-    expect(splitConsequence(`Renamed the gate: ow://object/${id}, then hung it.`)).toEqual({ words: 'Renamed the gate, then hung it.', address: `ow://object/${id}` });
-    // Letters run on after the id: the address ends with its 36 characters.
-    expect(splitConsequence(`Built the gate: ow://object/${id}abc`)).toEqual({ words: 'Built the gate abc', address: `ow://object/${id}` });
-    // A fragment or another query key is not part of an address found in prose; a moment and a lens are.
-    expect(splitConsequence(`Built the gate: ow://object/${id}#notes`).address).toBe(`ow://object/${id}`);
-    expect(splitConsequence(`Built the gate: ow://object/${id}@12.`).address).toBe(`ow://object/${id}@12`);
-    // An id in upper case reads (an address is read in either case); the line keeps it as written.
-    expect(splitConsequence(`Built the gate: ow://object/${id.toUpperCase()}.`)).toEqual({ words: 'Built the gate', address: `ow://object/${id.toUpperCase()}` });
+    expect(consequenceLine(`Built the gate: ow://object/${id}.`, W)).toEqual({ words: 'Built the gate.', address: `ow://object/${id}` });
+    // Prose after the address stays with the words.
+    expect(consequenceLine(`Moved ow://object/${id} to the hall.`, W)).toEqual({ words: 'Moved to the hall.', address: `ow://object/${id}` });
+    expect(consequenceLine(`Renamed the gate: ow://object/${id}, then hung it.`, W)).toEqual({ words: 'Renamed the gate, then hung it.', address: `ow://object/${id}` });
+    // Letters run on after the id: the address ends with its 36 characters, and the whole line stays.
+    expect(consequenceLine(`Built the gate: ow://object/${id}abc`, W)).toEqual({ words: `Built the gate: ow://object/${id}abc`, address: `ow://object/${id}` });
+    // A fragment is not part of an address found in prose; a moment is, and the line names the element without it.
+    expect(consequenceLine(`Built the gate: ow://object/${id}#notes`, W).address).toBe(`ow://object/${id}`);
+    expect(consequenceLine(`Built the gate: ow://object/${id}@12.`, W).address).toBe(`ow://object/${id}`);
+    // An id in upper case reads (an address is read in either case): named lowercase, the line kept as written.
+    expect(consequenceLine(`Built the gate: ow://object/${id.toUpperCase()}.`, W)).toEqual({ words: `Built the gate: ow://object/${id.toUpperCase()}.`, address: `ow://object/${id}` });
     // What does not read as an address is words: no id, a short id, an upper-case prefix, an unknown type word.
     for (const line of ['Renamed the Steinway: ow://object/o1.', `Built: ow://object/${id.slice(0, 13)}.`, `Built: OW://object/${id}`, `Built: ow://thing/${id}`]) {
-      expect(splitConsequence(line)).toEqual({ words: line, address: null });
+      expect(consequenceLine(line, W)).toEqual({ words: line, address: null });
     }
-    // The site's form is an address too.
-    expect(splitConsequence(`Opened the hall: https://www.onlyworlds.com/w/hyperion/event/${id}.`))
-      .toEqual({ words: 'Opened the hall', address: `https://www.onlyworlds.com/w/hyperion/event/${id}` });
+    // The site's form with a slug for its world is prose.
+    const slug = `Opened the hall: https://www.onlyworlds.com/w/hyperion/event/${id}.`;
+    expect(consequenceLine(slug, W)).toEqual({ words: slug, address: null });
   });
 
   // The room draws every line on every render: a long line of junk must cost time in proportion to its length.
@@ -220,7 +226,7 @@ describe('reports (schema-dist profiles/report.md)', () => {
   // 200 KB run keeps the ratio from reading timer noise).
   it('a long line of near-addresses is read in linear time', () => {
     const id = '01a1d4ef-0000-7000-8000-000000000084';
-    const best = (line: string) => Math.min(...[0, 1, 2].map(() => { const t = performance.now(); splitConsequence(line); return performance.now() - t; }));
+    const best = (line: string) => Math.min(...[0, 1, 2].map(() => { const t = performance.now(); consequenceLine(line, W); return performance.now() - t; }));
     const of = (unit: string, kb: number) => unit.repeat(Math.ceil((kb * 1024) / unit.length));
     for (const unit of ['ow://object/ ', 'ow://object/a/', 'https://www.onlyworlds.com/w/ab_', `ow://thing/${id}`, `ow://object/${id}`]) {
       const t200 = best(of(unit, 200));
@@ -231,11 +237,13 @@ describe('reports (schema-dist profiles/report.md)', () => {
   }, 120000);
 
   // A site-form world followed by a number (one the SDK does not read as cutting a word, as it does a letter, a
-  // combining mark or an underscore) is still an address.
-  it('a site-form world followed by a non-ASCII number is still found', () => {
+  // combining mark or an underscore) is still found as an address, and a world alone names no element (rule 10):
+  // the line stays whole and names nothing.
+  it('a site-form world followed by a non-ASCII number names no element', () => {
     for (const n of ['²', '٣', 'Ⅷ']) {
-      expect(splitConsequence(`Opened the hall: https://www.onlyworlds.com/w/hyperion${n}`).address, `followed by U+${n.codePointAt(0)!.toString(16)}`)
-        .toBe('https://www.onlyworlds.com/w/hyperion');
+      const line = `Opened the hall: https://www.onlyworlds.com/w/hyperion${n}`;
+      expect(consequenceLine(line, W), `followed by U+${n.codePointAt(0)!.toString(16)}`)
+        .toEqual({ words: line, address: null });
     }
   });
 

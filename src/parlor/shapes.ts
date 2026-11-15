@@ -27,7 +27,7 @@
  * may write that mark, never the room's.
  */
 
-import { FIELD_SCHEMA, charterOf, findOwLinks, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
+import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readReportLine, readReportLines, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
 import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when';
 
 export interface El {
@@ -196,7 +196,7 @@ export interface ReportPart {
   word: string;
   /** The keeper's short human part (step 2); may already be there on a handed-in report. */
   description: string;
-  /** What changed, one entry per non-empty line, as written (rule 8: a line may have no address). */
+  /** What changed, one entry per line as the report profile splits a text (rule 10: every CR and LF a break, each trimmed, an empty one none; rule 8: a line may have no address). */
   consequences: string[];
   /** The ids in `x_report_answers`, non-empty strings, first place; the room keeps the work items it holds (rule 5). */
   answers: string[];
@@ -221,52 +221,22 @@ function readReportPart(el: El): ReportPart {
     state: folded === REPORT_HANDED_IN ? 'handed in' : folded === REPORT_COMPLETED ? 'completed' : 'other',
     word,
     description: str(el.description),
-    consequences: str(el.consequences).split(/\r?\n/).map(s => s.trim()).filter(Boolean),
+    consequences: readReportLines(str(el.consequences)).map(r => r.line),
     answers,
     proposed: proposedMarkOf(el) !== null,
   };
 }
 
-const HAS_WORDS = /[\p{L}\p{N}]/u;
-
-/** Opening marks an address may follow, each with its closing mark. */
-const PAIRS = new Map([['(', ')'], ['[', ']'], ['"', '"'], ['\'', '\''], ['“', '”'], ['‘', '’'], ['«', '»']]);
-
 /**
- * A line of `consequences` as a person reads it: its words, and the address that follows them (the report
- * profile: "the element named in words before its address"), kept apart so the room shows the words and
- * keeps the address beside them, as written. A line with no address is all words (rule 8); one that starts with
- * its address keeps the whole line as its words, the address still kept apart.
- *
- * Addresses are found as the address profile reads them in prose (serial 127), by the SDK's `findOwLinks`, in both
- * forms: one glued to a word before it ("elbow://…") is none, and each ends where its own reading ends, so what
- * follows is prose, a full stop included. Of several, the line's last. Text that does not read as an address
- * (`ow://object/o1`: no id) is words. The address leaves the words only when it stands apart (at the line's start,
- * after a space or a colon, or after an opening bracket or quote); after a hyphen, a digit or another mark the whole
- * line is the words. In the words, the separator before the address goes (`: `, a bracket or quote opened on it),
- * with that opener's closer right after the address, and so does the line's closing punctuation after it; prose
- * after it stays.
+ * A line of `consequences` as the room shows it (the report profile's rule 10, schema-dist v0.34.1-dist.129, read by
+ * the SDK's `readReportLine`): the words a reader shows, and the address of the element it names in this world,
+ * written `ow://<type>/<id>`, or null. The address leaves the words only where nothing the writer wrote is lost;
+ * otherwise the whole line stays, still naming its element. An address of another world, a slug or a world alone is
+ * prose.
  */
-export function splitConsequence(line: string): { words: string; address: string | null } {
-  const all = findOwLinks(line);
-  if (!all.length) return { words: line, address: null };
-  const { start: at, end } = all[all.length - 1];
-  const address = line.slice(at, end);
-  const opener = at > 0 && PAIRS.has(line[at - 1]) ? line[at - 1] : null;
-  // Glued to a hyphen, a digit or another mark (`x-ow://…`): cutting it out would leave the mark in the words.
-  if (at > 0 && !opener && line[at - 1] !== ':' && !/\s/.test(line[at - 1])) return { words: line, address };
-  // The separator before the address, walked back by hand (a trailing-anchored pattern is quadratic on a long run).
-  let k = opener ? at - 1 : at;
-  while (k > 0 && (line[k - 1] === ':' || line[k - 1] === '(' || /\s/.test(line[k - 1]))) k--;
-  const before = line.slice(0, k).trim();
-  let after = line.slice(end).trim();
-  // The closer of the bracket or quote the separator opened leaves with the address.
-  const closer = PAIRS.get(line.slice(k, at).trimEnd().slice(-1));
-  if (closer && after.startsWith(closer)) after = after.slice(closer.length).trimStart();
-  if (!HAS_WORDS.test(after)) after = '';
-  if (!before) return { words: line.trim(), address };
-  if (!after) return { words: before, address };
-  return { words: `${before}${/^[,.;:!?)\]]/.test(after) ? '' : ' '}${after}`, address };
+export function consequenceLine(line: string, world: string): { words: string; address: string | null } {
+  const { words, address } = readReportLine(line, { world });
+  return { words, address };
 }
 
 /** A handed-in report's opening in the room: its first three lines, at most 280 characters; `cut` when more remain. */

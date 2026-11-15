@@ -6,7 +6,7 @@
  * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, splitConsequence, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, consequenceLine, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
 import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
@@ -811,7 +811,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         r.state === 'handed in' && !r.proposed ? h('p', { class: 'sys' }, 'Not completed yet: a host reads it next.') : null,
         r.state === 'completed'
           ? h('div', { class: 'report-changes', 'data-part': 'report-changes' }, h('div', { class: 'ph' }, 'What changed'),
-            r.consequences.length ? h('ul', null, r.consequences.map(c => { const { words, address } = splitConsequence(c); return h('li', address ? { title: address, 'data-address': address } : null, words); })) : h('p', { class: 'sys' }, 'No changes written.'))
+            r.consequences.length ? h('ul', null, r.consequences.map(c => { const { words, address } = consequenceLine(c, room.world.id); return h('li', address ? { title: address, 'data-address': address } : null, words); })) : h('p', { class: 'sys' }, 'No changes written.'))
           : null,
         ...story,
         fileBlock(l.id, l.by)));
