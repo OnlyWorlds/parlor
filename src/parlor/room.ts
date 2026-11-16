@@ -20,6 +20,7 @@ import {
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
 import { RoomFiles, filesName } from './files';
+import { hostLine, isHostRefusal } from './host';
 
 /** A report born completed, pressed by a seat that no longer keeps the world: nothing was sent. */
 export class KeeperOnly extends Error {}
@@ -54,6 +55,8 @@ export function problemLine(err: unknown, doing: string): string {
     const e = err as { status: number; code?: string | null };
     if (e.status === 401) return `Your PIN did not match while ${doing}. Check your PIN on Your parlors.`;
     if (e.code === 'not_author') return 'Only the person who made it can change that.';
+    // The web host's refusal, before the API saw it: not the seat (its own words, nothing was written).
+    if (isHostRefusal(err)) return hostLine(err, 'this', 'Nothing was written.', doing);
     if (e.status === 403) return `Your seat in this world cannot do that (${doing}).`;
     if (e.status === 429) return 'Too many requests for a moment. Wait a little and try again.';
     if (e.code === 'pin_required') return 'Your account needs a PIN before it can write. Set one on onlyworlds.com, under Account settings.';

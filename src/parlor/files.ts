@@ -15,6 +15,7 @@ import {
   type OwFileKind, type OwFileTicket, type OwMe, type OwV2Client, type OwWorldFileRow,
 } from '@onlyworlds/sdk';
 import { serialQueue } from './serial';
+import { hostLine, isHostRefusal } from './host';
 import { byCodePoint, earlierFirst } from './when';
 
 /** keel's 25 MB is binary: 26,214,400 bytes. */
@@ -72,6 +73,8 @@ export function fileProblem(err: unknown, name: string): { line: string; retry: 
   if (c === 'quota_exceeded') return { line: `${name} was not added: this world has added as many files as it may today. Try again tomorrow.`, retry: false };
   if (c === 'ticket_expired' || c === 'ticket_invalid' || c === 'ticket_used') return { line: `${name} was not added: its sending took too long.`, retry: true };
   if (status(err) === 404) return { line: `${name} was not added: the line is gone, or hidden from you.`, retry: false };
+  // The web host's refusal, before the API saw it (its name or label held the text): not the seat.
+  if (isHostRefusal(err)) return { line: hostLine(err, name, 'Nothing was added.'), retry: true };
   if (c === 'not_author' || status(err) === 403) return { line: `${name} was not added: your seat cannot add a file to that line.`, retry: false };
   if (c === 'pin_required' || status(err) === 401) return { line: `${name} was not added: your PIN did not match. Check your PIN on Your parlors.`, retry: false };
   if (status(err) === 429) return { line: `${name} was not added: too many requests for a moment. Wait a little and try again.`, retry: true };
