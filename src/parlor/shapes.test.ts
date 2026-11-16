@@ -5,7 +5,7 @@ import {
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
-  newReport, reportName, localDay, REPORT_ANSWERS, storyStart, consequenceLine,
+  newReport, reportName, localDay, REPORT_ANSWERS, storyStart, saidIn, consequenceLine,
   unmarkedCharters, writtenId, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED,
 } from './shapes';
 // schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
@@ -260,6 +260,14 @@ describe('reports (schema-dist profiles/report.md)', () => {
     const long = storyStart('y'.repeat(400));
     expect(long.cut).toBe(true);
     expect(long.text.length).toBe(280);
+  });
+
+  it('a free report names its sitting once: the default name already says Sitting', () => {
+    expect(saidIn('Sitting, November 16')).toBe('said in Sitting, November 16');
+    expect(saidIn('sitting two')).toBe('said in sitting two');
+    expect(saidIn('Kickoff')).toBe('said in the sitting Kickoff');
+    expect(saidIn('Sittings review')).toBe('said in the sitting Sittings review');
+    expect(saidIn('Untitled')).toBe('said in the sitting Untitled');
   });
 
   it('the name is the first line with words, cut, then the day', () => {

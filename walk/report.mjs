@@ -149,7 +149,9 @@ try {
     const newest = sits.at(-1);
     check('keel: a report on no entry or item hangs on the newest sitting by events', !!newest && JSON.stringify(e1.events) === JSON.stringify([newest.id]),
       JSON.stringify({ events: e1.events, newest: newest?.id, sittings: sits.length }));
-    const said = `said in the sitting ${String(newest?.name ?? '').replace(/\s+/g, ' ').trim() || 'Untitled'}`;
+    // The room's own sittings are named "Sitting, <day>": the line says the word once ("said in Sitting, November 16").
+    const sitName = String(newest?.name ?? '').replace(/\s+/g, ' ').trim() || 'Untitled';
+    const said = sitName.toLowerCase().startsWith('sitting') && !/^sitting\w/i.test(sitName) ? `said in ${sitName}` : `said in the sitting ${sitName}`;
     check('member: the report says the sitting it was said in', await until(async () => (await r1.locator('[data-part="report-sitting"]').innerText({ timeout: 1000 }).catch(() => '')) === said, 10000), said);
   }
   { const title = await r1.locator('.report-title').innerText(); check('member: its title carries the day', [...days()].some(d => title.endsWith(`, ${d}`))); }

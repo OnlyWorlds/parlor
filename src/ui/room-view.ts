@@ -6,7 +6,7 @@
  * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, consequenceLine, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
 import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
@@ -798,7 +798,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           r.proposed ? h('span', { class: 'chip prop', 'data-part': 'report-proposed' }, 'Proposed') : null,
           ...answered.map(id => h('span', { class: 't' }, `answers ${workItems.get(id)!.title || 'Untitled'}`)),
           anchor ? h('span', { class: 't' }, `on ${anchor.title || 'Untitled'}`) : null,
-          sitName ? h('span', { class: 't', 'data-part': 'report-sitting' }, `said in the sitting ${sitName}`) : null,
+          sitName ? h('span', { class: 't', 'data-part': 'report-sitting' }, saidIn(sitName)) : null,
           hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
           hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
           room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this report') : null,

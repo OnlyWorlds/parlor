@@ -248,6 +248,12 @@ export function storyStart(story: string): { text: string; cut: boolean } {
   return { text, cut };
 }
 
+/** Where a free report was said, by its sitting's name: a name that already opens with the word (the parlor's own
+ * "Sitting, November 16") is not given it twice. */
+export function saidIn(sittingName: string): string {
+  return /^sitting\b/i.test(sittingName) ? `said in ${sittingName}` : `said in the sitting ${sittingName}`;
+}
+
 /** The sender's own day, as the report's name carries it. */
 export function localDay(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
