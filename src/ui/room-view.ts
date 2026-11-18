@@ -1301,18 +1301,19 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     hostKey = key;
     const start = h('button', { class: 'btn std', type: 'button', onclick: async () => {
       const when = new Date().toLocaleDateString([], { day: 'numeric', month: 'long' });
+      hostOpen = true;
       try { await room.startSitting(`Sitting, ${when}`); } catch (err) { notice(problemLine(err, 'starting the sitting'), true); }
     } }, s ? 'Start a new sitting' : 'Start the first sitting');
     const sw = (which: keyof Switches, label: string) => s && h('button', {
       class: 'btn std', type: 'button', 'aria-pressed': String(s[which]),
-      onclick: async () => { try { await room.setSwitch(which, !s[which]); } catch (err) { notice(problemLine(err, 'changing a switch'), true); } },
+      onclick: async () => { hostOpen = true; try { await room.setSwitch(which, !s[which]); } catch (err) { notice(problemLine(err, 'changing a switch'), true); } },
     }, `${label}: ${s[which] ? 'on' : 'off'}`);
     clear(host, h('div', { class: 'hostbar' },
       h('h3', null, 'Host'),
       s && reading ? h('div', { class: 'phases', 'aria-label': 'Phase' }, PHASES.map(p => h('span', { class: p.name === s.phase ? 'pp now' : 'pp' }, p.name))) : null,
       s && !reading ? h('div', { class: 'phases', role: 'group', 'aria-label': 'Phase' }, PHASES.map(p => h('button', {
         class: p.name === s.phase ? 'pp now' : 'pp', type: 'button', 'aria-pressed': String(p.name === s.phase),
-        onclick: async () => { try { await room.setPhase(p.name); } catch (err) { notice(problemLine(err, 'moving the phase'), true); } },
+        onclick: async () => { hostOpen = true; try { await room.setPhase(p.name); } catch (err) { notice(problemLine(err, 'moving the phase'), true); } },
       }, p.name))) : null,
       s && !reading ? h('div', { class: 'sw' }, sw('hearts', 'Hearts'), sw('specs', 'Specs shown'), sw('voting', 'Voting')) : null,
       h('div', { class: 'btns' }, start),

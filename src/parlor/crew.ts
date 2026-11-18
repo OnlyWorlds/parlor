@@ -34,7 +34,6 @@ export interface Crew {
   people: Array<{ seat: CrewSeat; ais: CrewSeat[] }>;
 }
 
-const FALLBACK_NAMES = new Set(['A member', 'The owner']);
 
 /**
  * The crew from the roster, by the team rule the OnlyWorlds Dashboard uses (`buildTeam`, vendored in team.ts). After
@@ -62,7 +61,8 @@ export function crewOf(o: {
       const own = o.memberCharacters.get(p.key);
       if (own) {
         character = own.id;
-        if (FALLBACK_NAMES.has(name) && own.name.trim()) name = own.name.trim();
+        // Their Character's name leads, as for any person (the team rule reads a served username only after it).
+        if (own.name.trim()) name = own.name.trim();
       }
     }
     const seat: CrewSeat = { key: p.key, name, ai: false, character, role: roleOf(p.key), you: p.you, plays: null };

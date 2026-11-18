@@ -15,7 +15,7 @@ describe('the crew', () => {
   const members: OwMember[] = [
     member({ id: null, kind: 'owner', role: 'owner', character: 'c-titus' }),
     member({ id: 'm-jas', role: 'contributor', character: 'c-jasper' }),
-    member({ id: 'm-noch', role: 'contributor', character: null }),
+    member({ id: 'm-noch', role: 'contributor', character: null, name: 'noor-login' }),
     member({ id: 'm-bare', role: 'contributor', character: null }),
     member({ id: 'a-von', kind: 'agent', role: 'contributor', character: 'c-vonkje', name: 'vonkje-seat', sponsor_member: null }),
     member({ id: 'a-kael', kind: 'agent', role: 'contributor', character: 'c-kael', name: 'kael', sponsor_member: 'owner' }),
@@ -43,7 +43,7 @@ describe('the crew', () => {
     expect(keys).not.toContain('m-gone');
   });
 
-  it('gives a person with no roster Character the Member Character they made, and its name', () => {
+  it('gives a person with no roster Character the Member Character they made, its name over a served username', () => {
     const noor = crew.people.find(p => p.seat.key === 'm-noch')!.seat;
     expect(noor.character).toBe('c-own');
     expect(noor.name).toBe('Noor');
