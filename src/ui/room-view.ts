@@ -7,7 +7,7 @@
  */
 
 import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
-import { seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
+import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
 import { newestNote } from '../parlor/team';
 import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
 import { isAfter } from '../parlor/when';
@@ -760,8 +760,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // -------------------------------------------------- moving between rooms
   /** Open a room: the team chat, or a seat's by its key. A seat's room takes plain lines, so a report or an answer is let go. */
   function openSpace(next: string): void {
-    // Seat rooms are a team world's alone (a workshop world keeps its one room).
-    if (next !== 'team' && !room.teamWorld) return;
+    // Seat rooms are a team world's alone (a workshop world keeps its one room), and only a beast's (roomSeat).
+    if (next !== 'team' && (!room.teamWorld || !roomSeat(crewNow, next))) return;
     if (next !== 'team') {
       if (reporting) { reporting = false; finishBox.checked = false; drawReportMode(); }
       if (replyTo && !replyTo.line) { replyTo = null; drawReply(); notice('A seat\'s room takes plain lines: the answer was let go, your text is kept.'); }
@@ -866,7 +866,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     seatsNow = seatsByKey(crewNow);
     // A seat whose room went (it left, or its Character is no longer served) brings the room back to the team chat.
     // A workshop world has no seat rooms.
-    if (space !== 'team' && (!room.teamWorld || !seatsNow.get(space)?.character)) { space = 'team'; cardId = null; dropLineReply(); }
+    if (space !== 'team' && (!room.teamWorld || !roomSeat(crewNow, space))) { space = 'team'; cardId = null; dropLineReply(); }
     const work = room.work();
     const notes = room.roster ? [...room.els.values()].filter(el => el.type === 'narrative' && el.supertype === 'Note') : [];
     lineOf = new Map([...seatsNow.values()].map(s => [s.key, room.roster
@@ -1164,11 +1164,12 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   }
   function crewRow(s: CrewSeat, personName: string | null): HTMLElement {
     const wl = lineOf.get(s.key) ?? null;
-    // Whose room a press opens: its own; an AI that plays its person's Character, its person's; none with no Character.
+    // Only a beast's row opens a room (its own); a person and a person's AI keep their rows, not pressable.
     // A workshop world has no seat rooms: its rows only say who is here.
-    const target = !room.teamWorld ? null : s.plays ? (seatsNow.get(s.plays)?.character ? s.plays : null) : s.character ? s.key : null;
+    const target = room.teamWorld && roomSeat(crewNow, s.key) ? s.key : null;
+    const beast = crewNow.beasts.some(b => b.key === s.key);
     const busy = !!wl?.working;
-    const status = s.plays ? `plays ${personName ?? 'its person'}` : !s.character && room.teamWorld ? 'no room you can see' : wl?.on ? '' : s.ai ? 'free' : `${s.role ?? 'member'}${s.you ? ', you' : ''}`;
+    const status = s.plays ? `plays ${personName ?? 'its person'}` : beast && !s.character && room.teamWorld ? 'no room you can see' : wl?.on ? '' : s.ai ? 'free' : `${s.role ?? 'member'}${s.you ? ', you' : ''}`;
     const inner = [
       seatBody(s.name, s.ai, busy, wl?.on ? 38 : 26),
       h('span', { class: 'mid' }, h('span', { class: 'nm' }, s.name), status ? h('span', { class: 'st' }, status) : null,
@@ -1180,7 +1181,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     ];
     const cls = `row${wl?.on ? '' : ' free'}`;
     return target
-      ? h('button', { class: cls, type: 'button', 'data-seat': s.key, 'data-focus': `crew:${s.key}`, 'aria-current': String(!s.plays && space === target), onclick: () => openSpace(target) }, inner)
+      ? h('button', { class: cls, type: 'button', 'data-seat': s.key, 'data-focus': `crew:${s.key}`, 'aria-current': String(space === target), onclick: () => openSpace(target) }, inner)
       : h('div', { class: `${cls} none`, 'data-seat': s.key }, inner);
   }
   function drawCrew(): void {

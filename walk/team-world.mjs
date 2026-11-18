@@ -8,10 +8,11 @@
 // key for the member (to write its Note), revoked by its id.
 //
 // One door is played, and only that one: GET /members on the host's page and the phone's. keel's roster for the test
-// world holds no AI seat and no person with a roster Character, so the played answer adds two AI rows (one no one
-// answers for, one the owner answers for) and gives the member's row the Member Character it already writes as (so its
-// Note's sender reads verified, as for a person whose seat names a Character). Every other read and every write is
-// keel's. The member's own page reads keel's roster as served.
+// world holds no AI seat, and only an AI no one answers for (a beast) has a room, so the played answer adds two AI rows
+// (a beast writing as its own Character, and one the owner answers for), and on the host's page plays the member's own
+// seat as a beast too, writing as the Member Character it already writes as (so its Note's sender reads verified and
+// its room is the room the walk writes in). Every other read and every write is keel's. The member's desk page reads
+// keel's roster as served; the phone's adds the same two AI rows and leaves the member a person.
 //
 // The workshop world is crew-walk-b's "Dashboard ground (crew test)" (no Charter mark), read only: the page is
 // handed a key the walk minted for it (so the page mints none), and that key is revoked by its id.
@@ -104,23 +105,23 @@ try {
 
   // keel's roster, with the played rows added (the one played door).
   const roster = await host.members();
-  const played = rows => [
-    ...rows.map(r => (r.id === bWho ? { ...r, character: bChar.id } : r)),
+  const played = (rows, memberAsBeast) => [
+    ...rows.map(r => (r.id === bWho && memberAsBeast ? { ...r, kind: 'agent', sponsor_member: null, name: 'member-seat', character: bChar.id } : r)),
     { id: `a1a1a1a1-0000-4000-8000-${RUN.padStart(12, '0').slice(-12)}`, kind: 'agent', role: 'contributor', character: beastChar.id, status: 'active', name: 'beast-seat', sponsor_member: null, lenses: [], lenses_from: 'none' },
     { id: `a2a2a2a2-0000-4000-8000-${RUN.padStart(12, '0').slice(-12)}`, kind: 'agent', role: 'contributor', character: null, status: 'active', name: `Host's helper ${RUN}`, sponsor_member: 'owner', lenses: [], lenses_from: 'none' },
   ];
-  const playMembers = async ctx => ctx.route(/\/api\/v2\/members\/?(\?|$)/, async route => {
+  const playMembers = async (ctx, memberAsBeast) => ctx.route(/\/api\/v2\/members\/?(\?|$)/, async route => {
     const res = await route.fetch();
     const body = await res.json();
     const rows = Array.isArray(body) ? body : body.data ?? body.results ?? [];
-    const out = played(rows);
+    const out = played(rows, memberAsBeast);
     await route.fulfill({ response: res, json: Array.isArray(body) ? out : { ...body, [body.data ? 'data' : 'results']: out } });
   });
 
   // ---------------------------------------------------------------- the host
   const hostCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await signedIn(hostCtx, 'crew-walk-c');
-  await playMembers(hostCtx);
+  await playMembers(hostCtx, true);
   const h = await hostCtx.newPage();
   pages.push([h, 'crew-walk-c']);
   const errors = [];
@@ -154,7 +155,12 @@ try {
   const helper = crew.locator('.kid .row', { hasText: `Host's helper ${RUN}` });
   check('crew: an AI the owner answers for sits under the owner, folded by "1 AI"', await until(() => helper.isVisible(), 10000)
     && await crew.locator('.wrap', { has: h.locator('.fold') }).first().locator('.fold').innerText({ timeout: 4000 }).catch(() => '').then(t => /1 AI/.test(t)));
-  check('crew: an AI with no Character has no room you can see, and is not pressable', /no room you can see/.test(await helper.innerText({ timeout: 4000 }).catch(() => '')) && (await crew.locator(`.kid div.row.none`, { hasText: `Host's helper ${RUN}` }).count()) === 1);
+  check('crew: an AI a person answers for keeps its row, not pressable', !/no room you can see/.test(await helper.innerText({ timeout: 4000 }).catch(() => ''))
+    && (await crew.locator(`.kid div.row.none`, { hasText: `Host's helper ${RUN}` }).count()) === 1 && (await crew.locator(`.kid button.row`, { hasText: `Host's helper ${RUN}` }).count()) === 0);
+  check('crew: a person keeps their row, not pressable: no room of their own', await until(async () => (await crew.locator('div.row.none[data-seat="owner"]').count()) === 1, 10000)
+    && (await crew.locator('button.row[data-seat="owner"]').count()) === 0);
+  check('crew: a beast\'s row opens its room', (await crew.locator('button.row', { hasText: `Walk beast ${RUN}` }).count()) === 1);
+  // The member's seat, played as a beast: its room is the one the walk writes in.
   const bRow = crew.locator(`button.row[data-seat="${bWho}"]`);
   // No seat is shown as working yet (nothing records a seat's session): the member holds a taken work item, and still
   // its row wears no ring and says no "since"; its newest Note is its status line.
@@ -270,6 +276,7 @@ try {
     ? { viewport: { width: 390, height: 844 }, ...(engineName === 'chromium' ? { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } : {}) }
     : { viewport: { width: 1280, height: 800 } });
   await signedIn(mCtx, 'crew-walk-b');
+  if (phone) await playMembers(mCtx, false);
   const m = await mCtx.newPage();
   pages.push([m, 'crew-walk-b']);
   m.on('pageerror', e => errors.push(String(e)));
@@ -282,10 +289,12 @@ try {
     check('phone: one pane at a time, the room first', JSON.stringify(await panes()) === '[true,false]');
     check('phone: no sideways scroll', !(await m.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));
     await m.locator('.mtabs').getByRole('button', { name: 'Crew and work' }).click();
-    const myRow = m.locator(`[data-part="crew"] button.row[data-seat="${bWho}"]`);
-    check('phone: the crew list shows, the member\'s own row in it', await until(() => myRow.isVisible(), 10000));
-    await myRow.click();
-    check('phone: a row opens its room on the room\'s pane', await until(async () => JSON.stringify(await panes()) === '[true,false]' && await m.locator('.head .room-title', { hasText: `${bName}’s room` }).isVisible(), 5000));
+    const myRow = m.locator(`[data-part="crew"] .row[data-seat="${bWho}"]`);
+    check('phone: the crew list shows, the member\'s own row in it, not pressable', await until(() => myRow.isVisible(), 10000)
+      && await myRow.evaluate(el => el.tagName === 'DIV' && el.classList.contains('none')));
+    const beastOnPhone = m.locator('[data-part="crew"] button.row', { hasText: `Walk beast ${RUN}` });
+    await beastOnPhone.click();
+    check('phone: a beast\'s row opens its room on the room\'s pane', await until(async () => JSON.stringify(await panes()) === '[true,false]' && await m.locator('.head .room-title', { hasText: `Walk beast ${RUN}’s room` }).isVisible(), 5000));
     check('phone: no sideways scroll in a seat\'s room', !(await m.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));
     await shot(m, 'phone-room');
     await m.locator('.mtabs').getByRole('button', { name: 'Crew and work' }).click();

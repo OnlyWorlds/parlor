@@ -90,6 +90,15 @@ export function seatsByKey(crew: Crew): Map<MemberKey, CrewSeat> {
   return out;
 }
 
+/**
+ * The seat whose room `key` opens: a beast (an AI no person answers for) with a Character this reader is served. A
+ * person and a person's AI keep their rows in the crew, with no room of their own for now (ruled 2026-11-18).
+ */
+export function roomSeat(crew: Crew, key: MemberKey): CrewSeat | null {
+  const b = crew.beasts.find(x => x.key === key);
+  return b?.character ? b : null;
+}
+
 // ---------------------------------------------------------------- threads and a seat's room
 
 /** A line in a room as drawn: under its parent (`depth` above 0) or a root. */

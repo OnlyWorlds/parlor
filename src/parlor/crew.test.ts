@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { OwMember } from '@onlyworlds/sdk';
 import { readLines, readWork, readDesignParts, type El, type Sitting } from './shapes';
-import { crewOf, seatRoom, thread, heldWork, workLineOf, shownWorkLine, SHOW_WORKING, workshopRuns, designFolds, cardOf, firstLine, seatsByKey } from './crew';
+import { crewOf, roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, SHOW_WORKING, workshopRuns, designFolds, cardOf, firstLine, seatsByKey } from './crew';
 import { buildTeam, newestNote, age } from './team';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
@@ -34,6 +34,19 @@ describe('the crew', () => {
     const titus = crew.people.find(p => p.seat.key === 'owner')!;
     expect(titus.ais.map(a => a.name)).toEqual(['Kael']);
     expect(titus.seat.role).toBe('host');
+  });
+
+  it('opens a room only for a beast with a Character: never a person, never a person\'s AI', () => {
+    expect(roomSeat(crew, 'a-von')?.name).toBe('Vonkje');
+    // A person with a Character, an AI with its own Character under its person, an AI that plays its person.
+    expect(roomSeat(crew, 'owner')).toBeNull();
+    expect(roomSeat(crew, 'm-jas')).toBeNull();
+    expect(roomSeat(crew, 'a-kael')).toBeNull();
+    expect(roomSeat(crew, 'a-twin')).toBeNull();
+    expect(roomSeat(crew, 'team')).toBeNull();
+    // A beast whose Character the reader is not served has no room either.
+    const unseen = crewOf({ members, me: 'm-jas', mySeats: [], charName, memberCharacters, served: c => c !== 'c-vonkje' && served(c) });
+    expect(roomSeat(unseen, 'a-von')).toBeNull();
   });
 
   it('reads the reader first, and leaves players and removed rows off', () => {
