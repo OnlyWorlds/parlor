@@ -338,6 +338,8 @@ try {
 
   check('no page error', errors.length === 0, errors.slice(0, 2).join(' | '));
   for (const [p, label] of pages) await recordMinted(p, label);
+  // A played read still in flight when its page closes must not end the walk (its route.fetch throws then).
+  for (const ctx of [mCtx, hostCtx]) await ctx.unrouteAll({ behavior: 'ignoreErrors' });
   await mCtx.close();
   await hostCtx.close();
 
