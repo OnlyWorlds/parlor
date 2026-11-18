@@ -139,6 +139,8 @@ export interface Line {
   parent: string | null;
   /** The work item a line answers: a Narrative cannot point at a Relation by parent_narrative, so `relations`. */
   about: string | null;
+  /** The Objects then the Constructs the line names: a design part among them is a talk on it (`designsOf`). */
+  named: string[];
   at: string;
   /** A report (the report profile's pair and the mark): its own parts; null for a Message. `text` is its story. */
   report: ReportPart | null;
@@ -170,6 +172,7 @@ export function readLinesAsGiven(els: Iterable<El>): Line[] {
       narrator: link(el, 'narrator'),
       parent: link(el, 'parent_narrative'),
       about: links(el, 'relations')[0] ?? null,
+      named: [...links(el, 'objects'), ...links(el, 'constructs')],
       at: el.created_at ?? '',
       report: report ? readReportPart(el) : null,
       el,
@@ -319,7 +322,7 @@ export function maySetDone(el: El): boolean {
  */
 export function newReport(
   text: string, narrator: string, roomOf: string, day: string,
-  on: { parent?: string | null; item?: string | null; answers?: boolean; sitting?: string | null } = {},
+  on: { parent?: string | null; item?: string | null; answers?: boolean; sitting?: string | null; part?: Anchor | null } = {},
   keeper: KeeperPart | null = null,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -335,9 +338,13 @@ export function newReport(
     body.relations = [on.item];
     if (on.answers) body[REPORT_ANSWERS] = [on.item];
   }
-  // Free talk (the report profile's closed talk, its third anchor): no board entry and no work item under it, so it
+  // A talk on an Object or a Construct (the report profile's fourth anchor, ruled 2026-11-18): the part in its
+  // own field by its type, written before the keeper's touched picks, which merge with it.
+  const part = on.part && (on.part.link === 'objects' || on.part.link === 'constructs') ? on.part : null;
+  if (part) body[part.link] = [part.id];
+  // Free talk (the report profile's closed talk, its third anchor): no board entry, work item or part under it, so it
   // hangs on the sitting it was said in, linked in `events`. A keeper's touched Events join after it, never in place of it.
-  if (on.sitting && !on.parent && !on.item) body.events = [on.sitting];
+  if (on.sitting && !on.parent && !on.item && !part) body.events = [on.sitting];
   if (keeper) {
     body.description = keeper.description;
     const lines = keeper.changes.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
@@ -366,6 +373,21 @@ function lineText(el: El): string {
 export function lineName(text: string): string {
   const one = text.replace(/\s+/g, ' ').trim();
   return one.length <= 60 ? one : one.slice(0, 59).trimEnd() + '…';
+}
+
+/**
+ * What a line answers, as the one link field it writes: a board entry by `parent_narrative`, a work item by
+ * `relations` (a Narrative links a Relation there), a design part by `objects` or `constructs`, by the part's own
+ * type. One field, one id: a line never answers in two places.
+ */
+export type AnchorLink = 'parent_narrative' | 'relations' | 'objects' | 'constructs';
+export interface Anchor { link: AnchorLink; id: string }
+
+/** A new line's body: the text, the narrator, the room's mark and, when it answers something, its one anchor. */
+export function newLineAt(text: string, narrator: string | null, anchor: Anchor | null, roomOf: string, nameIfNoText = ''): Record<string, unknown> {
+  const body = newLine(text, narrator, null, roomOf, null, nameIfNoText);
+  if (anchor) body[anchor.link] = anchor.link === 'parent_narrative' ? anchor.id : [anchor.id];
+  return body;
 }
 
 export function newLine(text: string, narrator: string | null, parent: string | null, roomOf: string, about: string | null = null, nameIfNoText = ''): Record<string, unknown> {
@@ -916,6 +938,44 @@ export function newWorkItem(
     if (!had.includes(p.id)) body[field] = [...had, p.id];
   }
   return body;
+}
+
+// ---------------------------------------------------------------- design parts
+
+/** A part's design state, as the charter pack writes it in `subtype`, compared trimmed and folded as the room profile folds a pair (ruled 2026-11-18). */
+export const DESIGN_STATES = ['in design', 'locked'] as const;
+export type DesignState = (typeof DESIGN_STATES)[number];
+
+export interface DesignPart {
+  id: string;
+  type: 'object' | 'construct';
+  title: string;
+  state: DesignState;
+  el: El;
+}
+
+/**
+ * The design parts a reader sees: Objects and Constructs whose `subtype` folds to `in design` or `locked`, the
+ * world's own (never the room's), never hidden (by the mark or the room's own list), known of, proposed, or a reading
+ * aid. In design first, then locked, each by its folded name in code point order, a tie by id.
+ */
+export function readDesignParts(els: Iterable<El>, hidden: ReadonlySet<string> = new Set()): DesignPart[] {
+  const out: DesignPart[] = [];
+  for (const el of els) {
+    const type = fold(el.type);
+    if (type !== 'object' && type !== 'construct') continue;
+    const word = fold(el.subtype);
+    const state = (DESIGN_STATES as readonly string[]).includes(word) ? (word as DesignState) : null;
+    if (!state || !isPickable(el) || hidden.has(el.id) || isCharterElement(el) || handsOnAsProposed(el)) continue;
+    out.push({ id: el.id, type, title: typeof el.name === 'string' && el.name.trim() ? el.name : 'Untitled', state, el });
+  }
+  const rank = (s: DesignState) => (s === 'in design' ? 0 : 1);
+  return out.sort((a, b) => rank(a.state) - rank(b.state) || byCodePoint(fold(a.title), fold(b.title)) || byCodePoint(a.id, b.id));
+}
+
+/** The link a line answering this part writes: by the part's own type. */
+export function designLink(part: Pick<DesignPart, 'type'>): AnchorLink {
+  return part.type === 'object' ? 'objects' : 'constructs';
 }
 
 /** What a person may pick as what a work item is about: the world's own elements, never the room's or a hidden one. */

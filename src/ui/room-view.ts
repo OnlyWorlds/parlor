@@ -6,7 +6,7 @@
  * pressing; the rest redraws from the room's elements.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, designLink } from '../parlor/shapes';
 import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
@@ -43,13 +43,33 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let specOpen = false;
   let boardOpen = false;
   // A workshop opens on its specs; a world's parlor (no sitting yet) on its work.
-  let workTab: 'work' | 'changes' | 'specs' | 'board' = room.sittings().length ? 'specs' : 'work';
+  let workTab: 'work' | 'changes' | 'specs' | 'board' | 'designs' = room.sittings().length ? 'specs' : 'work';
   // What changed since this browser last opened the room (a per-viewer convenience; nothing breaks without it).
   const seenKey = `parlor.seen.${room.world.id}`;
   let seenBefore = '';
   try { seenBefore = localStorage.getItem(seenKey) ?? ''; localStorage.setItem(seenKey, new Date().toISOString()); } catch { /* private window */ }
   let workOpen = false;
-  let replyTo: { id: string; title: string; kind: 'board' | 'work' } | null = null;
+  // What the composer answers, as the one link field the line writes (a design part by objects or constructs).
+  let replyTo: { id: string; title: string; link: AnchorLink } | null = null;
+  const isDesignReply = (r: typeof replyTo): boolean => r?.link === 'objects' || r?.link === 'constructs';
+  const DESIGN_GONE = 'That design is no longer open here: your text is kept.';
+  /**
+   * A design reply read again from the room (the contract gate's M2): its title the part's name now; when the id is no
+   * longer a design part this reader sees, the reply clears and says so. True when the reply still stands.
+   */
+  function rereadDesignReply(parts: ReadonlyArray<DesignPart> = room.designs()): boolean {
+    if (!replyTo || !isDesignReply(replyTo)) return true;
+    const part = parts.find(p => p.id === replyTo!.id);
+    // While a line is on its way the reply stays: a retry of a lost answer must send the same body under the same key
+    // (gate 2's N1); the next draw after the send reads it again.
+    if (!part && sending) return true;
+    if (!part) { replyTo = null; drawReply(); notice(DESIGN_GONE, true); return false; }
+    // The title set in place, so the reply a send captured is still this one when its line lands (the gate's S2).
+    if (part.title !== replyTo.title) { replyTo.title = part.title; drawReply(); }
+    return true;
+  }
+  /** The design parts as this draw read them, once per draw (the gate's S1); a press reads its own. */
+  let partsNow: DesignPart[] = [];
   let stickToEnd = true;
   // The reports whose story a person unfolded: kept across redraws, forgotten with the room.
   const openReports = new Set<string>();
@@ -125,7 +145,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     return item && (maySetDone(item.el) || (doneByMe.has(item.id) && item.state === 'done')) ? item : null;
   }
   function drawFinishLabel(): void {
-    const sets = room.isKeeper && replyTo?.kind === 'work' && !!setsDoneOn(replyTo.id);
+    const sets = room.isKeeper && replyTo?.link === 'relations' && !!setsDoneOn(replyTo.id);
     const box = sets ? ' This report is the work the item asked for: the item is set done' : ' This report is the work the item asked for';
     if (finishLabel.lastChild?.textContent !== box) finishLabel.replaceChildren(finishBox, box);
   }
@@ -217,6 +237,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       const kTyped = { short: kShort.value, changes: kChanges.value, picks: kPicks };
       if (asReport && !t) { notice('A report needs your text. Files alone go on a line.', true); return; }
       if (!t && !files.length) return;
+      // A design that went since Answer was pressed sends nothing (the contract gate's M2).
+      if (!rereadDesignReply()) return;
       const answering = replyTo;
       sending = true;
       sendBtn.disabled = true;
@@ -234,9 +256,16 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           drawReportMode();
           if (!keeper && keeperTyped() && !dropKeeperPart) { dropKeeperPart = true; throw new Refused('You no longer keep this world, so a report from you goes in as handed in: your short part and what changed would not be sent. Hand in again to send it that way.'); }
           if (keeper && !kTyped.short.trim()) throw new Refused('A report you complete needs its short part: write it under In short.');
-          const item = keeper && answers && answering?.kind === 'work' ? setsDoneOn(answering.id) : null;
+          const item = keeper && answers && answering?.link === 'relations' ? setsDoneOn(answering.id) : null;
           const setsDone = item?.id ?? null;
-          const on = { parent: answering?.kind === 'board' ? answering.id : null, item: answering?.kind === 'work' ? answering.id : null, answers };
+          // A report on a design names the part in its own field and hangs on no sitting (the report profile's fourth
+          // anchor, ruled 2026-11-18): in `on`, so a changed design is a new draft, a new body and a new key.
+          const on = {
+            parent: answering?.link === 'parent_narrative' ? answering.id : null,
+            item: answering?.link === 'relations' ? answering.id : null,
+            part: answering && isDesignReply(answering) ? { link: answering.link, id: answering.id } : null,
+            answers,
+          };
           // Not the item's state: once a first press set it done, the retry must still send that press's body and key.
           const sig = JSON.stringify([t, on, keeper, keeper ? [kTyped.short, kTyped.changes, kTyped.picks.map(p => p.id)] : null]);
           if (!draft || draft.sig !== sig) {
@@ -251,7 +280,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           await room.handIn(draft.body, draft.key, files, draft.setsDone, !!draft.setsDone && doneByMe.has(draft.setsDone));
         } else {
           sent = true;
-          await room.post(t, answering?.kind === 'board' ? answering.id : null, answering?.kind === 'work' ? answering.id : null, files);
+          await room.post(t, answering ? { link: answering.link, id: answering.id } : null, files);
         }
         if (text.value === typed) { text.value = ''; text.style.height = 'auto'; }
         if (replyTo === answering) { replyTo = null; drawReply(); }
@@ -314,7 +343,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     if (!replyTo) { clear(replyBar); return; }
     drawFinishLabel();
     clear(replyBar, h('span', null, `${reporting ? 'Report on' : 'Answering'}: ${replyTo.title}`),
-      reporting && replyTo.kind === 'work' ? finishLabel : null,
+      reporting && replyTo.link === 'relations' ? finishLabel : null,
       h('button', { class: 'btn quiet', type: 'button', onclick: () => { replyTo = null; drawReply(); } }, 'Not now'));
   }
 
@@ -618,15 +647,19 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const tabChanges = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'changes'; draw(); } }, 'Changes');
   const tabSpecs = h('button', { type: 'button', role: 'tab', 'aria-selected': 'true', onclick: () => { workTab = 'specs'; draw(); } }, 'Specs');
   const tabBoard = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'board'; draw(); } }, 'Board');
-  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Work' }, tabWorkItems, tabChanges, tabSpecs, tabBoard);
+  // Designs: shown only where the world's Charter is marked and a design part exists.
+  const tabDesigns = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', hidden: true, onclick: () => { workTab = 'designs'; draw(); } }, 'Designs');
+  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Work' }, tabWorkItems, tabChanges, tabSpecs, tabBoard, tabDesigns);
   const board = h('div');
   const workList = h('div');
   const changeList = h('div');
+  const designList = h('div', { hidden: true });
   const workMarks = markSet(workList);
   const changeMarks = markSet(changeList);
+  const designMarks = markSet(designList);
   // -------------------------------------------------- the layout
   const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? completeCard : null, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
-  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm);
+  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm, designList);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
   function phoneTab(which: 'room' | 'work') {
@@ -652,6 +685,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function redraw(): void { afterPress(heldDraw); }
   function heldDraw(): void { if (!gone) draw(); }
   function draw(): void {
+    partsNow = room.designs();
     drawTop();
     drawReportMode();
     drawComplete();
@@ -661,10 +695,20 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     drawBoard();
     drawWorkItems();
     drawChanges();
+    drawDesigns();
     drawTabs();
+    rereadDesignReply(partsNow);
   }
 
   function drawTabs(): void {
+    // Designs shows only while there is one; a selected Designs that goes falls back to Work (the gate's S8).
+    const parts = partsNow.length;
+    tabDesigns.hidden = parts === 0;
+    if (!parts && workTab === 'designs') workTab = 'work';
+    const designsLabel = `Designs ${parts}`;
+    if (tabDesigns.textContent !== designsLabel) tabDesigns.textContent = designsLabel;
+    tabDesigns.setAttribute('aria-selected', String(workTab === 'designs'));
+    designList.hidden = workTab !== 'designs';
     const workLabel = `Work ${room.work().filter(w => w.state !== 'done').length}`;
     const specsLabel = `Specs ${room.specs().length}`;
     const boardLabel = `Board ${room.board().length}`;
@@ -731,10 +775,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const workItems = new Map<string, { title: string }>();
     for (const w of room.work()) { entries.set(w.id, w); workItems.set(w.id, w); }
     const sittingIds = new Set(room.sittings().map(s => s.id));
+    // The design parts by id, once per draw: a line that names one is a talk on it.
+    const partsBy = new Map(partsNow.map(p => [p.id, p]));
     room.files.unwatchAll();
     clear(lines, ls.length ? ls.map(l => {
-      if (l.report) return reportLine(l, l.report, entries, workItems, sittingIds);
-      const answering = (l.parent ? entries.get(l.parent) : undefined) ?? (l.about ? entries.get(l.about) : undefined);
+      if (l.report) return reportLine(l, l.report, entries, workItems, sittingIds, partsBy);
+      // A board entry or a work item leads; else the design parts it names, each by its name now (the gate's S2, N3).
+      const designs = room.designsOf(l, partsBy);
+      const answering = (l.parent ? entries.get(l.parent) : undefined) ?? (l.about ? entries.get(l.about) : undefined)
+        ?? (designs.length ? { title: designs.map(d => d.title).join(', ') } : undefined);
       const ai = room.isAi(l.by, l.el.changed_via);
       const name = room.name(l.by);
       const hidden = room.hidden.has(l.id);
@@ -763,12 +812,13 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
    * has not completed it; completed, the keeper's description open, What changed beside it, the story folded.
    * Everything it shows is text. A fold's open state is the room's, so a redraw keeps it.
    */
-  function reportLine(l: Line, r: ReportPart, entries: Map<string, { title: string }>, workItems: Map<string, { title: string }>, sittingIds: ReadonlySet<string>): HTMLElement {
+  function reportLine(l: Line, r: ReportPart, entries: Map<string, { title: string }>, workItems: Map<string, { title: string }>, sittingIds: ReadonlySet<string>, partsBy: ReadonlyMap<string, DesignPart>): HTMLElement {
     const ai = room.isAi(l.by, l.el.changed_via);
     const name = room.name(l.by);
     const hidden = room.hidden.has(l.id);
     const hiddenMine = !room.isHost && l.el.hidden === true;
     const answered = r.answers.filter(id => workItems.has(id));
+    const onParts = room.designsOf(l, partsBy);
     // The anchor a report hangs on: its board entry, or the first of its relations the room holds (step 2 may add others first).
     const rel = Array.isArray(l.el.relations) ? (l.el.relations as unknown[]).filter((x): x is string => typeof x === 'string') : [];
     const anchorId = l.parent ?? rel.find(id => entries.has(id)) ?? null;
@@ -798,6 +848,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           r.proposed ? h('span', { class: 'chip prop', 'data-part': 'report-proposed' }, 'Proposed') : null,
           ...answered.map(id => h('span', { class: 't' }, `answers ${workItems.get(id)!.title || 'Untitled'}`)),
           anchor ? h('span', { class: 't' }, `on ${anchor.title || 'Untitled'}`) : null,
+          // A report on a design part, or one that touched it (the same field: the report profile's fourth anchor).
+          !anchor && !answered.length && onParts.length
+            ? h('span', { class: 't', 'data-part': 'report-design' }, `on ${onParts.map(d => d.title).join(', ')}`) : null,
           sitName ? h('span', { class: 't', 'data-part': 'report-sitting' }, saidIn(sitName)) : null,
           hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
           hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
@@ -1041,7 +1094,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           hidden ? (room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : ''].filter(Boolean).join(' · ')) : null,
         h('div', { class: 'btns' },
           room.canWrite ? h('button', { class: 'btn std', type: 'button', onclick: () => {
-            replyTo = { id: e.id, title: e.title || 'Untitled', kind: 'board' };
+            replyTo = { id: e.id, title: e.title || 'Untitled', link: 'parent_narrative' };
             drawReply();
             if (mq.matches) phoneTab('room');
             text.focus();
@@ -1059,6 +1112,35 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   /** The work list, rebuilt only when what it shows moved (as the board). */
   let workKey = '';
   let deleting: string | null = null;
+  // -------------------------------------------------- designs (2026-11-18)
+  let designKey = '';
+  const DESIGN_WORD = { 'in design': 'In design', locked: 'Locked' } as const;
+  function drawDesigns(): void {
+    // The parts this draw read, and their answers counted in one pass over the lines (the gate's S1).
+    const counts = partsNow.length ? room.answerCounts(partsNow.map(p => p.id)) : new Map<string, number>();
+    const view = partsNow.map(p => ({ p, answers: counts.get(p.id) ?? 0 }));
+    // Rebuilt only when what it shows moved, so a feed tick never eats an Answer press (the gate's S8).
+    const key = JSON.stringify([view.map(v => [v.p.id, v.p.title, v.p.state, v.p.type, v.answers]), room.canWrite]);
+    if (key === designKey) return;
+    if (designMarks.held()) return;
+    designKey = key;
+    const focused = designMarks.before();
+    const world = { id: room.world.id, name: room.world.name };
+    clear(designList,
+      h('p', { class: 'sys' }, 'The designs this world holds, in design and locked. Answer one to talk about it here: what you send names it, and its talk gathers under it.'),
+      ...view.map(({ p, answers }) => h('div', { class: 'card witem', 'data-design': p.id },
+        h('div', { class: 'ttl' }, h('span', { class: `chip ${p.state === 'locked' ? 's-done' : 's-open'}` }, DESIGN_WORD[p.state]),
+          h('h3', null, p.title), designMarks.mark(waymarkPlan(world, p.el as unknown as Record<string, unknown>, 'Untitled'), `design:${p.id}`)),
+        h('div', { class: 'm' }, `${p.type === 'object' ? 'Object' : 'Construct'}${answers ? ` · ${answers} answer${answers === 1 ? '' : 's'} in the room` : ''}`),
+        room.canWrite ? h('div', { class: 'btns' }, h('button', { class: 'btn std', type: 'button', onclick: () => {
+          replyTo = { id: p.id, title: p.title, link: designLink(p) };
+          drawReply();
+          if (mq.matches) phoneTab('room');
+          text.focus();
+        } }, 'Answer')) : null)));
+    designMarks.after(focused);
+  }
+
   const STATE_WORD = { open: 'Open', taken: 'Taken', done: 'Done' } as const;
   function drawWorkItems(): void {
     // Whom it is for: its person and the Titles whose holders it is for (x_packet_for); neither is no one, never everyone.
@@ -1118,7 +1200,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
             h('button', { class: 'btn quiet', type: 'button', onclick: () => { deleting = null; draw(); } }, 'Keep it'))
           : h('div', { class: 'btns' },
             room.canWrite ? h('button', { class: 'btn std', type: 'button', onclick: () => {
-              replyTo = { id: w.id, title: w.title || 'Untitled', kind: 'work' };
+              replyTo = { id: w.id, title: w.title || 'Untitled', link: 'relations' };
               drawReply();
               if (mq.matches) phoneTab('room');
               text.focus();

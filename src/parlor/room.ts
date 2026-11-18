@@ -11,11 +11,11 @@ import { newestFirst } from './when';
 import { session, type AccountWorld } from './session';
 import {
   OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readLinesAsGiven, orderLines, readHearts, readSpecs, readVotes,
-  readSittings, readCharter, readMemberCharacters, linesOfSitting, linesOfUnseenSitting, myHearts, tally, newLine, newSpec, newHeart,
+  readSittings, readCharter, readMemberCharacters, linesOfSitting, linesOfUnseenSitting, myHearts, tally, newSpec, newHeart,
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
   readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK, addressOf, type WorkItem,
   newReport, localDay, isReportPickable, maySetDone, unmarkedCharters, CHARTER_MARK, REPORT_COMPLETED, type KeeperPart,
-  isReport, isWorkItemPair, reportPartOf, completionPatch,
+  isReport, isWorkItemPair, reportPartOf, completionPatch, newLineAt, readDesignParts, type Anchor, type DesignPart,
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
@@ -287,7 +287,36 @@ export class Room {
   /** The room's lines answering one thing (a board entry by parent, a work item by relations), across every sitting. */
   answers(id: string) {
     // Only the few that answer are ordered: a sort of every line per board entry and work item cost each render (the S598 code gate).
-    return orderLines(readLinesAsGiven(this.els.values()).filter(l => l.parent === id || l.about === id || !!l.report?.answers.includes(id)));
+    return orderLines(readLinesAsGiven(this.els.values()).filter(l => l.parent === id || l.about === id || !!l.report?.answers.includes(id) || l.named.includes(id)));
+  }
+
+  /**
+   * The design parts this reader sees, only where the world's Charter is marked: a world without one has no
+   * designs here, whatever its subtypes say (a locked Object is a door in a fantasy world).
+   */
+  designs(): DesignPart[] {
+    return this.charter() ? readDesignParts(this.els.values(), this.hidden) : [];
+  }
+
+  /**
+   * The design parts a line is a talk on: the ones it names that are design parts the reader sees now. `by` is the
+   * parts by id, built once per draw by the caller (the code gate's S4: never a map per line).
+   */
+  designsOf(line: { named: readonly string[] }, by: ReadonlyMap<string, DesignPart> = new Map(this.designs().map(p => [p.id, p]))): DesignPart[] {
+    if (!line.named.length) return [];
+    return [...new Set(line.named)].map(id => by.get(id)).filter((p): p is DesignPart => !!p);
+  }
+
+  /** How many lines answer each of these ids, in one pass over the room's lines (as `answers` counts them; the gate's S1). */
+  answerCounts(ids: Iterable<string>): Map<string, number> {
+    const n = new Map<string, number>();
+    for (const id of ids) n.set(id, 0);
+    if (!n.size) return n;
+    for (const l of readLinesAsGiven(this.els.values())) {
+      const hit = new Set<string>([...(l.parent ? [l.parent] : []), ...(l.about ? [l.about] : []), ...(l.report?.answers ?? []), ...l.named]);
+      for (const id of hit) { const c = n.get(id); if (c !== undefined) n.set(id, c + 1); }
+    }
+    return n;
   }
 
   /** The world's own recent changes (a world's parlor's work surface). */
@@ -378,10 +407,10 @@ export class Room {
    * go after it, on their own queue (never behind the room's writes), to the line this call made: its id is
    * captured here, whatever the room shows when they land. Text may be empty when files come with it.
    */
-  post(text: string, parent: string | null = null, about: string | null = null, files: ReadonlyArray<File> = []): Promise<void> {
+  post(text: string, anchor: Anchor | null = null, files: ReadonlyArray<File> = []): Promise<void> {
     this.showSitting = null;
     return this.serial(async () => {
-      const made = await this.client.create('narrative', newLine(text, this.myCharacter(), parent, this.roomOfNow(), about, filesName(files)));
+      const made = await this.client.create('narrative', newLineAt(text, this.myCharacter(), anchor, this.roomOfNow(), filesName(files)));
       // Once the line exists its files go to it, and nothing after can turn this Send into a failure the
       // composer would answer by giving the files back (a second Send would make the line twice).
       if (files.length) this.files.attach((made as { id: string }).id, files);
@@ -406,7 +435,7 @@ export class Room {
    * A report's body, built once at the press so a retry sends the same body (its day and its name too). A keeper's
    * part makes it the keeper's own report, born completed; null hands it in. Null when the seat has no Character.
    */
-  reportBody(text: string, on: { parent?: string | null; item?: string | null; answers?: boolean }, keeper: KeeperPart | null): Record<string, unknown> | null {
+  reportBody(text: string, on: { parent?: string | null; item?: string | null; answers?: boolean; part?: Anchor | null }, keeper: KeeperPart | null): Record<string, unknown> | null {
     const narrator = this.myCharacter();
     if (!narrator || !text.trim()) return null;
     // Said now, so in the newest sitting (where a report shows once sent, as a line does), never one being browsed.
