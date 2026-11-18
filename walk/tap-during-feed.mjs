@@ -1,7 +1,7 @@
 // A press while the room's feed lands: the tap must do what it was pressed on.
 //   WALK_STATE=<scratch file> PARLOR_URL=http://127.0.0.1:30338/ node walk/tap-during-feed.mjs chromium|firefox
 // The host (crew-walk-c, the seed's token) opens the room, starts a sitting in Pitch and adds a spec.
-// Then, twice (Heart on the spec, Show earlier in the room's head): the feed's next read is held, a
+// Then, twice (Heart on the spec, a seat's row in the crew list): the feed's next read is held, a
 // lore decoy is made in the world (recorded by id), the press goes down, the read is let go and
 // lands (a redraw on the old build replaces what is pressed), and only then the press comes up.
 // The tap must land; the redraw it held must run after it. A control: PARLOR_URL at the older build.
@@ -64,15 +64,19 @@ try {
   page.on('requestfinished', r => { if (/\/api\/v2\/changes\//.test(r.url()) && !r.url().includes('head=true')) feedDone++; });
 
   await page.goto(`${BASE}#/w/${s.worldId}`);
-  check('the room opens on the host\'s seat', await until(() => page.getByText('You: host').isVisible(), 30000));
+  check('the room opens on the host\'s seat', await until(() => page.locator('.top[data-room-role="host"]').isVisible(), 30000));
   if (await page.locator('#my-name').isVisible().catch(() => false)) {
     await page.fill('#my-name', 'Host C');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
   }
+  // A team world's host panel shows after Run a workshop (already shown while an earlier walk's workshop runs).
+  const run = page.locator('[data-part="run-workshop"]');
+  if (await until(() => run.isVisible(), 10000) && (await run.innerText()) === 'Run a workshop') await run.click();
   await page.getByRole('button', { name: /Start (the first|a new) sitting/ }).click();
   check('a sitting starts in Arrive', await until(() => page.locator('.hostbar .pp.now', { hasText: 'Arrive' }).isVisible()));
   await page.locator('.hostbar .pp', { hasText: 'Pitch' }).click();
   check('Pitch: hearts on', await until(() => page.getByRole('button', { name: 'Hearts: on' }).isVisible()));
+  await page.getByRole('tab', { name: 'Specs' }).click();
   const title = `A tap walk spec, ${engineName}, ${new Date().toISOString().slice(11, 19)}`;
   await page.getByRole('button', { name: /Add your spec|Edit your spec/ }).click();
   await page.fill('#spec-title', title);
@@ -119,19 +123,22 @@ try {
     }
   }
 
-  // ---------------------------------------------------------------- Show earlier, while the feed lands
+  // ---------------------------------------------------------------- a seat's row in the crew list, while the feed lands
   {
-    const earlier = page.getByRole('button', { name: 'Show earlier' });
-    if (await until(() => earlier.isVisible(), 4000)) {
-      const name = `Decoy tap earlier ${engineName} ${Date.now() % 100000}`;
-      const r = await pressThroughFeed(earlier, name);
-      check('earlier: the feed read was held and then landed under the press', r.caught && r.landed, `caught ${r.caught}, landed ${r.landed}`);
-      check('earlier: the pressed button was not replaced under the press', !r.replaced);
-      check('earlier: the tap lands (an earlier sitting shows)', await until(() => page.getByText('An earlier sitting.').isVisible(), 6000));
-      if (await page.getByRole('button', { name: 'Back to now' }).isVisible().catch(() => false)) await page.getByRole('button', { name: 'Back to now' }).click();
+    await page.getByRole('tab', { name: 'Crew' }).click();
+    const row = page.locator('[data-part="crew"] button.row[data-seat]:not([data-seat="team"])').first();
+    if (await until(() => row.isVisible(), 6000)) {
+      const seatName = (await row.locator('.nm').innerText()).trim();
+      const name = `Decoy tap seat ${engineName} ${Date.now() % 100000}`;
+      const r = await pressThroughFeed(row, name);
+      check('seat: the feed read was held and then landed under the press', r.caught && r.landed, `caught ${r.caught}, landed ${r.landed}`);
+      check('seat: the pressed row was not replaced under the press', !r.replaced);
+      check('seat: the tap lands (the seat\'s room opens)', await until(() => page.locator('.head .room-title', { hasText: `${seatName}’s room` }).isVisible(), 6000));
+      await page.locator('[data-part="crew"] [data-seat="team"]').click();
     } else {
-      check('earlier: the room offers Show earlier (an earlier sitting on the ground)', false);
+      check('seat: the crew list offers a seat with a room', false);
     }
+    await page.getByRole('tab', { name: 'Specs' }).click();
   }
 
   // ---------------------------------------------------------------- a press that never becomes a click
@@ -164,6 +171,10 @@ try {
     check(`off ${where}: the held redraw runs once the press ends with no click`, ranAfter, `${Date.now() - t0} ms after the lift${ranAfter ? '' : `; events: ${await page.evaluate(() => (window.__ev ?? []).slice(-6).join(' ')).catch(() => '?')}`}`);
     check(`off ${where}: no heart was left by the press dragged off`, await card.getByRole('button', { name: '♡ Heart' }).isVisible());
   }
+
+  // The workshop ends, so the next walk starts outside one.
+  if ((await run.innerText().catch(() => '')) === 'End the workshop') await run.click();
+  await until(async () => (await run.innerText()) === 'Run a workshop', 8000);
 
   // The keys this page's parlor holds, by their last four, for teardown (never the secrets).
   const sess = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('parlor.session.v1') ?? 'null'); } catch { return null; } }).catch(() => null);

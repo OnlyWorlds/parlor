@@ -68,9 +68,9 @@ try {
     return page;
   };
   const host = await open('crew-walk-c');
-  check('host: the room opens', await until(() => host.getByText('You: host').isVisible(), 30000));
+  check('host: the room opens', await until(() => host.locator('.top[data-room-role="host"]').isVisible(), 30000));
   const m = await open('crew-walk-b');
-  check('member: the room opens', await until(() => m.getByText('You: member').isVisible(), 30000));
+  check('member: the room opens', await until(() => m.locator('.top[data-room-role="member"]').isVisible(), 30000));
   for (const p of [host, m]) await p.getByRole('tab', { name: /^Specs/ }).click().catch(() => {});
   const rules = p => p.locator('[data-part="house-rules"] h3', { hasText: 'House rules' });
   const offer = host.locator('[data-part="charter-offer"]');
@@ -81,10 +81,17 @@ try {
 
   await offer.getByRole('button', { name: "Mark House rules as this world's charter" }).click();
   check('keel: the Law carries the world\'s id as its mark', await until(async () => (await api.get('law', law.id)).x_charter_of === s.worldId, 15000));
-  check('host: house rules shown, the offer gone', await until(() => rules(host).isVisible(), 15000) && await offer.count() === 0);
-  check('member: house rules shown once the feed brings the mark', await until(() => rules(m).isVisible(), 30000));
-  // The views file's charter row leads with description, drawn open: the words show with no press.
-  check('member: the house rules read open, their words shown', await m.locator('[data-part="house-rules"] p').isVisible());
+  // Marked, the world is a team world: the house rules open from Rules in the top bar, in the element card, whole.
+  const rulesCard = async p => {
+    const btn = p.locator('[data-part="rules"]');
+    if (!(await btn.isVisible())) return false;
+    if (!(await p.locator('[data-part="element-card"]').isVisible())) await btn.click();
+    return /House rules/.test(await p.locator('[data-part="element-card"] h2').innerText().catch(() => ''));
+  };
+  check('host: house rules shown, the offer gone', await until(() => rulesCard(host), 15000) && await offer.count() === 0);
+  check('member: house rules shown once the feed brings the mark', await until(() => rulesCard(m), 30000));
+  // The charter is read whole, never cut: its words show with no further press.
+  check('member: the house rules read open, their words shown', await m.locator('[data-part="element-card"] .card-text.whole').isVisible());
 } catch (err) {
   check('the walk ran to its end', false, String(err?.message ?? err).slice(0, 300));
 } finally {

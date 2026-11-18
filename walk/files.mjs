@@ -43,7 +43,7 @@ const pGif = file('wave.gif', Buffer.from('GIF89a\x01\x00\x01\x00\x00\x00\x00;',
 const api = new OwV2Client({ apiKey: s.hostKey.key, apiPin: account('crew-walk-c').pin, baseUrl: API });
 s.decoys ??= [];
 const record = (id) => { if (!s.decoys.some(d => d.id === id)) { s.decoys.push({ type: 'narrative', id }); writeState(s); } };
-const lineId = async (text) => { for await (const e of api.listAll('narrative')) if (e.description === text) return e.id; return null; };
+const lineId = async (text) => { for await (const e of api.listAll('narrative')) if ((e.story || e.description) === text) return e.id; return null; };
 const filesOn = async (id) => (await api.worldFiles()).data.filter(r => r.element_id === id);
 
 async function withToken(ctx, label) {
@@ -75,7 +75,7 @@ try {
   const host = await hostCtx.newPage();
   pages.push([host, 'crew-walk-c']);
   await host.goto(`${BASE}#/w/${s.worldId}`);
-  check('host: the room opens', await until(() => host.getByText('You: host').isVisible(), 30000));
+  check('host: the room opens', await until(() => host.locator('.top[data-room-role="host"]').isVisible(), 30000));
   if (await host.locator('#my-name').isVisible().catch(() => false)) {
     await host.fill('#my-name', 'Host C');
     await host.getByRole('button', { name: 'Save', exact: true }).click();
@@ -121,7 +121,7 @@ try {
   const id1 = await lineId(text);
   if (id1) record(id1);
   let lines = 0;
-  for await (const e of api.listAll('narrative')) if (e.description === text) lines++;
+  for await (const e of api.listAll('narrative')) if ((e.story || e.description) === text) lines++;
   check('host: one line for one Send, Enter twice', lines === 1, `${lines} lines`);
   const k1 = id1 ? await filesOn(id1) : [];
   check('keel: the line holds harbour.webp and notes.md at their sizes', k1.length === 2
@@ -189,7 +189,7 @@ try {
   const ask = m.getByRole('button', { name: /^Join Parlor ground \(crew test\) as/ });
   if (await until(() => ask.isVisible(), 12000)) await ask.click();
   else await m.goto(`${BASE}#/w/${s.worldId}`);
-  check('member: in the room', await until(() => m.getByText('You: member').isVisible(), 30000));
+  check('member: in the room', await until(() => m.locator('.top[data-room-role="member"]').isVisible(), 30000));
   const mLine = m.locator('.line', { hasText: text });
   check('member: the host\'s line shows its two files', await until(async () => (await mLine.locator('.file[data-file]').count()) === 2, 30000));
   await m.waitForTimeout(3000);

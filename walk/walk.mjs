@@ -5,6 +5,8 @@
 // (default crew-walk-b) joins by the seed's invite link, names itself, posts,
 // writes a spec and votes; the host runs every phase, hearts, stars the
 // winner, then hides the member's line, which must leave the member's room.
+// The test world's Charter is marked, so it is a team world: the host presses
+// Run a workshop for the host panel, and ends the workshop at the end.
 import { chromium, firefox } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { OwV2Client } from '@onlyworlds/sdk';
@@ -101,15 +103,22 @@ try {
   const host = await hostCtx.newPage();
   pages.push([host, 'crew-walk-c']);
   await host.goto(`${BASE}#/w/${s.worldId}`);
-  check('host: the room opens on the host\'s own seat', await until(() => host.getByText('You: host').isVisible()));
-  check('host: the charter is on the work surface', await until(() => host.locator('[data-part="house-rules"] h3', { hasText: 'House rules' }).isVisible()));
-  // The charter row leads with description, open: its words are on screen without a press.
-  check('host: the house rules read open, their words shown', await until(() => host.locator('[data-part="house-rules"] p').isVisible()));
+  check('host: the room opens on the host\'s own seat', await until(() => host.locator('.top[data-room-role="host"]').isVisible()));
+  // A team world's house rules open from Rules in the top bar, in the element card, whole.
+  await until(() => host.locator('[data-part="rules"]').isVisible());
+  await host.locator('[data-part="rules"]').click().catch(() => {});
+  check('host: the charter opens from Rules', await until(async () => /House rules/.test(await host.locator('[data-part="element-card"] h2').innerText())));
+  check('host: the house rules read open, their words shown', await until(() => host.locator('[data-part="element-card"] .card-text.whole').isVisible()));
+  await host.keyboard.press('Escape');
   if (await host.locator('#my-name').isVisible().catch(() => false)) {
     await host.fill('#my-name', 'Host C');
     await host.getByRole('button', { name: 'Save', exact: true }).click();
   }
-  check('host: the room names the host', await until(() => host.locator('.seatlist li', { hasText: 'Host C' }).isVisible()));
+  check('host: the room names the host', await until(() => host.locator('[data-part="crew"] .row', { hasText: 'Host C' }).first().isVisible()));
+  // The host panel shows after Run a workshop (already shown while an earlier walk's workshop runs).
+  const run = host.locator('[data-part="run-workshop"]');
+  if (await until(() => run.isVisible()) && (await run.innerText()) === 'Run a workshop') await run.click();
+  await until(() => host.locator('[data-part="host-panel"]').isVisible(), 5000);
   if (await host.getByRole('button', { name: 'Start the first sitting' }).isVisible().catch(() => false)) {
     await host.getByRole('button', { name: 'Start the first sitting' }).click();
   } else {
@@ -136,11 +145,11 @@ try {
     check('d: the code left the address bar', !d.url().includes('ow_j_'), d.url());
     await shot(d, 'd-landing');
     await signInByForm(d, 'crew-walk-d');
-    check('d: a PIN-less member reads the room', await until(() => d.getByText('You: member').isVisible(), 20000));
+    check('d: a PIN-less member reads the room', await until(() => d.locator('.top[data-room-role="member"]').isVisible(), 20000));
     check('d: and is told how to write', await until(() => d.getByText('your account needs a PIN').isVisible()));
     check('d: no composer for a reader', await d.locator('textarea[aria-label="Write a line"]').count() === 0);
     await shot(d, 'd-pin-required');
-    check('host: the new seat shows without a reload', await until(() => host.locator('.seatlist li').count().then(n => n >= 2), 40000));
+    check('host: the new seat shows without a reload', await until(() => host.locator('[data-part="crew"] .row[data-seat]:not([data-seat="team"])').count().then(n => n >= 2), 40000));
     s.dJoined = true;
     writeState(s);
     await recordMinted(d, 'crew-walk-d');
@@ -161,7 +170,7 @@ try {
   const ask = m.getByRole('button', { name: `Join Parlor ground (crew test) as ${memberLabel}` });
   check('member: a signed-in invite asks first, naming the account', await until(() => ask.isVisible(), 20000));
   await ask.click();
-  check('member: the join lands in the room', await until(() => m.getByText('You: member').isVisible(), 20000));
+  check('member: the join lands in the room', await until(() => m.locator('.top[data-room-role="member"]').isVisible(), 20000));
   const named = await m.locator('#my-name').isVisible().catch(() => false);
   if (named) {
     await m.fill('#my-name', `Walker ${engineName}`);
@@ -173,14 +182,14 @@ try {
     const entries = await m.locator('.btn.entry').evaluateAll(els => els.filter(e => e.offsetParent !== null).map(e => e.textContent));
     check('member: at most one Entry button on the screen', entries.length <= 1, entries.join(', '));
   }
-  const tab = async name => { if (phone) await m.locator('.mtabs').getByRole('button', { name }).click(); };
+  const tab = async name => { if (phone) await m.locator('.mtabs').getByRole('button', { name: name === 'Work' ? 'Crew and work' : name }).click(); };
   if (phone) {
     const panes = async () => m.locator('section.pane').evaluateAll(els => els.map(e => getComputedStyle(e).display !== 'none'));
     check('phone: one pane at a time, the room first', JSON.stringify(await panes()) === '[true,false]');
     const wide = await m.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     check('phone: no sideways scroll', !wide);
   }
-  check('host: the member\'s seat shows by name without a reload', await until(() => host.locator('.seatlist li', { hasText: 'Walker' }).isVisible(), 40000));
+  check('host: the member\'s seat shows by name without a reload', await until(() => host.locator('[data-part="crew"] .row', { hasText: 'Walker' }).first().isVisible(), 40000));
   const lineText = `Hello from the ${engineName} walk, ${new Date().toISOString().slice(11, 19)}`;
   await m.fill('textarea[aria-label="Write a line"]', lineText);
   await m.keyboard.press('Enter');
@@ -207,6 +216,10 @@ try {
   // Pitch: specs shown, hearts on.
   await host.locator('.hostbar .pp', { hasText: 'Pitch' }).click();
   await tab('Work');
+  // Specs shows for a member once a switch is on; the host sees it while the host panel is open.
+  check('member: Specs shows once the workshop runs', await until(() => m.getByRole('tab', { name: 'Specs' }).isVisible(), 10000));
+  await m.getByRole('tab', { name: 'Specs' }).click();
+  await host.getByRole('tab', { name: 'Specs' }).click();
   check('member: the phase reaches them', await until(() => m.locator('.phases .pp.now', { hasText: 'Pitch' }).isVisible(), 8000));
   // Unique per run: a read-back by name must never meet an earlier run's spec (10-22's were left starred).
   const specTitle = `A ${engineName} map that draws itself, ${new Date().toISOString().slice(11, 19)}`;
@@ -279,7 +292,8 @@ try {
   check('host: markup in an entry stays text', await hostEntry.getByText('<i>disagree</i>', { exact: false }).isVisible());
   await hostEntry.getByRole('button', { name: 'Answer' }).click();
   check('host: the composer says what it answers', await host.locator('.reply', { hasText: `Answering: ${entryTitle}` }).isVisible());
-  const answerText = `The host answers from ${engineName}: 1 to 1000.`;
+  // Unique per run: a team world's room holds every sitting's lines, an earlier run's answer among them.
+  const answerText = `The host answers from ${engineName}: 1 to 1000, ${new Date().toISOString().slice(11, 19)}.`;
   await host.fill('textarea[aria-label="Write a line"]', answerText);
   await host.keyboard.press('Enter');
   check('host: the answer is a line saying what it answers', await until(async () =>
@@ -349,7 +363,7 @@ try {
   await host.waitForTimeout(2500);
   check('host: a lore Work item is not work', !(await host.locator('.witem', { hasText: `DECOY work ${engineName}` }).count()));
   await hostItem.getByRole('button', { name: 'Answer' }).click();
-  const workAnswer = `The host takes the ${engineName} item: linking it now.`;
+  const workAnswer = `The host takes the ${engineName} item: linking it now, ${stamp}.`;
   await host.fill('textarea[aria-label="Write a line"]', workAnswer);
   await host.keyboard.press('Enter');
   check('host: the answer says what it answers', await until(async () =>
@@ -470,7 +484,8 @@ try {
     check('the lore heart still stands (the host\'s toggle never took it)', rels.some(e => e.name === 'Decoy heart'));
     const charter = (await all('law')).find(e => sup(e, 'charter'));
     check('mark: the sitting is the world\'s, kept through every phase change', sitting?.x_room_of === s.worldId && sitting?.subtype === 'Show', `${sitting?.x_room_of} ${sitting?.subtype}`);
-    check('mark: the member\'s line is the sitting\'s', !!line && line.x_room_of === sitting?.id, String(line?.x_room_of));
+    // Said in Arrive, every switch off: no workshop ran yet, so in this team world the line carries the world's mark.
+    check('mark: the member\'s line, said before any switch was on, is the world\'s', !!line && line.x_room_of === s.worldId, String(line?.x_room_of));
     check('mark: the spec is the sitting\'s, its kind its subtype, kept through the star', !!spec && spec.x_room_of === sitting?.id && spec.subtype === 'Feature', `${spec?.x_room_of} ${spec?.subtype}`);
     check('star: the winner is the sitting\'s x_star, no spec written', !!spec && sitting?.x_star === spec.id, String(sitting?.x_star));
     check('mark: the heart is the sitting\'s', !!heart && heart.x_room_of === sitting?.id, String(heart?.x_room_of));
@@ -504,21 +519,20 @@ try {
   // row with hidden: true, so the poster is told.
   check('member: told the host hid their own line', await until(() => m.locator('.line', { hasText: lineText }).getByText('Hidden by the host').isVisible(), 20000));
 
-  // An earlier sitting is a record: the host reads it back with nothing in it to change, then returns.
-  await host.getByRole('button', { name: 'Show earlier' }).click();
-  check('host: an earlier sitting offers no phase, switch or winner to change', await until(async () =>
-    await host.getByText('An earlier sitting.').isVisible()
-    && await host.locator('.hostbar [role="group"][aria-label="Phase"]').count() === 0
-    && await host.getByRole('button', { name: /^Hearts:|^Voting:/ }).count() === 0
-    && await host.getByRole('button', { name: 'Make it the winner' }).count() === 0, 5000));
-  await shot(host, 'host-earlier');
-  // A line written while reading back goes to the newest sitting, and the room comes back to show it.
-  const backLine = `Written from an earlier sitting, ${engineName}, ${new Date().toISOString().slice(11, 19)}`;
-  await host.fill('textarea[aria-label="Write a line"]', backLine);
+  // End the workshop: the host panel folds, every switch goes off, and a line written after carries the world's mark.
+  await run.click();
+  check('host: End the workshop folds the host panel', await until(() => host.locator('[data-part="host-panel"]').isHidden(), 5000));
+  const afterLine = `Written after the workshop, ${engineName}, ${new Date().toISOString().slice(11, 19)}`;
+  await host.fill('textarea[aria-label="Write a line"]', afterLine);
   await host.keyboard.press('Enter');
-  check('host: a line written while reading back shows, the room back to now', await until(async () =>
-    await host.getByText(backLine).isVisible() && !(await host.getByText('An earlier sitting.').count()), 6000));
-  check('host: back to now, the phases are the host\'s again', await until(() => host.locator('.hostbar [role="group"][aria-label="Phase"]').isVisible(), 5000));
+  check('host: a line written after the workshop shows', await until(() => host.getByText(afterLine).isVisible(), 6000));
+  {
+    let after = null, sitting = null;
+    await until(async () => { for await (const e of api.listAll('narrative')) if (words(e) === afterLine) after = e; return !!after; }, 15000);
+    for await (const e of api.listAll('event')) if ((e.supertype ?? '').toLowerCase() === 'sitting' && e.x_room_of && (!sitting || e.created_at > sitting.created_at)) sitting = e;
+    check('mark: End turned the sitting\'s switches off, its phase kept', !!sitting && !sitting.x_hearts_on && !sitting.x_specs_shown && !sitting.x_voting_open && sitting.subtype === 'Show');
+    check('mark: a line written after the workshop carries the world\'s mark', after?.x_room_of === s.worldId, String(after?.x_room_of));
+  }
   // A window narrowed to a phone after load keeps one pane at a time (Seethe, 2026-10-25), and both come back when wide.
   {
     const panes = () => host.locator('section.pane').evaluateAll(els => els.map(e => getComputedStyle(e).display !== 'none'));

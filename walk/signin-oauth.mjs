@@ -105,18 +105,18 @@ async function walk(engine, tag) {
   check(tag, (await stored()) === null && !keel.calls.includes('POST /api/v2/auth/token'), 'nothing kept, nothing traded');
   check(tag, new URL(page.url()).pathname === '/' && !/error=|state=/.test(page.url()), `the address is clean (${page.url()})`);
 
-  // The round trip: the code traded first, the token kept, the address clean, Your parlors naming the account.
+  // The round trip: the code traded first, the token kept, the address clean, Your worlds naming the account.
   keel.mode = 'ok';
   keel.calls.length = 0;
   await button().click();
-  await page.getByRole('heading', { name: 'Your parlors' }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Your worlds' }).waitFor({ timeout: 15000 });
   const a = keel.authorize.at(-1);
   check(tag, a?.searchParams.get('client_id') === 'parlor' && a.searchParams.get('redirect_uri') === CALLBACK && a.searchParams.get('code_challenge_method') === 'S256', 'authorize names parlor, the registered address, S256');
   const after = keel.calls.slice(keel.calls.indexOf('GET /signin/authorize') + 1).filter(c => !c.startsWith('OPTIONS'));
   check(tag, after[0] === 'POST /api/v2/auth/token', `the exchange is the first call on the return (${after.slice(0, 3).join(', ')})`);
   check(tag, (await stored())?.token === TOKEN && (await stored())?.accountId === 'acc-1', 'the token is kept, with its account');
   check(tag, new URL(page.url()).pathname === '/' && !/code=|state=/.test(page.url()), `the address is clean (${page.url()})`);
-  check(tag, await page.getByText('Signed in as wren.', { exact: false }).isVisible(), 'Your parlors names the account');
+  check(tag, await page.getByText('Signed in as wren.', { exact: false }).isVisible(), 'Your worlds names the account');
   check(tag, (await page.evaluate(() => localStorage.getItem('ow_signin:parlor'))) === null, 'the record is gone');
   await page.goBack().catch(() => undefined);
   await page.waitForTimeout(800);
@@ -125,10 +125,10 @@ async function walk(engine, tag) {
   // P8: a return this browser did not start, while signed in: silent, nothing traded.
   keel.calls.length = 0;
   await page.goto(`${CALLBACK}?code=stale&state=stale`);
-  await page.getByRole('heading', { name: 'Your parlors' }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Your worlds' }).waitFor({ timeout: 15000 });
   check(tag, !keel.calls.includes('POST /api/v2/auth/token') && (await stored())?.token === TOKEN && !(await page.locator('.notice').isVisible().catch(() => false)), 'a return not started here, signed in: silent, nothing traded');
   await page.goto(`${CALLBACK}?error=access_denied&state=x`);
-  await page.getByRole('heading', { name: 'Your parlors' }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Your worlds' }).waitFor({ timeout: 15000 });
   await page.waitForTimeout(400);
   check(tag, !(await page.locator('.notice').isVisible().catch(() => false)) && (await stored())?.token === TOKEN, 'a crafted Cancel, signed in: silent');
 
@@ -141,14 +141,14 @@ async function walk(engine, tag) {
     await button().waitFor();
     await page.evaluate(r => localStorage.setItem('parlor.session.v1', JSON.stringify(r)), other);
     await button().click();
-    await page.getByRole('heading', { name: 'Your parlors' }).waitFor({ timeout: 15000 });
+    await page.getByRole('heading', { name: 'Your worlds' }).waitFor({ timeout: 15000 });
   };
   await pressWithPlanted();
   const s1 = await stored();
   check(tag, s1?.token === TOKEN && s1.pin === '1234' && s1.keys?.w === 'ow_k_x', 'the same account: the new token, keys and the PIN kept');
   keel.account = { id: 'acc-2', username: 'bo' };
   await pressWithPlanted();
-  await page.getByRole('heading', { name: 'Your parlors' }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Your worlds' }).waitFor({ timeout: 15000 });
   const s2 = await stored();
   check(tag, s2?.accountId === 'acc-2' && !s2.pin && Object.keys(s2.keys).length === 0 && await page.getByText('Signed in as bo.', { exact: false }).isVisible(), 'another account: keys and the PIN dropped, the new name said');
   keel.account = { id: 'acc-1', username: 'wren' };
@@ -185,10 +185,10 @@ async function walk(engine, tag) {
   // The code gate's C3: Not now lets the invite go and frees the tab, across a reload too.
   await page.evaluate(c => { location.hash = `#/join/${c}`; }, CODE);
   await page.getByRole('button', { name: 'Not now' }).click();
-  await page.getByRole('heading', { name: 'Your parlors' }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Your worlds' }).waitFor({ timeout: 15000 });
   await page.reload();
-  await page.getByRole('heading', { name: 'Your parlors' }).waitFor({ timeout: 15000 });
-  check(tag, keel.joined === 1 && !(await page.getByRole('button', { name: 'Not now' }).isVisible()), 'Not now: the invite let go, Your parlors, still after a reload, nothing spent');
+  await page.getByRole('heading', { name: 'Your worlds' }).waitFor({ timeout: 15000 });
+  check(tag, keel.joined === 1 && !(await page.getByRole('button', { name: 'Not now' }).isVisible()), 'Not now: the invite let go, Your worlds, still after a reload, nothing spent');
 
   // P6: Use another account signs the parlor out and opens the form with the invite kept.
   await fresh(`${PROD}/#/join/${CODE}`);

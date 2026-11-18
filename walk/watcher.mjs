@@ -1,11 +1,13 @@
 // A watcher's room in the app. A guest is served the room's lines (mail to everyone)
-// and no sitting, and each line keeps its room mark: so the room shows the newest
-// sitting's lines by that mark, and says what a watcher is not shown. The host
+// and no sitting, and each line keeps its room mark. In a world with no Charter mark the
+// room shows the newest sitting's lines by that mark and says what a watcher is not shown;
+// the test world's Charter is marked, so it is a team world, whose room holds every
+// sitting's lines, and whose Crew tab says a guest is not shown the crew. The host
 // (crew-walk-c, after seed.mjs) starts two sittings with one line each, recorded
 // for teardown; crew-walk-a is lowered from its role to guest for the walk and put
 // back after, read back.
 //   WALK_STATE=<scratch file> PARLOR_URL=<served build> node --experimental-strip-types walk/watcher.mjs [chromium|firefox]
-//   EXPECT_OLD=1 is the control on a build before the watcher's grouping: it must fail.
+//   A control: PARLOR_URL at a build before the team world, where the earlier sitting's line and the Crew tab's line fail.
 import { OwV2Client } from '@onlyworlds/sdk';
 import { chromium, firefox } from 'playwright';
 import { account, readState, writeState, accountCall, API } from './accounts.mjs';
@@ -63,12 +65,16 @@ try {
   await p.goto(`${BASE}#/w/${s.worldId}`);
   const until = async (fn, ms = 20000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await fn().catch(() => false)) return true; await p.waitForTimeout(250); } return false; };
   const sees = await until(() => p.getByText(now).isVisible());
-  const want = !process.env.EXPECT_OLD;
   check(sees, "the watcher reads this sitting's line");
-  const seesOld = await p.getByText(old).isVisible().catch(() => false);
-  check(want ? !seesOld : seesOld, want ? "and not the earlier sitting's" : "the old build shows the earlier sitting's line too");
-  const says = await p.getByText('A watcher is not shown the sitting itself').isVisible().catch(() => false);
-  check(want ? says : !says, want ? 'the room says what a watcher is not shown' : 'the old build says nothing of it');
+  // The test world's Charter is marked, so it is a team world: its room holds every sitting's lines, a watcher's too
+  // (the front door names the Charter to a guest, who may not be served the Law itself).
+  const seesOld = await until(() => p.getByText(old).isVisible(), 8000);
+  check(seesOld, "and the earlier sitting's, a team world's room holding every sitting");
+  const says = await p.getByText('You can read this room.').isVisible().catch(() => false);
+  check(says, 'the room says the watcher can read it');
+  await p.getByRole('tab', { name: 'Crew' }).click().catch(() => {});
+  const refused = await until(() => p.locator('[data-part="crew-refused"]').isVisible(), 8000);
+  check(refused, 'the Crew tab says in one line that a guest is not shown the crew');
   check(!errors.length, `no page error (${errors.join(' | ')})`);
   const sess = await p.evaluate(() => JSON.parse(localStorage.getItem('parlor.session.v1') ?? 'null')).catch(() => null);
   for (const k of [...Object.values(sess?.keys ?? {}), ...Object.values(sess?.readKeys ?? {})]) {

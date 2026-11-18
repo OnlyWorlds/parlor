@@ -51,12 +51,12 @@ try {
   }, [s.tokens['crew-walk-c'].token, account('crew-walk-c').pin]);
   page = await ctx.newPage();
   await page.goto(`${BASE}#/w/${s.worldId}`);
-  check('the room opens on the host\'s seat', await until(() => page.getByText('You: host').isVisible(), 30000));
+  check('the room opens on the host\'s seat', await until(() => page.locator('.top[data-room-role="host"]').isVisible(), 30000));
   if (await page.locator('#my-name').isVisible().catch(() => false)) {
     await page.fill('#my-name', 'Host C');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
   }
-  const tab = page.getByRole('tab', { name: /^Designs \d+$/ });
+  const tab = page.getByRole('tab', { name: 'Designs' });
   check('a world with its charter marked and a design part shows Designs', await until(() => tab.isVisible(), 30000));
   await tab.click();
   const card = id => page.locator(`[data-design="${id}"]`);
@@ -84,8 +84,12 @@ try {
   line ? JSON.stringify({ objects: arr(line.objects), constructs: arr(line.constructs), relations: arr(line.relations), parent: line.parent_narrative ?? null }) : 'not found');
   // The room mark is the newest sitting's id, or the world's where there is no sitting yet.
   check('the line carries the room mark', !!line && typeof line.x_room_of === 'string' && line.x_room_of.length > 0, line?.x_room_of);
-  check('the line is labelled with the part it answers', await until(() => page.locator('.line', { hasText: said }).getByText(`answering Signup screen ${RUN}`).isVisible()));
-  check('the part counts the line', await until(async () => /1 answer in the room/.test(await card(screen.id).innerText())));
+  // The part it answers is named as the part itself: a chip that opens its card.
+  check('the line is labelled with the part it answers', await until(async () => {
+    const on = page.locator('.line', { hasText: said }).locator('[data-part="line-on"]');
+    return /answering/.test(await on.innerText()) && await on.locator(`[data-el="${screen.id}"]`, { hasText: `Signup screen ${RUN}` }).isVisible();
+  }));
+  check('the part counts the line', await until(async () => /1 answer\b/.test(await card(screen.id).innerText())));
   check('the reply clears once the line has landed', await bar.isHidden());
 
   // A rename reaches the reply bar; a part that leaves its state clears the reply and sends nothing.
@@ -116,7 +120,7 @@ try {
     && JSON.stringify(arr(rep.objects)) === JSON.stringify([screen.id]) && arr(rep.events).length === 0 && arr(rep.relations).length === 0 && !rep.parent_narrative,
   rep ? JSON.stringify({ supertype: rep.supertype, subtype: rep.subtype, objects: arr(rep.objects), events: arr(rep.events) }) : 'not found');
   check('the report says what it is on', await until(() => page.locator('.line.report', { hasText: `Signup drawn ${RUN}` }).locator('[data-part="report-design"]').getByText(`on Signup screen ${RUN}`).isVisible()));
-  check('the part counts the line and the report', await until(async () => /2 answers in the room/.test(await card(screen.id).innerText())));
+  check('the part counts the line and the report', await until(async () => /2 answers\b/.test(await card(screen.id).innerText())));
 } catch (e) {
   check('the walk ran to its end', false, String(e?.message ?? e).slice(0, 200));
 } finally {

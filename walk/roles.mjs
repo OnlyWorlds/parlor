@@ -58,7 +58,7 @@ try {
   }, [s.tokens['crew-walk-c'].token, account('crew-walk-c').pin]);
   const page = await ctx.newPage();
   await page.goto(`${BASE}#/w/${s.worldId}`);
-  check('the room opens on the host\'s seat', await until(() => page.getByText('You: host').isVisible(), 30000));
+  check('the room opens on the host\'s seat', await until(() => page.locator('.top[data-room-role="host"]').isVisible(), 30000));
   if (await page.locator('#my-name').isVisible().catch(() => false)) {
     await page.fill('#my-name', 'Host C');
     await page.getByRole('button', { name: 'Save', exact: true }).click();

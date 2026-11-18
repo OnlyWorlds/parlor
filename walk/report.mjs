@@ -78,7 +78,7 @@ try {
   const host = await hostCtx.newPage();
   pages.push([host, 'crew-walk-c']);
   await host.goto(`${BASE}#/w/${s.worldId}`);
-  check('host: the room opens', await until(() => host.getByText('You: host').isVisible(), 30000));
+  check('host: the room opens', await until(() => host.locator('.top[data-room-role="host"]').isVisible(), 30000));
   if (await host.locator('#my-name').isVisible().catch(() => false)) {
     await host.fill('#my-name', 'Host C');
     await host.getByRole('button', { name: 'Save', exact: true }).click();
@@ -97,7 +97,7 @@ try {
   const ask = m.getByRole('button', { name: /^Join Parlor ground \(crew test\) as/ });
   if (await until(() => ask.isVisible(), 12000)) await ask.click();
   else await m.goto(`${BASE}#/w/${s.worldId}`);
-  check('member: in the room', await until(() => m.getByText('You: member').isVisible(), 30000));
+  check('member: in the room', await until(() => m.locator('.top[data-room-role="member"]').isVisible(), 30000));
   if (await m.locator('#my-name').isVisible().catch(() => false)) {
     await m.fill('#my-name', 'Member B');
     await m.getByRole('button', { name: 'Save', exact: true }).click();
@@ -141,18 +141,26 @@ try {
     JSON.stringify({ name: e1.name, subtype: e1.subtype, mark: e1.x_room_of === s.worldId, narrator: !!e1.narrator, description: e1.description, relations: e1.relations }));
   const narrator = e1.narrator ? await api.get('character', e1.narrator).catch(() => null) : null;
   check('keel: its narrator is a Character in the world', !!narrator?.id);
-  // Free talk's anchor (the report profile's third): the newest sitting, by events, read as the parlor orders sittings.
+  // Free talk's anchor (the report profile's third): the newest sitting, by events, read as the parlor orders sittings,
+  // but only while a workshop runs (any switch of the newest sitting on); the test world's Charter is marked, so
+  // outside a workshop a free report hangs on no sitting.
   {
     const sits = [];
     for await (const e of api.listAll('event')) if (String(e.supertype ?? '').trim().toLowerCase() === 'sitting' && e.x_room_of === s.worldId) sits.push(e);
     sits.sort((a, b) => (Date.parse(a.created_at) - Date.parse(b.created_at)) || a.id.localeCompare(b.id));
     const newest = sits.at(-1);
-    check('keel: a report on no entry or item hangs on the newest sitting by events', !!newest && JSON.stringify(e1.events) === JSON.stringify([newest.id]),
-      JSON.stringify({ events: e1.events, newest: newest?.id, sittings: sits.length }));
-    // The room's own sittings are named "Sitting, <day>": the line says the word once ("said in Sitting, November 16").
-    const sitName = String(newest?.name ?? '').replace(/\s+/g, ' ').trim() || 'Untitled';
-    const said = sitName.toLowerCase().startsWith('sitting') && !/^sitting\w/i.test(sitName) ? `said in ${sitName}` : `said in the sitting ${sitName}`;
-    check('member: the report says the sitting it was said in', await until(async () => (await r1.locator('[data-part="report-sitting"]').innerText({ timeout: 1000 }).catch(() => '')) === said, 10000), said);
+    const runs = !!newest && [newest.x_hearts_on, newest.x_specs_shown, newest.x_voting_open].some(v => v === true || v === 'true');
+    if (runs) {
+      check('keel: a report on no entry or item, said while a workshop runs, hangs on the newest sitting by events', JSON.stringify(e1.events) === JSON.stringify([newest.id]),
+        JSON.stringify({ events: e1.events, newest: newest?.id, sittings: sits.length }));
+      // The room's own sittings are named "Sitting, <day>": the line says the word once ("said in Sitting, November 16").
+      const sitName = String(newest?.name ?? '').replace(/\s+/g, ' ').trim() || 'Untitled';
+      const said = sitName.toLowerCase().startsWith('sitting') && !/^sitting\w/i.test(sitName) ? `said in ${sitName}` : `said in the sitting ${sitName}`;
+      check('member: the report says the sitting it was said in', await until(async () => (await r1.locator('[data-part="report-sitting"]').innerText({ timeout: 1000 }).catch(() => '')) === said, 10000), said);
+    } else {
+      check('keel: a report on no entry or item, said while no workshop runs, hangs on no sitting', !(e1.events ?? []).length, JSON.stringify(e1.events));
+      check('member: the report names no sitting', await r1.locator('[data-part="report-sitting"]').count() === 0);
+    }
   }
   { const title = await r1.locator('.report-title').innerText(); check('member: its title carries the day', [...days()].some(d => title.endsWith(`, ${d}`))); }
   check('member: the first three lines show, and that a host reads it next', (await r1.locator('[data-part="report-story"]').innerText()).trim() === STORY.slice(0, 3).join('\n')

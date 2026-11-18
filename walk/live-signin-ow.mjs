@@ -1,6 +1,6 @@
 // Sign in with OnlyWorlds read live:
 // a crew account signed in on onlyworlds.com (its own form, in the walk's browser) presses the button
-// on the parlor, takes the consent page if it shows, and must land on Your parlors signed in with
+// on the parlor, takes the consent page if it shows, and must land on Your worlds signed in with
 // nothing typed into the parlor. Real keel throughout. With DIST set, https://parlor.onlyworlds.com is
 // served from that build (under its _headers and _redirects) so a build is read against real keel
 // before it flies; without it, the live host. The token the parlor kept is revoked by its own id (only
@@ -134,7 +134,7 @@ if (await consent.waitFor({ timeout: 8000 }).then(() => true, () => false)) {
 }
 const landed = roomMode
   ? await p.locator('[data-part="signed-in-as"]').waitFor({ timeout: 30000 }).then(() => true, () => false)
-  : await p.getByRole('heading', { name: 'Your parlors' }).waitFor({ timeout: 30000 }).then(() => true, () => false);
+  : await p.getByRole('heading', { name: 'Your worlds' }).waitFor({ timeout: 30000 }).then(() => true, () => false);
 await p.waitForTimeout(2500);
 await p.screenshot({ path: `${out}-3-back.png` });
 const session = await p.evaluate(() => JSON.parse(localStorage.getItem('parlor.session.v1') ?? 'null'));

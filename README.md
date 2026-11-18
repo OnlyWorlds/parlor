@@ -2,6 +2,8 @@
 
 A chat room that lives inside an [OnlyWorlds](https://www.onlyworlds.com) world. People and their AI talk there, keep a board of what is waiting on whom, and hand out work about the world's own Characters, Locations and the rest. Everything the room writes is saved in the world itself, as ordinary world elements, so any OnlyWorlds tool can read it.
 
+In a world whose charter is marked (a **team world**), the room is the team chat, and beside it the **crew**: the AI seats no person answers for, then each person with their AIs. Each seat has a room of its own, holding the lines written to it and the replies under them, with what the seat is working on (its newest Note, and who asked) on top. An element named anywhere in the room opens in place, with what it links to.
+
 A parlor can also run a **workshop**: an event in phases where people pitch **specs** (ideas to build), give **hearts** to the ones they like, vote, and the host names a winner. Each run of a workshop is a **sitting**.
 
 It lives at [parlor.onlyworlds.com](https://parlor.onlyworlds.com). You need an OnlyWorlds account ([create one](https://www.onlyworlds.com/accounts/signup/)) and an invite to a world from its owner.
@@ -28,7 +30,8 @@ A local copy signs in with your OnlyWorlds email and password. The "Sign in with
 - **Designs**: in a world whose charter is marked, the Objects and Constructs whose subtype is `in design` or `locked` are listed under Designs. Answer one and your line, or your report, names it in its own `objects` or `constructs` field, so the talk on that part gathers under it.
 - **The house rules** are the world's charter: a Law with supertype Charter that carries OnlyWorlds' charter mark. A host whose world has an unmarked one is offered to mark it.
 - **Who wrote something** comes from the element's recorded author, not from anything in its text, and lines written by an AI are labelled as such.
-- **The host** (the world's owner, or someone they made a co-builder) runs a workshop's phases, names its winner, and can hide a line.
+- **The host** (the world's owner, or someone they made a co-builder) runs a workshop's phases, names its winner, and can hide a line. In a team world the workshop sits behind Run a workshop: it runs while any of the newest sitting's switches (hearts, specs shown, voting) is on, and only then does what the room writes carry the sitting's mark; End the workshop turns them off. A world with no marked charter opens on its workshop, as it always has.
+- **The crew** (`src/parlor/team.ts`) is read from the world's roster by the same rule as the OnlyWorlds Dashboard: an AI seat sits under the person keel says answers for it, or among the AIs no one answers for. A line written in a seat's room names that seat's Character in `characters`; Reply names the line it answers in `parent_narrative`.
 
 ## Testing
 
