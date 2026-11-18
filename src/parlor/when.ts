@@ -29,6 +29,16 @@ export function newestFirst(a: unknown, b: unknown): number {
 }
 
 /**
+ * Two readable times within a second of each other. keel stamps a new element's created_at and updated_at a few
+ * microseconds apart, so an element no one changed since it was made is told by this, never by equal text.
+ */
+export function sameMoment(a: unknown, b: unknown): boolean {
+  const x = instantOf(a), y = instantOf(b);
+  if (x === null || y === null) return false;
+  return Math.abs((x.seconds - y.seconds) * 1_000_000 + (x.microseconds - y.microseconds)) < 1_000_000;
+}
+
+/**
  * Two ids in code point order (serial 123 point 4): the tie every sort here breaks by id. Never
  * `localeCompare`, which folds case and reads by a locale's collation, so an id in upper case sorted
  * apart from where every other reader of the standard puts it.

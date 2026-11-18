@@ -761,6 +761,14 @@ describe('recent changes (sheet §2)', () => {
     expect(c[1].name).toBe('Untitled');
   });
 
+  it('an element keel stamped a few microseconds apart at its making reads made; one changed a second later reads changed', () => {
+    const c = readChanges([
+      lore({ id: 'm', type: 'object', name: 'New', created_at: '2026-11-18T21:55:57.727711+00:00', updated_at: '2026-11-18T21:55:57.727720+00:00' }),
+      lore({ id: 'e', type: 'object', name: 'Edited', created_at: '2026-11-18T21:55:57.727711+00:00', updated_at: '2026-11-18T21:55:58.900000+00:00' }),
+    ]);
+    expect(Object.fromEntries(c.map(x => [x.id, x.made]))).toEqual({ m: true, e: false });
+  });
+
   it('carries who made it and when, and removed elements among the rows, newest first; a removal that may have been the room\'s is left out', () => {
     const c = readChanges([
       lore({ id: 'a', type: 'object', name: 'Gate', created_at: '2026-11-17T08:00:00Z', updated_at: '2026-11-18T09:00:00Z', changed_by: 'm2', created_by: 'm1' }),

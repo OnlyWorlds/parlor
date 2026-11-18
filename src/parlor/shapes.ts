@@ -28,7 +28,7 @@
  */
 
 import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, ROOM_PAIRS, readReportLine, readReportLines, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
-import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when.ts';
+import { byCodePoint, earlierFirst, isAfter, newestFirst, sameMoment } from './when.ts';
 
 export interface El {
   id: string;
@@ -1044,7 +1044,7 @@ export function readChanges(els: Iterable<El>, max = 40, removals: Iterable<Remo
     const at = el.updated_at ?? el.created_at ?? '';
     if (!at) continue;
     const by = 'changed_by' in el ? (typeof el.changed_by === 'string' && el.changed_by ? el.changed_by : OWNER) : whoMade(el);
-    out.push({ id: el.id, type: fold(el.type), name: (el.name ?? '').toString().trim() || 'Untitled', by, at, made: !!el.created_at && el.created_at === el.updated_at,
+    out.push({ id: el.id, type: fold(el.type), name: (el.name ?? '').toString().trim() || 'Untitled', by, at, made: sameMoment(el.created_at, el.updated_at ?? el.created_at),
       removed: false, madeBy: whoMade(el), madeAt: typeof el.created_at === 'string' && el.created_at ? el.created_at : null, el });
   }
   for (const r of removals) {

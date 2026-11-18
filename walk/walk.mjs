@@ -441,16 +441,21 @@ try {
   check('changes: one row for the element', (await host.locator('.changes li.ch', { hasText: loreName }).count()) === 1);
   {
     const nameBtn = loreRow.locator('button.nm');
-    await nameBtn.click();
     const elCard = host.locator('[data-part="element-card"]');
-    check('changes: the name opens the element\'s card', await until(async () => (await elCard.locator('h2').innerText({ timeout: 2000 }).catch(() => '')) === loreName, 5000));
-    await elCard.getByRole('button', { name: 'Close' }).click();
-    check('changes: the card closes and focus is back on the name', await until(() => elCard.isHidden(), 3000)
-      && await host.evaluate(n => document.activeElement?.classList.contains('nm') && document.activeElement.textContent === n, loreName));
+    if ((await nameBtn.count()) === 1) {
+      await nameBtn.click();
+      check('changes: the name opens the element\'s card', await until(async () => (await elCard.locator('h2').innerText({ timeout: 2000 }).catch(() => '')) === loreName, 5000));
+      await elCard.getByRole('button', { name: 'Close' }).click();
+      check('changes: the card closes and focus is back on the name', await until(() => elCard.isHidden(), 3000)
+        && await host.evaluate(n => document.activeElement?.classList.contains('nm') && document.activeElement.textContent === n, loreName));
+    } else {
+      check('changes: the name opens the element\'s card', false, 'the name is no button');
+    }
     // A removed element: struck, not pressable, its name as it was at the removal, the word "removed".
     const goneName = `Walk removed ${engineName} ${stamp}`;
     const gone = await decoy('character', { name: goneName });
     await until(async () => (await host.locator('.changes li.ch', { hasText: goneName }).count()) === 1, 15000);
+    check('changes: an element just made reads made, not changed', /^made by /.test((await host.locator('.changes li.ch', { hasText: goneName }).locator('[data-part="change-by"]').innerText({ timeout: 2000 }).catch(() => '')).trim()));
     await api.delete('character', gone.id);
     const goneRow = host.locator('.changes li.ch', { hasText: goneName });
     check('changes: a removed element stays, struck, its name kept, not pressable', await until(async () =>
