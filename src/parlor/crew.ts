@@ -290,6 +290,11 @@ export function designFolds(parts: readonly DesignPart[]): DesignFold[] {
   return [...folds.values()];
 }
 
+/** The folds biggest first (the most parts under a design at the top); folds of one size keep the order they came in. */
+export function bySize(folds: readonly DesignFold[]): DesignFold[] {
+  return folds.map((f, i) => [f, i] as const).sort(([a, i], [b, j]) => b.parts.length - a.parts.length || i - j).map(([f]) => f);
+}
+
 // ---------------------------------------------------------------- an element's card
 
 export interface CardLink { field: string; label: string; id: string; name: string; type: string; under: boolean }

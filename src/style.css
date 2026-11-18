@@ -112,7 +112,12 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .chip.c-orange{color:var(--warn);border-color:var(--warn)}
 .chip.c-green{color:var(--ok);border-color:var(--ok)}
 .card.bentry.hidden h3,.card.bentry.hidden p{color:var(--muted)}
-.reply{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:10px;font-size:13px;color:var(--muted)}
+.reply{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:10px;font-size:13px;color:var(--muted);border-left:2px solid var(--accent);padding:4px 0 4px 10px;background:var(--surf)}
+.reply strong{color:var(--text);font-weight:600}
+.reply.flash{animation:reply-lit 1.2s ease-out}
+@keyframes reply-lit{from{background:#0e3a44}to{background:var(--surf)}}
+@media (prefers-reduced-motion:reduce){.reply.flash{animation:none}}
+.btn.ans[aria-pressed=true]{background:var(--raise)}
 .found{list-style:none;margin:4px 0 0;padding:0}
 .found li button{width:100%;text-align:left;background:var(--surf2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;margin:0 0 4px;cursor:pointer;font-size:14px}
 .found li button:hover,.found li button:focus-visible{border-color:var(--accent);outline:none}
@@ -269,6 +274,13 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .fold2{flex:none;width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .fold2:hover{background:var(--raise)}
 .fold2.none{cursor:default}
+/* A design with parts reads as a parent: its fold a drawn button, its count a badge, its parts on a rail under it. */
+.design.parent>.des .fold2{border:1px solid var(--line);color:var(--text)}
+.design.parent>.des .fold2:hover{border-color:var(--accent);color:var(--accent)}
+.design.parent>.des .n{font-weight:700}
+.design.parent.open{background:var(--surf)}
+.design.parent.open .part{border-left:2px solid var(--line);margin-left:14px;padding-left:18px}
+.pc{font-size:12px;font-weight:600;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 8px;white-space:nowrap}
 .des .c,.part .c{color:var(--muted);font-size:12px}
 .pill{font-size:12px}
 .pill.s-open{color:var(--warn)}

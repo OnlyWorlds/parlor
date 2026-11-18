@@ -68,6 +68,12 @@ try {
   await card(screen.id).getByRole('button', { name: 'Answer' }).click();
   const bar = page.locator('.reply');
   check('the reply bar says what it answers', /Answering: Signup screen/.test(await bar.innerText()));
+  // The press reads where it was made: the part's own button says Answering while the composer answers it, and the bar
+  // where the answer is written is in view.
+  check('the pressed Answer reads Answering, pressed', await until(async () => (await card(screen.id).locator('button.ans').getAttribute('aria-pressed')) === 'true'
+    && (await card(screen.id).locator('button.ans').innerText()).trim() === 'Answering', 3000));
+  check('the other parts\' Answer stay unpressed', (await card(rules.id).locator('button.ans').getAttribute('aria-pressed')) === 'false');
+  check('the reply bar is in view', await bar.evaluate(el => { const r = el.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; }));
   const said = `On the signup screen ${RUN}`;
   await page.getByLabel('Write a line').fill(said);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -91,6 +97,7 @@ try {
   }));
   check('the part counts the line', await until(async () => /1 answer\b/.test(await card(screen.id).innerText())));
   check('the reply clears once the line has landed', await bar.isHidden());
+  check('and the part\'s Answer reads Answer again', await until(async () => (await card(screen.id).locator('button.ans').getAttribute('aria-pressed')) === 'false', 3000));
 
   // A rename reaches the reply bar; a part that leaves its state clears the reply and sends nothing.
   await card(rules.id).getByRole('button', { name: 'Answer' }).click();

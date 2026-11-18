@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { OwMember } from '@onlyworlds/sdk';
 import { readLines, readWork, readDesignParts, type El, type Sitting } from './shapes';
-import { crewOf, roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, SHOW_WORKING, workshopRuns, designFolds, cardOf, firstLine, seatsByKey } from './crew';
+import { crewOf, roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, SHOW_WORKING, workshopRuns, designFolds, bySize, cardOf, firstLine, seatsByKey } from './crew';
 import { buildTeam, newestNote, age } from './team';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
@@ -254,6 +254,10 @@ describe('the design folds', () => {
     const folds = designFolds(parts);
     const view = Object.fromEntries(folds.map(f => [f.design.id, f.parts.map(p => p.id)]));
     expect(view).toEqual({ trainer: ['deep', 'screen'], plain: [], loop1: [], loop2: [] });
+  });
+  it('shows the biggest design first; designs of one size keep their order (in design first, then by name)', () => {
+    const parts = readDesignParts([obj('a-small'), obj('b-big', undefined, 'locked'), obj('k1', 'b-big', 'locked'), obj('k2', 'b-big', 'locked'), obj('c-mid'), obj('m1', 'c-mid'), obj('d-none')]);
+    expect(bySize(designFolds(parts)).map(f => `${f.design.id}:${f.parts.length}`)).toEqual(['b-big:2', 'c-mid:1', 'a-small:0', 'd-none:0']);
   });
 });
 

@@ -7,7 +7,7 @@
  */
 
 import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
-import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
+import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, bySize, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
 import { newestNote } from '../parlor/team';
 import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
 import { isAfter } from '../parlor/when';
@@ -380,16 +380,22 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   lines.addEventListener('scroll', () => { stickToEnd = lines.scrollTop + lines.clientHeight >= lines.scrollHeight - 24; });
 
   // Answering a board entry: the composer says so until the line is sent or the answer dropped.
-  const replyBar = h('div', { class: 'reply', hidden: true });
+  // It is drawn plainly where the composer is, and shown at once: a press far off in the panel is answered here.
+  const replyBar = h('div', { class: 'reply', 'data-part': 'reply-bar', hidden: true });
   // The box answers one work item: answering another (or none) starts it unticked again.
   let finishFor: string | null = null;
   function drawReply(): void {
     const answeringId = replyTo?.id ?? null;
-    if (answeringId !== finishFor) { finishBox.checked = false; finishFor = answeringId; }
+    const fresh = answeringId !== finishFor;
+    if (fresh) { finishBox.checked = false; finishFor = answeringId; }
     replyBar.hidden = !replyTo;
+    // The Designs list says which part the composer answers: its Answer reads Answering while it does.
+    drawDesigns();
     if (!replyTo) { clear(replyBar); return; }
     drawFinishLabel();
-    clear(replyBar, h('span', null, `${reporting ? 'Report on' : replyTo.line ? 'Replying to' : 'Answering'}: ${replyTo.title}`),
+    // A new answer lights the bar for a moment, so the press reads where it lands.
+    if (fresh) { replyBar.classList.remove('flash'); void replyBar.offsetWidth; replyBar.classList.add('flash'); }
+    clear(replyBar, h('span', null, `${reporting ? 'Report on' : replyTo.line ? 'Replying to' : 'Answering'}: `, h('strong', null, replyTo.title)),
       reporting && replyTo.link === 'relations' ? finishLabel : null,
       h('button', { class: 'btn quiet', type: 'button', onclick: () => { replyTo = null; drawReply(); } }, 'Not now'));
   }
@@ -1579,24 +1585,28 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function drawDesigns(): void {
     // The parts this draw read, and their answers counted in one pass over the lines (the gate's S1).
     const counts = partsNow.length ? room.answerCounts(partsNow.map(p => p.id)) : new Map<string, number>();
-    const folds = designFolds(partsNow);
+    // The biggest design first (the most parts under it at the top).
+    const folds = bySize(designFolds(partsNow));
     // Rebuilt only when what it shows moved, so a feed tick never eats an Answer press or a fold (the gate's S8).
     const key = JSON.stringify([folds.map(f => [f.design.id, f.parts.map(p => p.id)]), partsNow.map(p => [p.id, p.title, p.state, p.type, counts.get(p.id) ?? 0, firstLine(p.el)]),
-      room.canWrite, [...openDesigns]]);
+      room.canWrite, [...openDesigns], replyTo && isDesignReply(replyTo) ? replyTo.id : null]);
     if (key === designKey) return;
     if (designMarks.held()) return;
     designKey = key;
     const focused = designMarks.before();
     const focusedName = focusIn(designList);
     const world = { id: room.world.id, name: room.world.name };
-    const answer = (p: DesignPart) => room.canWrite ? h('button', { class: 'btn std ans', type: 'button', 'data-focus': `design-answer:${p.id}`, onclick: () => {
+    const answering = (p: DesignPart) => !!replyTo && isDesignReply(replyTo) && replyTo.id === p.id;
+    const answer = (p: DesignPart) => room.canWrite ? h('button', { class: 'btn std ans', type: 'button', 'data-focus': `design-answer:${p.id}`, 'aria-pressed': String(answering(p)), onclick: () => {
+      // Pressed again while it is the one answered: the composer is where the answer is written.
+      if (answering(p)) { if (mq.matches) phoneTab('room'); text.focus(); return; }
       replyTo = { id: p.id, title: p.title, link: designLink(p) };
       drawReply();
       // An answer goes to the team chat: from a seat's room, the composer moves there, saying so.
       toTeamChat('An answer goes to the team chat: the composer moved there.');
       if (mq.matches) phoneTab('room');
       text.focus();
-    } }, 'Answer') : null;
+    } }, answering(p) ? 'Answering' : 'Answer') : null;
     const answers = (p: DesignPart) => { const n = counts.get(p.id) ?? 0; return n ? h('span', { class: 'c' }, `${n} answer${n === 1 ? '' : 's'}`) : null; };
     // A part's name reads its first line under the pointer and on focus, and opens its card on a press.
     const name = (p: DesignPart, cls: string) => tipped(h('button', { class: cls, type: 'button', 'data-focus': `design-name:${p.id}`, 'data-el': p.id, onclick: () => openCard(p.id) },
@@ -1607,14 +1617,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       ...folds.map(({ design: d, parts }) => {
         const open = openDesigns.has(d.id);
         const size = parts.length;
-        return h('div', { class: 'design', 'data-fold': d.id },
+        // A design with parts reads as a parent: its fold drawn as a button, its count of parts a badge.
+        return h('div', { class: `design${size ? ' parent' : ''}${open ? ' open' : ''}`, 'data-fold': d.id },
           h('div', { class: 'des', 'data-design': d.id },
             size ? h('button', { class: 'fold2', type: 'button', 'aria-expanded': String(open), 'aria-label': `${open ? 'Fold' : 'Unfold'} ${d.title}`, 'data-focus': `design-fold:${d.id}`, onclick: () => {
               if (open) openDesigns.delete(d.id); else openDesigns.add(d.id);
               draw();
             } }, chevron(open)) : h('span', { class: 'fold2 none', 'aria-hidden': 'true' }),
             name(d, 'n'),
-            h('span', { class: 'c' }, `${size} ${size === 1 ? 'part' : 'parts'}`),
+            h('span', { class: size ? 'pc' : 'c', 'data-part': 'part-count' }, size ? `${size} ${size === 1 ? 'part' : 'parts'}` : 'no parts'),
             answers(d), state(d),
             designMarks.mark(waymarkPlan(world, d.el as unknown as Record<string, unknown>, 'Untitled'), `design:${d.id}`),
             answer(d)),
