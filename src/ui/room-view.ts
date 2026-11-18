@@ -6,7 +6,7 @@
  * only when what they show moved, their open state kept apart, so a tick never eats a fold, an open card or focus.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
 import { seatRoom, thread, heldWork, workLineOf, designFolds, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
 import { newestNote } from '../parlor/team';
 import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
@@ -108,6 +108,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let reporting = false;
   const reportBtn = h('button', { class: 'btn quiet', type: 'button', 'data-part': 'report', 'aria-pressed': 'false', onclick: () => {
     reporting = !reporting;
+    // A report hangs under a report (a thread), never under a plain line: a Reply to a plain line is let go, saying so.
+    if (reporting && replyTo?.line && !replyIsReport(replyTo.id)) {
+      replyTo = null;
+      notice('A report does not hang under a plain line: the reply was let go, your text is kept.');
+    }
     // A seat's room takes plain lines: a report goes to the team chat, and the composer moves there, saying so.
     if (reporting && space !== 'team') toTeamChat('A report goes to the team chat: the composer moved there.');
     drawReportMode();
@@ -266,9 +271,16 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       if (!rereadDesignReply()) return;
       // In a seat's room the line is addressed to the seat's Character; a seat whose room went sends nothing.
       const inSeat = space !== 'team';
-      const to = inSeat ? seatsNow.get(space)?.character ?? null : null;
+      const to = inSeat && room.teamWorld ? seatsNow.get(space)?.character ?? null : null;
       if (inSeat && (!to || asReport)) {
         toTeamChat(asReport ? 'A report goes to the team chat: the composer moved there.' : 'That room is no longer there: your text is kept. You are in the team chat.');
+        return;
+      }
+      // A report never hangs under a plain line (only under a report, the thread): such a reply is let go first.
+      if (asReport && replyTo?.line && !replyIsReport(replyTo.id)) {
+        replyTo = null;
+        drawReply();
+        notice('A report does not hang under a plain line: the reply was let go, your text is kept. Hand in again.', true);
         return;
       }
       const answering = replyTo;
@@ -742,14 +754,25 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // -------------------------------------------------- moving between rooms
   /** Open a room: the team chat, or a seat's by its key. A seat's room takes plain lines, so a report or an answer is let go. */
   function openSpace(next: string): void {
+    // Seat rooms are a team world's alone (a workshop world keeps its one room).
+    if (next !== 'team' && !room.teamWorld) return;
     if (next !== 'team') {
       if (reporting) { reporting = false; finishBox.checked = false; drawReportMode(); }
       if (replyTo && !replyTo.line) { replyTo = null; drawReply(); notice('A seat\'s room takes plain lines: the answer was let go, your text is kept.'); }
     }
-    if (space !== next) { cardId = null; stickToEnd = true; }
+    if (space !== next) { cardId = null; stickToEnd = true; dropLineReply(); }
     space = next;
     draw();
     if (mq.matches) phoneTab('room');
+  }
+  /** A Reply to a line belongs to the room it was pressed in: it is let go with the room. */
+  function dropLineReply(): void {
+    if (replyTo?.line) { replyTo = null; drawReply(); }
+  }
+  /** Whether a line the composer replies to is a report (a report may hang under one: the thread). */
+  function replyIsReport(id: string): boolean {
+    const el = room.els.get(id);
+    return !!el && isReport(el);
   }
   /** Back to the team chat, saying why (a report or an answer goes there). */
   function toTeamChat(why: string): void {
@@ -757,6 +780,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     space = 'team';
     cardId = null;
     stickToEnd = true;
+    dropLineReply();
     notice(why);
     draw();
     if (mq.matches) phoneTab('room');
@@ -814,11 +838,12 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     crewNow = room.crew();
     seatsNow = seatsByKey(crewNow);
     // A seat whose room went (it left, or its Character is no longer served) brings the room back to the team chat.
-    if (space !== 'team' && !seatsNow.get(space)?.character) { space = 'team'; cardId = null; }
+    // A workshop world has no seat rooms.
+    if (space !== 'team' && (!room.teamWorld || !seatsNow.get(space)?.character)) { space = 'team'; cardId = null; dropLineReply(); }
     const work = room.work();
     const notes = room.roster ? [...room.els.values()].filter(el => el.type === 'narrative' && el.supertype === 'Note') : [];
     lineOf = new Map([...seatsNow.values()].map(s => [s.key, room.roster
-      ? workLineOf(newestNote(notes as never[], s.key, room.roster) as El | null, heldWork(work, s), room.els) : null]));
+      ? workLineOf(newestNote(notes as never[], s.key, room.roster) as El | null, heldWork(work, s), room.els, s.key) : null]));
     drawTop();
     drawReportMode();
     drawComplete();
@@ -980,9 +1005,17 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
 
   /** The quiet Reply on a line: the composer answers that line (its parent_narrative), in the room that is open. */
   function replyBtn(l: Line, name: string): HTMLElement | null {
-    if (!room.canWrite) return null;
+    // A team world's control: a workshop world keeps its room as it was.
+    if (!room.canWrite || !room.teamWorld) return null;
     return h('button', { class: 'act reply-act', type: 'button', 'data-act': 'reply', 'data-focus': `reply:${l.id}`, 'aria-label': `Reply to ${name}`, onclick: () => {
       const words = (l.report?.title || l.text).replace(/\s+/g, ' ').trim();
+      // A reply to a plain line is a line: a report never hangs under one, so Report turns off, saying so.
+      if (reporting && !l.report) {
+        reporting = false;
+        finishBox.checked = false;
+        drawReportMode();
+        notice('A reply to a line is a line: Report is off, your text is kept.');
+      }
       replyTo = { id: l.id, title: `${name}, ${words ? `"${lineName(words)}"` : 'a line'}`, link: 'parent_narrative', line: true };
       drawReply();
       text.focus();
@@ -1091,7 +1124,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function crewRow(s: CrewSeat, personName: string | null): HTMLElement {
     const wl = lineOf.get(s.key) ?? null;
     // Whose room a press opens: its own; an AI that plays its person's Character, its person's; none with no Character.
-    const target = s.plays ?? (s.character ? s.key : null);
+    // A workshop world has no seat rooms: its rows only say who is here.
+    const target = !room.teamWorld ? null : s.plays ? (seatsNow.get(s.plays)?.character ? s.plays : null) : s.character ? s.key : null;
     const busy = !!wl?.working;
     const status = s.plays ? `plays ${personName ?? 'its person'}` : !s.character ? 'no room you can see' : wl?.on ? '' : s.ai ? 'free' : `${s.role ?? 'member'}${s.you ? ', you' : ''}`;
     const inner = [

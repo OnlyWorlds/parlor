@@ -39,7 +39,9 @@ export interface Crew {
  * The crew from the roster, by the team rule the OnlyWorlds Dashboard uses (`buildTeam`, vendored in team.ts). After
  * it, a person whose roster row names no Character is given the Member Character they made in this world (their own
  * name in the room), so the person who writes as it has a room; a seat with neither has none. `charName` names a
- * Character this reader is served, or null: a name never comes from a Character the reader cannot see.
+ * Character this reader is served, or null: a name never comes from a Character the reader cannot see. `served` says
+ * whether this reader is served a Character at all (in its feed, not hidden, not a stub): a seat whose Character is
+ * not served has no room, so no room is ever keyed on, and no line ever addressed to, a Character the reader cannot see.
  */
 export function crewOf(o: {
   members: readonly OwMember[];
@@ -48,7 +50,9 @@ export function crewOf(o: {
   mySeats: readonly { id: string }[];
   charName: (character: string | null) => string | null;
   memberCharacters: ReadonlyMap<string, { id: string; name: string }>;
+  served: (character: string) => boolean;
 }): Crew {
+  const room = (c: string | null): string | null => (c && o.served(c) ? c : null);
   const team = buildTeam({ members: o.members, me: o.me, myUsername: o.myUsername, mySeats: o.mySeats, nameOf: c => o.charName(c) ?? '', charName: o.charName });
   const roleOf = (key: MemberKey): RoomRole => {
     const row = o.members.find(m => keyOf(m.id) === key);
@@ -65,16 +69,16 @@ export function crewOf(o: {
         if (own.name.trim()) name = own.name.trim();
       }
     }
-    const seat: CrewSeat = { key: p.key, name, ai: false, character, role: roleOf(p.key), you: p.you, plays: null };
+    const seat: CrewSeat = { key: p.key, name, ai: false, character: room(character), role: roleOf(p.key), you: p.you, plays: null };
     const ais: CrewSeat[] = p.ais.map(a => ({
       key: a.key, name: a.ownName, ai: true,
       // An AI that plays its person's Character has no room of its own: a press opens the person's.
-      character: a.as === 'person' ? null : a.character,
+      character: a.as === 'person' ? null : room(a.character),
       role: null, you: false, plays: a.as === 'person' ? p.key : null,
     }));
     return { seat, ais };
   });
-  const beasts: CrewSeat[] = team.unattached.map(a => ({ key: a.key, name: a.ownName, ai: true, character: a.character, role: null, you: false, plays: null }));
+  const beasts: CrewSeat[] = team.unattached.map(a => ({ key: a.key, name: a.ownName, ai: true, character: room(a.character), role: null, you: false, plays: null }));
   return { beasts, people };
 }
 
@@ -158,14 +162,15 @@ function links(el: El, field: string): string[] {
 }
 
 /**
- * The work item a seat holds taken: a work item whose state is taken and whose `characters` holds the seat's Character,
- * or that the seat's own live take holds; the newest by when it was made. Null when it holds none.
+ * The work item a seat holds taken: a work item in state taken that the seat's own live take holds, or whose
+ * `characters` holds the seat's Character and that someone else made (a seat never asks itself); the newest by when it
+ * was made. Null when it holds none.
  */
 export function heldWork(work: readonly WorkItem[], seat: { key: MemberKey; character: string | null }): WorkItem | null {
   let best: WorkItem | null = null;
   for (const w of work) {
     if (w.state !== 'taken') continue;
-    const named = !!seat.character && links(w.el, 'characters').includes(seat.character);
+    const named = !!seat.character && links(w.el, 'characters').includes(seat.character) && w.by !== seat.key;
     const took = w.takes.some(t => t.by === seat.key);
     if (!named && !took) continue;
     if (!best || earlierFirst(best.at, w.at) < 0 || (earlierFirst(best.at, w.at) === 0 && byCodePoint(w.id, best.id) < 0)) best = w;
@@ -191,7 +196,7 @@ export interface WorkLine {
   working: boolean;
   /** While working: the Note's time, else the work item's. */
   since: string | null;
-  /** Who made the work item the seat holds taken; null when it holds none. */
+  /** Who made the work item the seat holds taken, never the seat itself; null when it holds none. */
   askedBy: string | null;
 }
 
@@ -201,7 +206,7 @@ function noteText(el: El): string {
 }
 
 /** A seat's work line, from its newest Note and the work item it holds taken. Null when it has neither. */
-export function workLineOf(note: El | null, held: WorkItem | null, els: ReadonlyMap<string, El>): WorkLine | null {
+export function workLineOf(note: El | null, held: WorkItem | null, els: ReadonlyMap<string, El>, seat: MemberKey | null = null): WorkLine | null {
   if (!note && !held) return null;
   const on = note ? (noteText(note).split(/\r?\n/).map(s => s.trim()).find(Boolean) ?? '') : '';
   const ids: string[] = [];
@@ -219,7 +224,7 @@ export function workLineOf(note: El | null, held: WorkItem | null, els: Readonly
     links: ids,
     working: !!held,
     since: held ? noteAt ?? held.at : null,
-    askedBy: held ? held.by : null,
+    askedBy: held && held.by !== seat ? held.by : null,
   };
 }
 

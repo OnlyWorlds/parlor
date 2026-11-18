@@ -26,7 +26,8 @@ describe('the crew', () => {
   const names: Record<string, string> = { 'c-titus': 'Titus', 'c-jasper': 'Jasper', 'c-vonkje': 'Vonkje', 'c-kael': 'Kael' };
   const charName = (c: string | null) => (c ? names[c] ?? null : null);
   const memberCharacters = new Map([['m-noch', { id: 'c-own', name: 'Noor' }]]);
-  const crew = crewOf({ members, me: 'm-jas', mySeats: [], charName, memberCharacters });
+  const served = (c: string) => c in names || c === 'c-own';
+  const crew = crewOf({ members, me: 'm-jas', mySeats: [], charName, memberCharacters, served });
 
   it('puts an AI no one answers for among the beasts and an AI with a sponsor under its person', () => {
     expect(crew.beasts.map(b => b.name)).toEqual(['Vonkje']);
@@ -62,9 +63,21 @@ describe('the crew', () => {
   });
 
   it('never names a seat by a Character the reader is not served', () => {
-    const hidden = crewOf({ members, me: 'm-jas', mySeats: [], charName: () => null, memberCharacters: new Map() });
+    const hidden = crewOf({ members, me: 'm-jas', mySeats: [], charName: () => null, memberCharacters: new Map(), served: () => false });
     expect(hidden.beasts[0].name).toBe('vonkje-seat');
     expect(hidden.people.find(p => p.seat.key === 'owner')!.seat.name).toBe('The owner');
+  });
+
+  it('gives no room to a seat whose roster Character the reader is not served, never one keyed on the raw id', () => {
+    const hidden = crewOf({ members, me: 'm-jas', mySeats: [], charName: () => null, memberCharacters: new Map(), served: () => false });
+    for (const s of seatsByKey(hidden).values()) expect(s.character).toBeNull();
+    // Served except the beast's: only the beast loses its room.
+    const some = crewOf({ members, me: 'm-jas', mySeats: [], charName, memberCharacters, served: c => served(c) && c !== 'c-vonkje' });
+    expect(some.beasts[0].character).toBeNull();
+    expect(some.people.find(p => p.seat.key === 'owner')!.seat.character).toBe('c-titus');
+    // A roster Character the feed does not hold (not in `names`) gives no room either.
+    const absent = crewOf({ members: [...members, member({ id: 'm-hid', character: 'c-not-served' })], me: 'm-jas', mySeats: [], charName, memberCharacters, served });
+    expect(absent.people.find(p => p.seat.key === 'm-hid')!.seat.character).toBeNull();
   });
 
   it('is the dashboard rule: buildTeam itself places by sponsor and my_seats only', () => {
@@ -162,6 +175,20 @@ describe('who asked, and working', () => {
 
   it('holds none for a seat that holds nothing taken', () => {
     expect(heldWork(work, { key: 'm-x', character: 'c-x' })).toBeNull();
+  });
+
+  it('never counts an item the seat made about itself, unless its own take holds it; asked by never names the seat', () => {
+    const own = readWork([
+      workItem('w-self', '2026-11-18T11:00:00Z', { subtype: 'taken', characters: ['c-s'], created_by: 'm-self' }),
+    ], WORLD);
+    expect(heldWork(own, { key: 'm-self', character: 'c-s' })).toBeNull();
+    const took = readWork([
+      workItem('w-self', '2026-11-18T11:00:00Z', { characters: ['c-s'], created_by: 'm-self' }),
+      take('t-self', 'w-self', 'm-self'),
+    ], WORLD);
+    const held = heldWork(took, { key: 'm-self', character: 'c-s' });
+    expect(held?.id).toBe('w-self');
+    expect(workLineOf(null, held, new Map(), 'm-self')).toMatchObject({ working: true, askedBy: null });
   });
 
   it('says asked by from the work item and since from the Note, else the item', () => {

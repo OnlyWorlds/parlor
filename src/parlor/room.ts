@@ -21,7 +21,6 @@ import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
 import { RoomFiles, filesName } from './files';
 import { crewOf, workshopRuns, type Crew } from './crew';
-import { newestNote, type MemberKey } from './team';
 import { hostLine, isHostRefusal } from './host';
 
 /** A report born completed, pressed by a seat that no longer keeps the world: nothing was sent. */
@@ -340,22 +339,21 @@ export class Room {
       mySeats,
       charName: c => this.characterShown(c),
       memberCharacters: this.members(),
+      served: c => this.characterServed(c),
     });
+  }
+
+  /** Whether this reader is served a Character: in its feed, a Character, neither hidden nor a stub. */
+  characterServed(id: string | null): boolean {
+    if (!id) return false;
+    const el = this.els.get(id);
+    return !!el && String(el.type).toLowerCase() === 'character' && el.hidden !== true && el.known_of !== true;
   }
 
   /** A Character's name when this reader is served it, else null (never a name the reader cannot see). */
   characterShown(id: string | null): string | null {
-    if (!id) return null;
-    const el = this.els.get(id);
-    if (!el || String(el.type).toLowerCase() !== 'character' || el.hidden === true || el.known_of === true) return null;
-    return (el.name ?? '').toString().trim() || null;
-  }
-
-  /** A seat's newest Note (a Narrative with supertype Note the seat wrote by its own hand), or null. */
-  newestNote(key: MemberKey): El | null {
-    if (!this.roster) return null;
-    const notes = [...this.els.values()].filter(el => el.type === 'narrative' && el.supertype === 'Note');
-    return newestNote(notes as never[], key, this.roster) as El | null;
+    if (!id || !this.characterServed(id)) return null;
+    return (this.els.get(id)!.name ?? '').toString().trim() || null;
   }
 
   /**
