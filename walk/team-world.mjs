@@ -232,6 +232,24 @@ try {
   await h.locator('[data-part="report"]').click();
   check('room: Report moves the composer to Team chat', await until(() => h.locator('.head .room-title', { hasText: 'Team chat' }).isVisible(), 3000));
   await h.locator('[data-part="report"]').click();
+  // A Reply to a plain line, then Report: the reply is let go (a report never hangs under a plain line), the text kept.
+  {
+    const plain = h.locator('.lines .line', { hasText: toB });
+    await plain.hover();
+    await plain.getByRole('button', { name: /^Reply to/ }).click();
+    await box.fill(`Kept text ${RUN}`);
+    await h.locator('[data-part="report"]').click();
+    check('chat: Report on a reply to a plain line lets the reply go, the text kept', await until(async () =>
+      await h.locator('.reply').isHidden() && (await box.inputValue()) === `Kept text ${RUN}`, 3000));
+    await h.locator('[data-part="report"]').click();
+    // A line Reply is let go with the room it was pressed in.
+    await plain.hover();
+    await plain.getByRole('button', { name: /^Reply to/ }).click();
+    await bRow.click();
+    check('room: a line Reply is let go with the room', await until(() => h.locator('.reply').isHidden(), 3000));
+    await crew.locator('[data-seat="team"]').click();
+    await box.fill('');
+  }
 
   // ---------------------------------------------------------------- the member's page: keel's own roster
   const mCtx = await browser.newContext(phone
@@ -345,6 +363,11 @@ try {
         (await w.locator('[data-part="run-workshop"]:visible').count()) === 0 && await w.locator('[data-part="host-panel"]').isVisible() && await w.locator('.hostbar h3', { hasText: 'Host' }).isVisible(), 15000));
       check('workshop world: Specs is a tab', await w.getByRole('tab', { name: 'Specs' }).isVisible());
       check('workshop world: the top bar and the tabs are the new ones', await w.getByRole('button', { name: 'Your worlds' }).isVisible() && await w.getByRole('tab', { name: 'Crew' }).isVisible());
+      // A workshop world has no seat rooms and no Reply: its crew rows only say who is here.
+      const seatRows = w.locator('[data-part="crew"] .row[data-seat]:not([data-seat="team"])');
+      check('workshop world: the crew is listed, and no row opens a seat\'s room', await until(async () => (await seatRows.count()) >= 1, 15000)
+        && (await w.locator('[data-part="crew"] button.row[data-seat]:not([data-seat="team"])').count()) === 0, `${await seatRows.count()} rows`);
+      check('workshop world: no line carries Reply', (await w.locator('[data-act="reply"]').count()) === 0, `${await w.locator('.lines .line').count()} lines`);
       await w.getByRole('tab', { name: 'Specs' }).click();
       check('workshop world: Specs holds its sitting state as before', await until(() => w.locator('section.pane.side').getByText(/No sitting yet|Specs ·/).first().isVisible(), 8000));
       await shot(w, 'workshop-world');
