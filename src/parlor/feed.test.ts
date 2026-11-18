@@ -150,6 +150,18 @@ describe('RoomFeed', () => {
     expect(f.removals.has('x')).toBe(false);
   });
 
+  it('records no removal of an element the reader was served hidden or as a stub', async () => {
+    const k = new FakeKeel();
+    k.upsert('h', { name: 'A hidden place', hidden: true });
+    k.upsert('s', { name: 'A stub', known_of: true });
+    const f = new RoomFeed(k);
+    await f.sync();
+    k.remove('h', 'deleted', { deleted_at: '2026-11-18T20:00:00Z' });
+    k.remove('s', 'deleted', { deleted_at: '2026-11-18T20:00:01Z' });
+    await f.sync();
+    expect([...f.removals.keys()]).toEqual([]);
+  });
+
   it('a removal and its name outlast a walk from zero', async () => {
     const k = new FakeKeel();
     k.upsert('a', { name: 'Kept' });

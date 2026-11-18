@@ -1041,6 +1041,8 @@ export function readChanges(els: Iterable<El>, max = 40, removals: Iterable<Remo
   const out: Change[] = [];
   for (const el of els) {
     if (isRoomElement(el as Parameters<typeof isRoomElement>[0])) continue;
+    // What the reader is served hidden or as a stub is named nowhere in the room, here neither.
+    if (el.hidden === true || el.known_of === true) continue;
     const at = el.updated_at ?? el.created_at ?? '';
     if (!at) continue;
     const by = 'changed_by' in el ? (typeof el.changed_by === 'string' && el.changed_by ? el.changed_by : OWNER) : whoMade(el);

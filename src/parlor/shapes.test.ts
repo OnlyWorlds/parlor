@@ -761,6 +761,15 @@ describe('recent changes (sheet §2)', () => {
     expect(c[1].name).toBe('Untitled');
   });
 
+  it('names no element the reader is served hidden or as a stub, as every other list here', () => {
+    const c = readChanges([
+      lore({ id: 'h', type: 'location', name: 'A hidden place', updated_at: '2026-11-18T09:00:00Z', hidden: true }),
+      lore({ id: 'k', type: 'location', name: 'A stub', updated_at: '2026-11-18T09:00:00Z', known_of: true }),
+      lore({ id: 'p', type: 'location', name: 'A plain place', updated_at: '2026-11-18T09:00:00Z' }),
+    ]);
+    expect(c.map(x => x.id)).toEqual(['p']);
+  });
+
   it('an element keel stamped a few microseconds apart at its making reads made; one changed a second later reads changed', () => {
     const c = readChanges([
       lore({ id: 'm', type: 'object', name: 'New', created_at: '2026-11-18T21:55:57.727711+00:00', updated_at: '2026-11-18T21:55:57.727720+00:00' }),

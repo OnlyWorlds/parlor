@@ -188,6 +188,8 @@ export function applyChange(els: Map<string, El>, ch: OwChange, removals?: Map<s
   const old = els.get(ch.id) ?? before?.get(ch.id);
   els.delete(ch.id);
   if (!removals || (ch.reason !== undefined && ch.reason !== 'deleted') || !ch.deleted_at) return;
+  // An element the reader held hidden or as a stub was never named here, and its removal is not either.
+  if (old && (old.hidden === true || old.known_of === true)) return;
   const prev = removals.get(ch.id);
   const name = old ? ((typeof old.name === 'string' && old.name.trim()) || 'Untitled') : prev?.name ?? null;
   removals.set(ch.id, {
