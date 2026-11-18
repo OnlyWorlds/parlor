@@ -39,6 +39,18 @@ for (const k of keys.filter(k => (madeWith.has(k.last4) || (ours(k.name) && brow
   await accountCall(c, 'DELETE', `/account/worlds/${s.worldId}/keys/${k.id}`);
   keyCount++;
 }
+// The keys a walk minted by API and recorded by id (the team-world walk's), each revoked by its id on its own world:
+// with the host's token on the test world, with the minting account's token on another world it owns.
+for (const m of s.minted.filter(x => x.kind === 'walk-key' && !x.revoked)) {
+  const token = m.world === s.worldId ? c : s.tokens[m.label]?.token;
+  if (!token) { console.log(`a walk key on ${m.world} has no token to revoke it with: left`); continue; }
+  await accountCall(token, 'DELETE', `/account/worlds/${m.world}/keys/${m.id}`).catch(e => { if (e.status !== 404) throw e; });
+  const back = (await accountCall(token, 'GET', `/account/worlds/${m.world}/keys`)).data.find(k => k.id === m.id);
+  console.log(`walk key ${m.id.slice(0, 8)} revoked; reads back ${back ? (back.revoked ? 'revoked' : 'LIVE') : 'gone'}`);
+  if (!back || back.revoked) m.revoked = true;
+  keyCount++;
+}
+writeState(s);
 // The seed's own host key, by the id it recorded (it is neither the world's first key nor a browser's).
 if (s.hostKey?.id) {
   await accountCall(c, 'DELETE', `/account/worlds/${s.worldId}/keys/${s.hostKey.id}`).catch(() => {});

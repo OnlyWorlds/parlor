@@ -76,7 +76,7 @@ export function fileProblem(err: unknown, name: string): { line: string; retry: 
   // The web host's refusal, before the API saw it (its name or label held the text): not the seat.
   if (isHostRefusal(err)) return { line: hostLine(err, name, 'Nothing was added.'), retry: true };
   if (c === 'not_author' || status(err) === 403) return { line: `${name} was not added: your seat cannot add a file to that line.`, retry: false };
-  if (c === 'pin_required' || status(err) === 401) return { line: `${name} was not added: your PIN did not match. Check your PIN on Your parlors.`, retry: false };
+  if (c === 'pin_required' || status(err) === 401) return { line: `${name} was not added: your PIN did not match. Check your PIN on Your worlds.`, retry: false };
   if (status(err) === 429) return { line: `${name} was not added: too many requests for a moment. Wait a little and try again.`, retry: true };
   return { line: `${name} was not added: something went wrong. Try again in a moment.`, retry: true };
 }

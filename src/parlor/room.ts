@@ -55,7 +55,7 @@ export function problemLine(err: unknown, doing: string): string {
   if (err instanceof OwNetworkError) return `OnlyWorlds could not be reached while ${doing}. Check your connection; nothing was lost.`;
   if (err instanceof OwApiError || (err && typeof err === 'object' && 'status' in err)) {
     const e = err as { status: number; code?: string | null };
-    if (e.status === 401) return `Your PIN did not match while ${doing}. Check your PIN on Your parlors.`;
+    if (e.status === 401) return `Your PIN did not match while ${doing}. Check your PIN on Your worlds.`;
     if (e.code === 'not_author') return 'Only the person who made it can change that.';
     // The web host's refusal, before the API saw it: not the seat (its own words, nothing was written).
     if (isHostRefusal(err)) return hostLine(err, 'this', 'Nothing was written.', doing);

@@ -1,5 +1,5 @@
 /**
- * OnlyWorlds Parlor: a room on a world. Three pages: sign in, your parlors,
+ * OnlyWorlds Parlor: a room on a world. Three pages: sign in, your worlds,
  * the room. An invite link (`#/join/<code>`, or keel's own `/join#ow_j_…`
  * pasted in) joins first; the code leaves the address bar before anything
  * else runs. Sign in with OnlyWorlds comes back to `/signin/callback`, whose
@@ -79,7 +79,7 @@ async function finishSignIn(pending: Promise<SignInOutcome>): Promise<void> {
   history.replaceState(null, '', `/${landing.hash}`);
 }
 
-const STALE_INVITE = 'That invite link did not open: it may be used or out of date. Your parlors are below; ask the host for a new link if this one is missing.';
+const STALE_INVITE = 'That invite link did not open: it may be used or out of date. Your worlds are below; ask the host for a new link if this one is missing.';
 /** Each route() is a generation: one that a newer route() overtook during an await draws nothing more (the code gate's C1). */
 let generation = 0;
 
@@ -197,7 +197,7 @@ async function openRoom(worldId: string, overtaken: () => boolean): Promise<void
     if (overtaken()) return;
     clear(root, h('div', { class: 'center' }, h('div', { class: 'land' },
       h('p', { class: 'problem' }, problemLine(err, 'opening the room')),
-      h('div', { class: 'btns' }, h('button', { class: 'btn std', type: 'button', onclick: () => { location.hash = '#/'; } }, 'Your parlors')))));
+      h('div', { class: 'btns' }, h('button', { class: 'btn std', type: 'button', onclick: () => { location.hash = '#/'; } }, 'Your worlds')))));
   }
 }
 

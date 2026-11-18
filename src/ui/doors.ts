@@ -180,7 +180,7 @@ export function worldsView(root: HTMLElement, onOpen: (w: AccountWorld) => void,
 
   clear(root, h('div', { class: 'center' }, h('div', { class: 'land' },
     h('div', { class: 'brand' }, 'PARLOR'),
-    h('h1', null, 'Your parlors'),
+    h('h1', null, 'Your worlds'),
     h('p', null, `Signed in${session.login && !session.login.includes('@') ? ` as ${session.login}` : ''}. Every world you can enter has a room.`),
     list,
     joinForm,

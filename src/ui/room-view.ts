@@ -1,17 +1,20 @@
 /**
- * The room page (design sheet §3, Seethe's v1 screens 3, 4, 5, 7 and 10): the
- * room on the left, the work surface beside it (Work, Specs and the Board as tabs);
- * on a phone, one at a time. The composer, the forms and the tabs are built
- * once and never redrawn, so a feed tick never eats what someone is typing or
- * pressing; the rest redraws from the room's elements.
+ * The room page: the room alone in the main column (the team chat, or one seat's room), and a panel beside it as tabs
+ * (Crew, Work, Designs, Changes, Board, and Specs while a workshop runs or in a workshop world); on a phone, one at a
+ * time. The composer, the forms and the tabs are built once and never redrawn, so a feed tick never eats what someone
+ * is typing or pressing. The room's head, the crew list, an open element's card and the panel's lists are rebuilt
+ * only when what they show moved, their open state kept apart, so a tick never eats a fold, an open card or focus.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, designLink } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
+import { seatRoom, thread, heldWork, workLineOf, designFolds, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
+import { newestNote } from '../parlor/team';
+import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
 import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm, initial } from './dom';
-import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot } from './waymark';
+import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot, waymarkOpenIn } from './waymark';
 import { afterPress } from './press';
 import { OwNetworkError, fileKindOf, proposedMarkOf, type OwWorldFileRow } from '@onlyworlds/sdk';
 import { ACCEPT as FILES_ACCEPT, MAX_PICKS, adderOf, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
@@ -42,15 +45,34 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let picksFor: string | null = null;
   let specOpen = false;
   let boardOpen = false;
-  // A workshop opens on its specs; a world's parlor (no sitting yet) on its work.
-  let workTab: 'work' | 'changes' | 'specs' | 'board' | 'designs' = room.sittings().length ? 'specs' : 'work';
+  // The panel opens on the crew; a tab that goes (Specs when a workshop ends, Designs when none is left) falls back to it.
+  type PanelTab = 'crew' | 'work' | 'changes' | 'specs' | 'board' | 'designs';
+  let workTab: PanelTab = 'crew';
+  // What the room shows: the team chat, or one seat's room by its roster key.
+  let space = 'team';
+  // Run a workshop pressed in this browser: the host panel shows until End the workshop (a team world only).
+  let hostOpen = false;
+  // The crew's folds (Beasts, People, a person's AIs), kept per world in this browser: a convenience, nothing breaks without it.
+  const foldKey = `parlor.folds.${room.world.id}`;
+  const shut = new Set<string>();
+  try { for (const k of JSON.parse(localStorage.getItem(foldKey) ?? '[]') as unknown[]) if (typeof k === 'string') shut.add(k); } catch { /* none kept */ }
+  const keepFolds = (): void => { try { localStorage.setItem(foldKey, JSON.stringify([...shut])); } catch { /* private window */ } };
+  // The designs unfolded in Designs, for this visit.
+  const openDesigns = new Set<string>();
+  // The element whose card is open over the room, and the link fields its card lists open.
+  let cardId: string | null = null;
+  const cardFields = new Set<string>();
+  // The crew as this draw read it, once per draw.
+  let crewNow: Crew = { beasts: [], people: [] };
+  let seatsNow = new Map<string, CrewSeat>();
   // What changed since this browser last opened the room (a per-viewer convenience; nothing breaks without it).
   const seenKey = `parlor.seen.${room.world.id}`;
   let seenBefore = '';
   try { seenBefore = localStorage.getItem(seenKey) ?? ''; localStorage.setItem(seenKey, new Date().toISOString()); } catch { /* private window */ }
   let workOpen = false;
   // What the composer answers, as the one link field the line writes (a design part by objects or constructs).
-  let replyTo: { id: string; title: string; link: AnchorLink } | null = null;
+  // `line`: a Reply to a line in the room (its parent_narrative), the one answer a seat's room takes.
+  let replyTo: { id: string; title: string; link: AnchorLink; line?: boolean } | null = null;
   const isDesignReply = (r: typeof replyTo): boolean => r?.link === 'objects' || r?.link === 'constructs';
   const DESIGN_GONE = 'That design is no longer open here: your text is kept.';
   /**
@@ -86,6 +108,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let reporting = false;
   const reportBtn = h('button', { class: 'btn quiet', type: 'button', 'data-part': 'report', 'aria-pressed': 'false', onclick: () => {
     reporting = !reporting;
+    // A seat's room takes plain lines: a report goes to the team chat, and the composer moves there, saying so.
+    if (reporting && space !== 'team') toTeamChat('A report goes to the team chat: the composer moved there.');
     drawReportMode();
     drawReply();
     text.focus();
@@ -164,7 +188,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     drawFinishLabel();
     const label = reporting ? 'Hand in' : 'Send';
     if (sendBtn.textContent !== label) sendBtn.textContent = label;
-    const hint = reporting ? 'Write your report' : 'Write a line';
+    const seatName = space === 'team' ? null : seatsNow.get(space)?.name ?? null;
+    const hint = reporting ? 'Write your report' : seatName ? `Write to ${seatName} (everyone can read it)` : 'Write a line';
     if (text.placeholder !== hint) { text.placeholder = hint; text.setAttribute('aria-label', hint); }
     const rows = reporting ? 4 : 1;
     if (text.rows !== rows) { text.rows = rows; text.style.height = 'auto'; }
@@ -239,6 +264,13 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       if (!t && !files.length) return;
       // A design that went since Answer was pressed sends nothing (the contract gate's M2).
       if (!rereadDesignReply()) return;
+      // In a seat's room the line is addressed to the seat's Character; a seat whose room went sends nothing.
+      const inSeat = space !== 'team';
+      const to = inSeat ? seatsNow.get(space)?.character ?? null : null;
+      if (inSeat && (!to || asReport)) {
+        toTeamChat(asReport ? 'A report goes to the team chat: the composer moved there.' : 'That room is no longer there: your text is kept. You are in the team chat.');
+        return;
+      }
       const answering = replyTo;
       sending = true;
       sendBtn.disabled = true;
@@ -280,7 +312,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           await room.handIn(draft.body, draft.key, files, draft.setsDone, !!draft.setsDone && doneByMe.has(draft.setsDone));
         } else {
           sent = true;
-          await room.post(t, answering ? { link: answering.link, id: answering.id } : null, files);
+          await room.post(t, answering ? { link: answering.link, id: answering.id } : null, files, to);
         }
         if (text.value === typed) { text.value = ''; text.style.height = 'auto'; }
         if (replyTo === answering) { replyTo = null; drawReply(); }
@@ -342,7 +374,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     replyBar.hidden = !replyTo;
     if (!replyTo) { clear(replyBar); return; }
     drawFinishLabel();
-    clear(replyBar, h('span', null, `${reporting ? 'Report on' : 'Answering'}: ${replyTo.title}`),
+    clear(replyBar, h('span', null, `${reporting ? 'Report on' : replyTo.line ? 'Replying to' : 'Answering'}: ${replyTo.title}`),
       reporting && replyTo.link === 'relations' ? finishLabel : null,
       h('button', { class: 'btn quiet', type: 'button', onclick: () => { replyTo = null; drawReply(); } }, 'Not now'));
   }
@@ -642,26 +674,41 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     workTitle.focus();
   }
 
-  // -------------------------------------------------- the work tabs (built once)
-  const tabWorkItems = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'work'; draw(); } }, 'Work');
-  const tabChanges = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'changes'; draw(); } }, 'Changes');
-  const tabSpecs = h('button', { type: 'button', role: 'tab', 'aria-selected': 'true', onclick: () => { workTab = 'specs'; draw(); } }, 'Specs');
-  const tabBoard = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { workTab = 'board'; draw(); } }, 'Board');
-  // Designs: shown only where the world's Charter is marked and a design part exists.
-  const tabDesigns = h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', hidden: true, onclick: () => { workTab = 'designs'; draw(); } }, 'Designs');
-  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Work' }, tabWorkItems, tabChanges, tabSpecs, tabBoard, tabDesigns);
+  // -------------------------------------------------- the panel's tabs (built once)
+  type Tab = PanelTab;
+  const TAB_WORDS: Record<Tab, string> = { crew: 'Crew', work: 'Work', designs: 'Designs', changes: 'Changes', board: 'Board', specs: 'Specs' };
+  // Each tab an icon and a short word; the word may drop at a narrow width, the tab's name stays for a screen reader.
+  const tabBtn = (t: Tab) => h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', 'aria-label': TAB_WORDS[t], 'data-tab': t, onclick: () => { workTab = t; draw(); } },
+    tabIcon(t), h('span', { class: 'tab-word', 'aria-hidden': 'true' }, TAB_WORDS[t]));
+  const tabCrew = tabBtn('crew');
+  const tabWorkItems = tabBtn('work');
+  const tabDesigns = tabBtn('designs');
+  const tabChanges = tabBtn('changes');
+  const tabBoard = tabBtn('board');
+  const tabSpecs = tabBtn('specs');
+  const allTabs: Array<[Tab, HTMLButtonElement]> = [['crew', tabCrew], ['work', tabWorkItems], ['designs', tabDesigns], ['changes', tabChanges], ['board', tabBoard], ['specs', tabSpecs]];
+  const workTabs = h('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Panel' }, allTabs.map(([, b]) => b));
   const board = h('div');
   const workList = h('div');
   const changeList = h('div');
   const designList = h('div', { hidden: true });
+  const crewList = h('div', { class: 'crew', 'data-part': 'crew' });
   const workMarks = markSet(workList);
   const changeMarks = markSet(changeList);
   const designMarks = markSet(designList);
+
+  // -------------------------------------------------- an element's card (one, over the room's right side)
+  const elCard = h('aside', { class: 'elcard', 'data-part': 'element-card', hidden: true, 'aria-label': 'Element' });
+  // The room's notes under its head: a workshop world's sitting, what a reader without a PIN or a watcher may do.
+  const roomNotes = h('div', { class: 'room-notes' });
+  // The host panel folds by hiding, never by clearing: what it holds is drawn once per change, whether shown or not.
+  const hostWrap = h('div', { class: 'host-wrap', 'data-part': 'host-panel', hidden: true }, host);
+
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane', 'aria-label': 'Room' }, whoLine, roomHead, nameCard, lines, room.canWrite ? completeCard : null, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
-  const workPane = h('section', { class: 'pane off', 'aria-label': 'Work' }, host, workTabs, workList, workForm, changeList, work, specForm, board, boardForm, designList);
+  const roomPane = h('section', { class: 'pane room-col', 'aria-label': 'Room' }, whoLine, hostWrap, roomHead, roomNotes, nameCard, lines, elCard, room.canWrite ? completeCard : null, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
+  const workPane = h('section', { class: 'pane side off', 'aria-label': 'Panel' }, workTabs, crewList, workList, workForm, changeList, work, specForm, board, boardForm, designList);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
-  const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Work');
+  const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Crew and work');
   function phoneTab(which: 'room' | 'work') {
     roomPane.classList.toggle('off', which !== 'room');
     workPane.classList.toggle('off', which !== 'work');
@@ -678,19 +725,107 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   mq.addEventListener('change', onWidth);
   clear(root, h('div', { class: 'app' }, top, h('nav', { class: 'mtabs' }, tabRoom, tabWork), h('main', { class: 'main' }, roomPane, workPane)));
 
+  // -------------------------------------------------- where focus was, across a keyed rebuild
+  /** The `data-focus` of what holds focus under `box`, read before a rebuild. */
+  function focusIn(box: Element): string | null {
+    const a = document.activeElement;
+    return a instanceof HTMLElement && box.contains(a) ? a.closest('[data-focus]')?.getAttribute('data-focus') ?? null : null;
+  }
+  /** Focus goes back to the rebuilt node with the same `data-focus`, the page left where it was scrolled. */
+  function refocus(box: Element, key: string | null): void {
+    if (!key) return;
+    for (const el of box.querySelectorAll<HTMLElement>('[data-focus]')) {
+      if (el.getAttribute('data-focus') === key) { el.focus({ preventScroll: true }); return; }
+    }
+  }
+
+  // -------------------------------------------------- moving between rooms
+  /** Open a room: the team chat, or a seat's by its key. A seat's room takes plain lines, so a report or an answer is let go. */
+  function openSpace(next: string): void {
+    if (next !== 'team') {
+      if (reporting) { reporting = false; finishBox.checked = false; drawReportMode(); }
+      if (replyTo && !replyTo.line) { replyTo = null; drawReply(); notice('A seat\'s room takes plain lines: the answer was let go, your text is kept.'); }
+    }
+    if (space !== next) { cardId = null; stickToEnd = true; }
+    space = next;
+    draw();
+    if (mq.matches) phoneTab('room');
+  }
+  /** Back to the team chat, saying why (a report or an answer goes there). */
+  function toTeamChat(why: string): void {
+    if (space === 'team') return;
+    space = 'team';
+    cardId = null;
+    stickToEnd = true;
+    notice(why);
+    draw();
+    if (mq.matches) phoneTab('room');
+  }
+
+  // -------------------------------------------------- an element named where it shows
+  const elName = (el: El): string => (typeof el.name === 'string' && el.name.trim()) || 'Untitled';
+  /** Open an element's card over the room, or close it when it is the one open. */
+  function openCard(id: string): void {
+    cardId = cardId === id ? null : id;
+    cardFields.clear();
+    draw();
+  }
+  /** Step to a neighbour in the open card: the card shows it, and focus goes to its name. */
+  function stepCard(id: string): void {
+    cardId = id;
+    cardFields.clear();
+    draw();
+    elCard.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+  }
+  /** An element as a chip: its body, its name, its first line under the pointer; a press opens its card. */
+  function elChip(id: string, where: string, small = false): HTMLElement | null {
+    const el = room.els.get(id);
+    if (!isShowable(el)) return null;
+    const type = String(el.type).toLowerCase();
+    return tipped(h('button', { class: `chip elc${small ? ' sm' : ''}`, type: 'button', 'data-focus': `chip:${where}:${id}`, 'data-el': id, 'aria-pressed': String(cardId === id),
+      onclick: () => openCard(id) }, kindBody(type, small ? 18 : 22), elName(el)), el);
+  }
+  /** A name that shows its element's first line under the pointer and on focus (and tells a screen reader). */
+  function tipped<T extends HTMLElement>(node: T, el: El | undefined): T {
+    const tip = firstLine(el);
+    if (!tip) return node;
+    node.classList.add('tip');
+    node.setAttribute('data-tip', tip);
+    node.setAttribute('aria-description', tip);
+    return node;
+  }
+  /** "since 14:40" today, else the day. */
+  function sinceWords(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toDateString() === new Date().toDateString() ? hhmm(iso) : d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  }
+
   // -------------------------------------------------- what redraws
   // A redraw that is not a press's own (the feed's, a write's late answer, a fan-out settling) waits
   // while a press is in flight: a rebuild under a finger loses the tap (src/ui/press.ts).
   let gone = false;
   function redraw(): void { afterPress(heldDraw); }
   function heldDraw(): void { if (!gone) draw(); }
+  /** Each seat's work line, read once per draw. */
+  let lineOf = new Map<string, WorkLine | null>();
   function draw(): void {
     partsNow = room.designs();
+    crewNow = room.crew();
+    seatsNow = seatsByKey(crewNow);
+    // A seat whose room went (it left, or its Character is no longer served) brings the room back to the team chat.
+    if (space !== 'team' && !seatsNow.get(space)?.character) { space = 'team'; cardId = null; }
+    const work = room.work();
+    const notes = room.roster ? [...room.els.values()].filter(el => el.type === 'narrative' && el.supertype === 'Note') : [];
+    lineOf = new Map([...seatsNow.values()].map(s => [s.key, room.roster
+      ? workLineOf(newestNote(notes as never[], s.key, room.roster) as El | null, heldWork(work, s), room.els) : null]));
     drawTop();
     drawReportMode();
     drawComplete();
     drawRoom();
+    drawCard();
     drawHost();
+    drawCrew();
     drawWork();
     drawBoard();
     drawWorkItems();
@@ -700,26 +835,22 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     rereadDesignReply(partsNow);
   }
 
+  /** The host panel shows for a host in a workshop world, and in a team world after Run a workshop or while one runs. */
+  const hostShown = (): boolean => room.isHost && (!room.teamWorld || hostOpen || room.workshopRuns);
+  /** Specs shows in a workshop world, while a workshop runs, and for a host whose panel is open. */
+  const specsShown = (): boolean => !room.teamWorld || room.workshopRuns || hostShown();
+
   function drawTabs(): void {
-    // Designs shows only while there is one; a selected Designs that goes falls back to Work (the gate's S8).
+    // Designs shows only while there is one, Specs only as specsShown says; a selected tab that goes falls back to Crew.
     const parts = partsNow.length;
+    const specs = specsShown();
     tabDesigns.hidden = parts === 0;
-    if (!parts && workTab === 'designs') workTab = 'work';
-    const designsLabel = `Designs ${parts}`;
-    if (tabDesigns.textContent !== designsLabel) tabDesigns.textContent = designsLabel;
-    tabDesigns.setAttribute('aria-selected', String(workTab === 'designs'));
+    tabSpecs.hidden = !specs;
+    if ((!parts && workTab === 'designs') || (!specs && workTab === 'specs')) workTab = 'crew';
+    for (const [t, b] of allTabs) b.setAttribute('aria-selected', String(workTab === t));
+    crewList.hidden = workTab !== 'crew';
     designList.hidden = workTab !== 'designs';
-    const workLabel = `Work ${room.work().filter(w => w.state !== 'done').length}`;
-    const specsLabel = `Specs ${room.specs().length}`;
-    const boardLabel = `Board ${room.board().length}`;
-    if (tabWorkItems.textContent !== workLabel) tabWorkItems.textContent = workLabel;
-    if (tabSpecs.textContent !== specsLabel) tabSpecs.textContent = specsLabel;
-    if (tabBoard.textContent !== boardLabel) tabBoard.textContent = boardLabel;
-    tabWorkItems.setAttribute('aria-selected', String(workTab === 'work'));
-    tabChanges.setAttribute('aria-selected', String(workTab === 'changes'));
     changeList.hidden = workTab !== 'changes';
-    tabSpecs.setAttribute('aria-selected', String(workTab === 'specs'));
-    tabBoard.setAttribute('aria-selected', String(workTab === 'board'));
     workList.hidden = workTab !== 'work';
     work.hidden = workTab !== 'specs';
     board.hidden = workTab !== 'board';
@@ -728,32 +859,87 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     boardForm.hidden = !(boardOpen && workTab === 'board');
   }
 
-  // The world's name and its mark are built once: the bar's other parts are redrawn on every draw, and
+  // The world's name and its mark are built once: the bar's buttons are only shown, hidden and named on each draw, and
   // the mark is never moved, so an open fan-out and the focus on the mark stay where they are.
   const worldMark = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, null), 'world');
-  const topSub = h('div', { class: 'wsub' });
-  const topRest = h('div', { class: 'top-rest' });
-  top.append(h('div', { class: 'brand' }, 'PARLOR'), h('div', null, h('div', { class: 'wname' }, room.world.name, worldMark.el), topSub), topRest);
+  const rulesBtn = h('button', { class: 'btn quiet top-btn', type: 'button', 'data-part': 'rules', hidden: true, onclick: () => { const c = room.charter(); if (c) openCard(c.id); } }, 'Rules');
+  const runBtn = h('button', { class: 'btn std top-btn', type: 'button', 'data-part': 'run-workshop', hidden: true, onclick: () => { void runOrEnd(); } }, 'Run a workshop');
+  top.append(
+    h('div', { class: 'brand-row' }, h('img', { class: 'mark', src: '/icons/owlogo.png', alt: 'OnlyWorlds', width: 22, height: 22 }), h('span', { class: 'brand' }, 'PARLOR'),
+      h('span', { class: 'slash', 'aria-hidden': 'true' }, '/'), h('span', { class: 'wname' }, room.world.name), worldMark.el),
+    h('span', { class: 'sp' }), rulesBtn, runBtn,
+    h('button', { class: 'btn quiet top-btn', type: 'button', onclick: onLeave }, 'Your worlds'));
+  async function runOrEnd(): Promise<void> {
+    if (!hostShown()) {
+      hostOpen = true;
+      draw();
+      return;
+    }
+    // End the workshop: the panel folds, and each switch still on is turned off, so members stop seeing it too.
+    hostOpen = false;
+    draw();
+    if (!room.workshopRuns) return;
+    try { await room.endWorkshop(); } catch (err) { notice(problemLine(err, 'ending the workshop'), true); }
+  }
   function drawTop(): void {
+    // The room's role, for whoever reads the page by its parts (a test); the Crew tab says it in words.
+    top.setAttribute('data-room-role', room.role);
+    const charter = room.charter();
+    rulesBtn.hidden = !charter;
+    rulesBtn.setAttribute('aria-pressed', String(!!charter && cardId === charter.id));
+    runBtn.hidden = !(room.isHost && room.teamWorld);
+    const label = hostShown() ? 'End the workshop' : 'Run a workshop';
+    if (runBtn.textContent !== label) runBtn.textContent = label;
+    hostWrap.hidden = !hostShown();
+  }
+
+  // -------------------------------------------------- the room's head (rebuilt only when what it shows moved)
+  let headKey = '';
+  function drawHead(): void {
+    const seat = space === 'team' ? null : seatsNow.get(space) ?? null;
+    const wl = seat ? lineOf.get(seat.key) ?? null : null;
+    const asker = wl?.askedBy ? room.name(wl.askedBy) : null;
+    const chipIds = wl ? wl.links.map(id => [id, elName(room.els.get(id)!), firstLine(room.els.get(id))]) : [];
     const s = room.sitting();
-    const seats = room.seats();
-    const hostName = seats.find(x => x.role === 'host')?.name;
-    topSub.textContent = [s ? s.phase : 'No sitting yet', hostName ? `host ${hostName}` : ''].filter(Boolean).join(' · ');
-    clear(topRest,
-      h('span', { class: 'chip' }, `You: ${room.role}`),
-      h('div', { class: 'seats', 'aria-label': `${seats.length} seats` },
-        seats.slice(0, 12).map(x => h('span', { class: x.ai ? 'bdg a' : 'bdg', title: `${x.name}, ${x.ai ? 'AI ' : ''}${x.role}` }, x.ai ? 'AI' : initial(x.name))),
-        h('button', { class: 'btn quiet', type: 'button', onclick: onLeave }, 'Your parlors')),
-    );
+    const runs = room.teamWorld && room.workshopRuns && s ? s.phase : null;
+    const key = JSON.stringify([space, seat, wl, asker, chipIds, cardId, room.world.name, runs]);
+    if (key === headKey) return;
+    headKey = key;
+    const focused = focusIn(roomHead);
+    if (!seat) {
+      clear(roomHead, h('div', { class: 'head-words' }, h('h2', { class: 'room-title' }, 'Team chat'),
+        h('div', { class: 'sub' }, `everyone in ${room.world.name} · a line to one seat shows in its room too${runs ? ` · a workshop runs, in its ${runs} phase` : ''}`)));
+    } else {
+      const state = seat.ai ? (wl?.working ? 'working' : 'free now') : seat.role ?? 'member';
+      clear(roomHead, seatBody(seat.name, seat.ai, !!wl?.working, 48), h('div', { class: 'head-words' },
+        h('h2', { class: 'room-title' }, `${seat.name}’s room`),
+        wl?.on ? h('div', { class: 'workline', 'data-part': 'work-line' }, wl.on) : h('div', { class: 'sub' }, `${state} · lines to ${seat.name}, everyone can read them`),
+        wl ? h('div', { class: 'meta', 'data-part': 'work-meta' }, [
+          wl.working && wl.since ? `since ${sinceWords(wl.since)}` : '',
+          wl.noteAt ? `its Note at ${hhmm(wl.noteAt)}` : '',
+          asker ? `asked by ${asker}` : '',
+        ].filter(Boolean).join(' · ')) : null,
+        chipIds.length ? h('div', { class: 'chips', 'data-part': 'work-elements' }, chipIds.map(([id]) => elChip(id, 'head'))) : null));
+    }
+    roomHead.className = seat ? 'head seat' : 'head';
+    refocus(roomHead, focused);
+  }
+
+  /** The Character a "to" names, by its seat's name, else the Character's own when the reader is served it; else nothing. */
+  function toName(character: string): string | null {
+    for (const s of seatsNow.values()) if (s.character === character) return s.name;
+    return room.characterShown(character);
   }
 
   function drawRoom(): void {
+    drawHead();
     const all = room.sittings();
     const s = room.sitting();
     const earlier = s ? all.findIndex(x => x.id === s.id) : -1;
-    clear(roomHead,
-      h('div', { class: 'ph' }, s ? `Room · this sitting, from ${hhmm(s.at)}` : 'Room'),
-      earlier > 0 || room.showSitting
+    // A workshop world's room is its sitting's, as it always was: the sitting it shows, and the earlier ones to read.
+    clear(roomNotes,
+      !room.teamWorld && s ? h('div', { class: 'ph' }, `This sitting, from ${hhmm(s.at)}`) : null,
+      !room.teamWorld && (earlier > 0 || room.showSitting)
         ? h('div', { class: 'sys' }, room.showSitting ? 'An earlier sitting. ' : `${earlier} earlier sitting${earlier === 1 ? '' : 's'}. `,
           h('button', { class: 'btn quiet', type: 'button', onclick: () => {
             room.showSitting = room.showSitting ? null : all[Math.max(0, earlier - 1)].id;
@@ -763,14 +949,16 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         : null,
     );
     if (!room.canWrite) {
-      roomHead.append(h('p', { class: 'sys' }, room.sittingUnseen
+      roomNotes.append(h('p', { class: 'sys' }, room.sittingUnseen && !room.teamWorld
         ? 'You can read the talk in this room: the lines of the latest sitting someone has written in. A watcher is not shown the sitting itself, its specs, its votes or its board.'
         : room.role !== 'watcher' && room.me.scope === 'read'
           ? 'You can read this room. To write in it, your account needs a PIN: set one on onlyworlds.com under Account settings, then open the room again.'
           : 'You can read this room.'));
     }
     nameCard.hidden = !room.needsName();
+    const seat = space === 'team' ? null : seatsNow.get(space) ?? null;
     const ls = room.lines();
+    const shownLines: Threaded[] = seat?.character ? seatRoom(ls, seat.character) : thread(ls);
     const entries = new Map<string, { title: string }>(room.board().map(e => [e.id, e]));
     const workItems = new Map<string, { title: string }>();
     for (const w of room.work()) { entries.set(w.id, w); workItems.set(w.id, w); }
@@ -778,33 +966,178 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     // The design parts by id, once per draw: a line that names one is a talk on it.
     const partsBy = new Map(partsNow.map(p => [p.id, p]));
     room.files.unwatchAll();
-    clear(lines, ls.length ? ls.map(l => {
-      if (l.report) return reportLine(l, l.report, entries, workItems, sittingIds, partsBy);
-      // A board entry or a work item leads; else the design parts it names, each by its name now (the gate's S2, N3).
-      const designs = room.designsOf(l, partsBy);
-      const answering = (l.parent ? entries.get(l.parent) : undefined) ?? (l.about ? entries.get(l.about) : undefined)
-        ?? (designs.length ? { title: designs.map(d => d.title).join(', ') } : undefined);
-      const ai = room.isAi(l.by, l.el.changed_via);
-      const name = room.name(l.by);
-      const hidden = room.hidden.has(l.id);
-      // keel tells a maker their own line is hidden (#537); a host reads it from the hidden list.
-      const hiddenMine = !room.isHost && l.el.hidden === true;
-      const door = doorLine(l.el);
-      return h('div', { class: `line${ai ? ' ai' : ''}${hidden || hiddenMine ? ' hidden' : ''}` },
-        h('span', { class: ai ? 'bdg a' : 'bdg' }, ai ? 'AI' : initial(name)),
-        h('div', null,
-          h('div', { class: 'meta' }, h('span', { class: 'who' }, name), ai ? h('span', { class: 'chip' }, 'AI') : null,
-            h('span', { class: 't' }, hhmm(l.at)),
-            door ? h('span', { class: 't' }, door) : null,
-            answering ? h('span', { class: 't' }, `answering ${answering.title}`) : null,
-            hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
-            hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
-            room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this line') : null),
-          l.text ? h('div', { class: 'txt' }, l.text) : null,
-          fileBlock(l.id, l.by)));
-    }) : h('div', { class: 'sys' }, room.canWrite ? 'No lines yet. Say hello.' : 'No lines yet.'));
+    const focused = focusIn(lines);
+    clear(lines, shownLines.length ? shownLines.map(({ line: l, depth }) => {
+      const row = l.report ? reportLine(l, l.report, entries, workItems, sittingIds, partsBy) : messageLine(l, entries, partsBy);
+      if (depth > 0) row.classList.add('reply-line');
+      row.setAttribute('data-line', l.id);
+      return row;
+    }) : h('div', { class: 'sys' }, seat ? `No lines to ${seat.name} yet.` : room.canWrite ? 'No lines yet. Say hello.' : 'No lines yet.'));
+    refocus(lines, focused);
     if (stickToEnd) lines.scrollTop = lines.scrollHeight;
-    if (room.feed.lastError) roomHead.append(h('p', { class: 'problem' }, problemLine(room.feed.lastError, 'following the room')));
+    if (room.feed.lastError) roomNotes.append(h('p', { class: 'problem' }, problemLine(room.feed.lastError, 'following the room')));
+  }
+
+  /** The quiet Reply on a line: the composer answers that line (its parent_narrative), in the room that is open. */
+  function replyBtn(l: Line, name: string): HTMLElement | null {
+    if (!room.canWrite) return null;
+    return h('button', { class: 'act reply-act', type: 'button', 'data-act': 'reply', 'data-focus': `reply:${l.id}`, 'aria-label': `Reply to ${name}`, onclick: () => {
+      const words = (l.report?.title || l.text).replace(/\s+/g, ' ').trim();
+      replyTo = { id: l.id, title: `${name}, ${words ? `"${lineName(words)}"` : 'a line'}`, link: 'parent_narrative', line: true };
+      drawReply();
+      text.focus();
+    } }, 'Reply');
+  }
+
+  /** The names a line is addressed to, as "to …"; a Character the reader is not served names no one. */
+  function toLine(l: Line): HTMLElement | null {
+    const names = l.to.map(toName).filter((x): x is string => !!x);
+    return names.length ? h('span', { class: 't to', 'data-part': 'line-to' }, `to ${names.join(', ')}`) : null;
+  }
+
+  function messageLine(l: Line, entries: Map<string, { title: string }>, partsBy: ReadonlyMap<string, DesignPart>): HTMLElement {
+    // A board entry or a work item leads; else the design parts it names, each by its name now (the gate's S2, N3).
+    const designs = room.designsOf(l, partsBy);
+    const answering = (l.parent ? entries.get(l.parent) : undefined) ?? (l.about ? entries.get(l.about) : undefined);
+    const ai = room.isAi(l.by, l.el.changed_via);
+    const name = room.name(l.by);
+    const hidden = room.hidden.has(l.id);
+    // keel tells a maker their own line is hidden (#537); a host reads it from the hidden list.
+    const hiddenMine = !room.isHost && l.el.hidden === true;
+    const door = doorLine(l.el);
+    const onParts = !answering && designs.length ? designs.map(d => elChip(d.id, `line:${l.id}`, true)).filter((x): x is HTMLElement => !!x) : [];
+    return h('div', { class: `line${ai ? ' ai' : ''}${hidden || hiddenMine ? ' hidden' : ''}` },
+      seatBody(name, ai, false, 26),
+      h('div', null,
+        h('div', { class: 'meta' }, h('span', { class: 'who' }, name), ai ? h('span', { class: 'chip' }, 'AI') : null,
+          h('span', { class: 't' }, hhmm(l.at)),
+          door ? h('span', { class: 't' }, door) : null,
+          toLine(l),
+          answering ? h('span', { class: 't' }, `answering ${answering.title}`) : null,
+          !answering && designs.length && !onParts.length ? h('span', { class: 't' }, `answering ${designs.map(d => d.title).join(', ')}`) : null,
+          hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
+          hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
+          replyBtn(l, name),
+          room.isHost ? h('button', { class: 'act', type: 'button', 'data-focus': `hide:${l.id}`, onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this line') : null),
+        l.text ? h('div', { class: 'txt' }, l.text) : null,
+        onParts.length ? h('div', { class: 'on', 'data-part': 'line-on' }, h('span', { class: 't' }, 'answering'), onParts) : null,
+        fileBlock(l.id, l.by)));
+  }
+
+  // -------------------------------------------------- the open element's card (rebuilt only when it moved)
+  let cardKey = '';
+  let cardMark: ReturnType<typeof waymarkSlot> | null = null;
+  function drawCard(): void {
+    const el = cardId ? room.els.get(cardId) : undefined;
+    if (!cardId || !isShowable(el)) {
+      cardId = null;
+      if (!elCard.hidden || cardKey) { elCard.hidden = true; cardKey = ''; cardMark?.dispose(); cardMark = null; clear(elCard); }
+      return;
+    }
+    const view = cardOf(el, room.els, room.work());
+    // The house rules are read whole, never cut.
+    const whole = room.charter()?.id === el.id;
+    const key = JSON.stringify([view, [...cardFields], whole]);
+    if (key === cardKey) return;
+    // An open fan-out of the card's mark holds the rebuild; it runs once the fan-out settles.
+    if (cardMark && waymarkOpenIn(elCard)) return;
+    cardKey = key;
+    const focused = focusIn(elCard);
+    cardMark?.dispose();
+    cardMark = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, el as unknown as Record<string, unknown>, 'Untitled'), `card:${el.id}`);
+    // Past five links, one line per field with a count; a press lists that field's elements.
+    const many = view.links.length > 5;
+    const fields = new Map<string, typeof view.links>();
+    for (const l of view.links) fields.set(l.label, [...(fields.get(l.label) ?? []), l]);
+    const q = view.questions.length;
+    clear(elCard,
+      h('div', { class: 'ttl' }, kindBody(view.type, 30),
+        h('div', { class: 'ttl-words' }, h('h2', { tabindex: '-1' }, view.name),
+          h('div', { class: 'kind' }, h('span', { class: `kind-word k-${kindGroup(view.type)}` }, view.kind), view.state ? ` · ${view.state}` : '')),
+        h('button', { class: 'x', type: 'button', 'aria-label': 'Close', 'data-focus': 'card:x', onclick: () => { cardId = null; draw(); } }, '×')),
+      view.text ? h('p', { class: whole ? 'card-text whole' : 'card-text', 'data-part': 'card-text' }, view.text) : null,
+      view.links.length && !many ? linkGraph(view.type, view.links, stepCard) : null,
+      many ? h('ul', { class: 'card-fields', 'data-part': 'card-fields' }, [...fields].map(([label, ls]) => {
+        const open = cardFields.has(label);
+        return h('li', null,
+          h('button', { class: 'field-line', type: 'button', 'aria-expanded': String(open), 'data-focus': `card:f:${label}`, onclick: () => {
+            if (open) cardFields.delete(label); else cardFields.add(label);
+            draw();
+          } }, chevron(open), `${label} · ${ls.length}`),
+          open ? h('ul', { class: 'field-list' }, ls.map(l => h('li', null, h('button', { class: 'nb-line', type: 'button', 'data-focus': `card:n:${l.id}`, onclick: () => stepCard(l.id) }, kindBody(l.type, 18), l.name)))) : null);
+      })) : null,
+      q ? h('div', { class: 'card-qs', 'data-part': 'card-questions' }, h('ul', null, view.questions.slice(0, 5).map(x => h('li', null, x.title))),
+        q > 5 ? h('p', { class: 'sys' }, `And ${q - 5} more under Work.`) : null) : null,
+      h('div', { class: 'foot' }, h('span', null, q ? `${q} open question${q === 1 ? '' : 's'}` : 'No open questions'), h('span', { class: 'sp' }),
+        h('span', { class: 'open-in' }, 'Open it', cardMark.el)));
+    elCard.hidden = false;
+    refocus(elCard, focused);
+  }
+  // Escape closes the open card (a picture's viewer closes itself first).
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape' || !cardId || viewer.open) return;
+    cardId = null;
+    draw();
+  };
+  document.addEventListener('keydown', onKey);
+
+  // -------------------------------------------------- the crew (rebuilt only when what it shows moved)
+  let crewKey = '';
+  function toggleFold(k: string): void {
+    if (shut.has(k)) shut.delete(k); else shut.add(k);
+    keepFolds();
+    draw();
+  }
+  function crewRow(s: CrewSeat, personName: string | null): HTMLElement {
+    const wl = lineOf.get(s.key) ?? null;
+    // Whose room a press opens: its own; an AI that plays its person's Character, its person's; none with no Character.
+    const target = s.plays ?? (s.character ? s.key : null);
+    const busy = !!wl?.working;
+    const status = s.plays ? `plays ${personName ?? 'its person'}` : !s.character ? 'no room you can see' : wl?.on ? '' : s.ai ? 'free' : `${s.role ?? 'member'}${s.you ? ', you' : ''}`;
+    const inner = [
+      seatBody(s.name, s.ai, busy, wl?.on ? 38 : 26),
+      h('span', { class: 'mid' }, h('span', { class: 'nm' }, s.name), status ? h('span', { class: 'st' }, status) : null,
+        busy ? h('span', { class: 'sr' }, ', working') : null,
+        wl?.on ? h('span', { class: 'wk' }, wl.on) : null),
+      wl?.links.length ? h('span', { class: 'dots' }, wl.links.slice(0, 3).map(id => kindBody(String(room.els.get(id)?.type ?? '').toLowerCase(), 18))) : null,
+      busy && wl?.since ? h('span', { class: 'eta' }, `since ${sinceWords(wl.since)}`) : null,
+      target ? h('span', { class: 'go', 'aria-hidden': 'true' }, '›') : null,
+    ];
+    const cls = `row${wl?.on ? '' : ' free'}`;
+    return target
+      ? h('button', { class: cls, type: 'button', 'data-seat': s.key, 'data-focus': `crew:${s.key}`, 'aria-current': String(!s.plays && space === target), onclick: () => openSpace(target) }, inner)
+      : h('div', { class: `${cls} none`, 'data-seat': s.key }, inner);
+  }
+  function drawCrew(): void {
+    const view = [space, [...shut], !!room.roster, room.world.name,
+      [...seatsNow.values()].map(s => [s, lineOf.get(s.key) ?? null, (lineOf.get(s.key)?.links ?? []).map(id => room.els.get(id)?.type)]),
+      crewNow.people.map(p => [p.seat.key, p.ais.map(a => a.key)]), crewNow.beasts.map(b => b.key)];
+    const key = JSON.stringify(view);
+    if (key === crewKey) return;
+    crewKey = key;
+    const focused = focusIn(crewList);
+    const sec = (k: string, label: string) => h('button', { class: 'sec', type: 'button', 'aria-expanded': String(!shut.has(k)), 'data-focus': `fold:${k}`, onclick: () => toggleFold(k) }, chevron(!shut.has(k)), label);
+    const chatRow = h('button', { class: 'row chat-row', type: 'button', 'data-seat': 'team', 'data-focus': 'crew:team', 'aria-current': String(space === 'team'), onclick: () => openSpace('team') },
+      chatBody(38), h('span', { class: 'mid' }, h('span', { class: 'nm' }, 'Team chat'), h('span', { class: 'wk' }, `everyone in ${room.world.name}`)), h('span', { class: 'go', 'aria-hidden': 'true' }, '›'));
+    const person = (p: Crew['people'][number]): Array<HTMLElement | null> => {
+      const k = `p:${p.seat.key}`;
+      const isShut = shut.has(k);
+      const n = p.ais.length;
+      const fold = n ? h('button', { class: 'fold', type: 'button', 'aria-expanded': String(!isShut), 'data-focus': `fold:${k}`, 'aria-label': `${isShut ? 'Show' : 'Hide'} ${p.seat.name}’s AIs`, onclick: () => toggleFold(k) },
+        `${n} ${n > 1 ? 'AIs' : 'AI'}`, chevron(!isShut)) : null;
+      return [h('div', { class: 'wrap' }, crewRow(p.seat, null), fold),
+        n && !isShut ? h('div', { class: 'kid' }, p.ais.map(a => crewRow(a, p.seat.name))) : null];
+    };
+    clear(crewList,
+      chatRow,
+      // A guest is refused the roster: no one else to list.
+      !room.roster ? h('p', { class: 'sys', 'data-part': 'crew-refused' }, 'A guest is not shown who else is here: the team chat is open to read.') : null,
+      room.roster ? sec('beasts', 'Beasts') : null,
+      room.roster && !shut.has('beasts') ? (crewNow.beasts.length ? crewNow.beasts.map(b => crewRow(b, null)) : h('p', { class: 'sys none-yet' }, 'No AI of its own here yet.')) : null,
+      room.roster ? sec('people', 'People and their AIs') : null,
+      room.roster && !shut.has('people') ? crewNow.people.flatMap(person) : null,
+    );
+    refocus(crewList, focused);
   }
 
   /**
@@ -831,7 +1164,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     // Keyed by the state too: Show all on a handed-in report is not the completed one's fold of what was handed in.
     const foldKey = `${l.id}:${r.state}`;
     const open = openReports.has(foldKey);
-    const fold = (label: string) => h('button', { class: 'act', type: 'button', 'data-act': 'report-fold', 'aria-expanded': String(open), onclick: () => {
+    const fold = (label: string) => h('button', { class: 'act', type: 'button', 'data-act': 'report-fold', 'data-focus': `report-fold:${foldKey}`, 'aria-expanded': String(open), onclick: () => {
       if (openReports.has(foldKey)) openReports.delete(foldKey); else openReports.add(foldKey);
       draw();
     } }, open ? 'Fold' : label);
@@ -840,7 +1173,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       ? [h('div', null, fold('The report as written')), open ? h('div', { class: 'txt', 'data-part': 'report-story' }, l.text) : null]
       : [h('div', { class: 'txt', 'data-part': 'report-story' }, open || !start.cut ? l.text : start.text), start.cut ? h('div', null, fold('Show all')) : null];
     return h('div', { class: `line report${ai ? ' ai' : ''}${hidden || hiddenMine ? ' hidden' : ''}`, 'data-report': r.state },
-      h('span', { class: ai ? 'bdg a' : 'bdg' }, ai ? 'AI' : initial(name)),
+      seatBody(name, ai, false, 26),
       h('div', null,
         h('div', { class: 'meta' }, h('span', { class: 'who' }, name), ai ? h('span', { class: 'chip' }, 'AI') : null,
           h('span', { class: 't' }, hhmm(l.at)),
@@ -854,10 +1187,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           sitName ? h('span', { class: 't', 'data-part': 'report-sitting' }, saidIn(sitName)) : null,
           hidden ? h('span', { class: 't' }, 'Hidden from the room') : null,
           hiddenMine ? h('span', { class: 't' }, 'Hidden by the host: only you and the hosts see it') : null,
-          room.isHost ? h('button', { class: 'act', type: 'button', onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this report') : null,
+          replyBtn(l, name),
+          room.isHost ? h('button', { class: 'act', type: 'button', 'data-focus': `hide:${l.id}`, onclick: () => hide(l.id, !hidden) }, hidden ? 'Unhide' : 'Hide this report') : null,
           // Step 2 in the room: a keeper completes a handed-in report in its own card.
           // Not on a proposed report: a keeper's step 2 over a proposal would read as settling it, and nothing rules that.
-          room.isKeeper && r.state === 'handed in' && !hidden && !r.proposed ? h('button', { class: 'act', type: 'button', 'data-act': 'complete', onclick: () => openComplete(l, r) }, 'Complete this report') : null),
+          room.isKeeper && r.state === 'handed in' && !hidden && !r.proposed ? h('button', { class: 'act', type: 'button', 'data-act': 'complete', 'data-focus': `complete:${l.id}`, onclick: () => openComplete(l, r) }, 'Complete this report') : null),
         r.title ? h('div', { class: 'report-title' }, r.title) : null,
         r.description.trim() ? h('div', { class: 'txt', 'data-part': 'report-description' }, r.description) : null,
         r.proposed ? h('p', { class: 'sys', 'data-part': 'report-proposed-line' }, 'Proposed and not yet reviewed: this report, and any change it names, is not part of the world until a keeper accepts it.') : null,
@@ -962,7 +1296,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     if (!room.isHost) { hostKey = ''; clear(host); return; }
     const s = room.sitting();
     const reading = room.browsing;
-    const key = JSON.stringify([s?.id, s?.phase, s?.hearts, s?.specs, s?.voting, reading, room.seats()]);
+    const key = JSON.stringify([s?.id, s?.phase, s?.hearts, s?.specs, s?.voting, reading]);
     if (key === hostKey) return;
     hostKey = key;
     const start = h('button', { class: 'btn std', type: 'button', onclick: async () => {
@@ -982,9 +1316,6 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       }, p.name))) : null,
       s && !reading ? h('div', { class: 'sw' }, sw('hearts', 'Hearts'), sw('specs', 'Specs shown'), sw('voting', 'Voting')) : null,
       h('div', { class: 'btns' }, start),
-      h('div', { class: 'ph seats-head' }, `Seats · ${room.seats().length}`),
-      h('ul', { class: 'seatlist' }, room.seats().map(x => h('li', null,
-        h('span', { class: x.ai ? 'bdg a' : 'bdg' }, x.ai ? 'AI' : initial(x.name)), x.name, h('span', { class: 'r' }, x.ai ? `AI ${x.role}` : x.role)))),
     ));
   }
 
@@ -1096,6 +1427,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           room.canWrite ? h('button', { class: 'btn std', type: 'button', onclick: () => {
             replyTo = { id: e.id, title: e.title || 'Untitled', link: 'parent_narrative' };
             drawReply();
+            // An answer goes to the team chat: from a seat's room, the composer moves there, saying so.
+            toTeamChat('An answer goes to the team chat: the composer moved there.');
             if (mq.matches) phoneTab('room');
             text.focus();
           } }, 'Answer') : null,
@@ -1118,27 +1451,52 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function drawDesigns(): void {
     // The parts this draw read, and their answers counted in one pass over the lines (the gate's S1).
     const counts = partsNow.length ? room.answerCounts(partsNow.map(p => p.id)) : new Map<string, number>();
-    const view = partsNow.map(p => ({ p, answers: counts.get(p.id) ?? 0 }));
-    // Rebuilt only when what it shows moved, so a feed tick never eats an Answer press (the gate's S8).
-    const key = JSON.stringify([view.map(v => [v.p.id, v.p.title, v.p.state, v.p.type, v.answers]), room.canWrite]);
+    const folds = designFolds(partsNow);
+    // Rebuilt only when what it shows moved, so a feed tick never eats an Answer press or a fold (the gate's S8).
+    const key = JSON.stringify([folds.map(f => [f.design.id, f.parts.map(p => p.id)]), partsNow.map(p => [p.id, p.title, p.state, p.type, counts.get(p.id) ?? 0, firstLine(p.el)]),
+      room.canWrite, [...openDesigns]]);
     if (key === designKey) return;
     if (designMarks.held()) return;
     designKey = key;
     const focused = designMarks.before();
+    const focusedName = focusIn(designList);
     const world = { id: room.world.id, name: room.world.name };
+    const answer = (p: DesignPart) => room.canWrite ? h('button', { class: 'btn std ans', type: 'button', 'data-focus': `design-answer:${p.id}`, onclick: () => {
+      replyTo = { id: p.id, title: p.title, link: designLink(p) };
+      drawReply();
+      // An answer goes to the team chat: from a seat's room, the composer moves there, saying so.
+      toTeamChat('An answer goes to the team chat: the composer moved there.');
+      if (mq.matches) phoneTab('room');
+      text.focus();
+    } }, 'Answer') : null;
+    const answers = (p: DesignPart) => { const n = counts.get(p.id) ?? 0; return n ? h('span', { class: 'c' }, `${n} answer${n === 1 ? '' : 's'}`) : null; };
+    // A part's name reads its first line under the pointer and on focus, and opens its card on a press.
+    const name = (p: DesignPart, cls: string) => tipped(h('button', { class: cls, type: 'button', 'data-focus': `design-name:${p.id}`, 'data-el': p.id, onclick: () => openCard(p.id) },
+      kindBody(p.type, cls === 'n' ? 20 : 18), p.title), p.el);
+    const state = (p: DesignPart) => h('span', { class: `pill ${p.state === 'locked' ? 's-done' : 's-open'}` }, DESIGN_WORD[p.state]);
     clear(designList,
       h('p', { class: 'sys' }, 'The designs this world holds, in design and locked. Answer one to talk about it here: what you send names it, and its talk gathers under it.'),
-      ...view.map(({ p, answers }) => h('div', { class: 'card witem', 'data-design': p.id },
-        h('div', { class: 'ttl' }, h('span', { class: `chip ${p.state === 'locked' ? 's-done' : 's-open'}` }, DESIGN_WORD[p.state]),
-          h('h3', null, p.title), designMarks.mark(waymarkPlan(world, p.el as unknown as Record<string, unknown>, 'Untitled'), `design:${p.id}`)),
-        h('div', { class: 'm' }, `${p.type === 'object' ? 'Object' : 'Construct'}${answers ? ` · ${answers} answer${answers === 1 ? '' : 's'} in the room` : ''}`),
-        room.canWrite ? h('div', { class: 'btns' }, h('button', { class: 'btn std', type: 'button', onclick: () => {
-          replyTo = { id: p.id, title: p.title, link: designLink(p) };
-          drawReply();
-          if (mq.matches) phoneTab('room');
-          text.focus();
-        } }, 'Answer')) : null)));
+      ...folds.map(({ design: d, parts }) => {
+        const open = openDesigns.has(d.id);
+        const size = parts.length;
+        return h('div', { class: 'design', 'data-fold': d.id },
+          h('div', { class: 'des', 'data-design': d.id },
+            size ? h('button', { class: 'fold2', type: 'button', 'aria-expanded': String(open), 'aria-label': `${open ? 'Fold' : 'Unfold'} ${d.title}`, 'data-focus': `design-fold:${d.id}`, onclick: () => {
+              if (open) openDesigns.delete(d.id); else openDesigns.add(d.id);
+              draw();
+            } }, chevron(open)) : h('span', { class: 'fold2 none', 'aria-hidden': 'true' }),
+            name(d, 'n'),
+            h('span', { class: 'c' }, `${size} ${size === 1 ? 'part' : 'parts'}`),
+            answers(d), state(d),
+            designMarks.mark(waymarkPlan(world, d.el as unknown as Record<string, unknown>, 'Untitled'), `design:${d.id}`),
+            answer(d)),
+          open ? parts.map(p => h('div', { class: 'part', 'data-design': p.id },
+            name(p, 'pn'), answers(p), state(p),
+            designMarks.mark(waymarkPlan(world, p.el as unknown as Record<string, unknown>, 'Untitled'), `design:${p.id}`),
+            answer(p))) : null);
+      }));
     designMarks.after(focused);
+    if (!focused) refocus(designList, focusedName);
   }
 
   const STATE_WORD = { open: 'Open', taken: 'Taken', done: 'Done' } as const;
@@ -1181,7 +1539,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         takers.length && w.state !== 'done' ? h('div', { class: 'm', 'data-part': 'taken-by' }, `Taken by ${takers.join(', ')}`) : null,
         w.text ? h('p', null, w.text) : null,
         els.length ? h('ul', { class: 'about' }, els.map(x => h('li', null,
-          h('span', { class: 'chip el' }, w.otherWorld ? `In another world · ${typeWord(x.type)}` : x.name === null ? `Missing · ${typeWord(x.type)}` : `${x.name} · ${typeWord(x.type)}`),
+          // An element the room holds reads its first line under the pointer and on focus, and opens its card on a press.
+          !w.otherWorld && x.name !== null && isShowable(room.els.get(x.id))
+            ? tipped(h('button', { class: 'chip el', type: 'button', 'data-el': x.id, onclick: () => openCard(x.id) }, `${x.name} · ${typeWord(x.type)}`), room.els.get(x.id))
+            : h('span', { class: 'chip el' }, w.otherWorld ? `In another world · ${typeWord(x.type)}` : x.name === null ? `Missing · ${typeWord(x.type)}` : `${x.name} · ${typeWord(x.type)}`),
           // A Missing element or one in another world has no page here to open. The mark takes the element
           // the room holds, its own type and body, never the type a packet claims for it.
           !w.otherWorld && x.name !== null && room.els.get(x.id)
@@ -1202,6 +1563,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
             room.canWrite ? h('button', { class: 'btn std', type: 'button', onclick: () => {
               replyTo = { id: w.id, title: w.title || 'Untitled', link: 'relations' };
               drawReply();
+              // An answer goes to the team chat: from a seat's room, the composer moves there, saying so.
+              toTeamChat('An answer goes to the team chat: the composer moved there.');
               if (mq.matches) phoneTab('room');
               text.focus();
             } }, 'Answer') : null,
