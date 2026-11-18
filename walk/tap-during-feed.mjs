@@ -5,6 +5,9 @@
 // lore decoy is made in the world (recorded by id), the press goes down, the read is let go and
 // lands (a redraw on the old build replaces what is pressed), and only then the press comes up.
 // The tap must land; the redraw it held must run after it. A control: PARLOR_URL at the older build.
+// One door is played, and only that one: GET /members. Only an AI no one answers for has a room, and keel's roster for
+// the test world holds none, so the played answer adds one such AI seat writing as a Character the walk makes (recorded,
+// so teardown.mjs deletes it by id). Every other read and every write is keel's.
 import { chromium, firefox } from '@playwright/test';
 import { OwV2Client } from '@onlyworlds/sdk';
 import { account, readState, writeState, API } from './accounts.mjs';
@@ -54,6 +57,19 @@ try {
       window.addEventListener(t, e => { window.__ev.push(`${t}@${e.target?.tagName ?? '?'}`); if (window.__ev.length > 40) window.__ev.shift(); }, true);
     }
   });
+  // The played door: keel's roster, with one AI seat no one answers for, writing as the walk's own Character.
+  const beastName = `Tap beast ${engineName} ${Date.now() % 100000}`;
+  const beastChar = await withLimit(api.create('character', { name: beastName }), 20000, 'the beast\'s Character');
+  s.decoys.push({ type: 'character', id: beastChar.id });
+  writeState(s);
+  const beastSeat = `a3a3a3a3-0000-4000-8000-${String(Date.now()).slice(-12).padStart(12, '0')}`;
+  await ctx.route(/\/api\/v2\/members\/?(\?|$)/, async route => {
+    const res = await route.fetch();
+    const body = await res.json();
+    const rows = Array.isArray(body) ? body : body.data ?? body.results ?? [];
+    const out = [...rows, { id: beastSeat, kind: 'agent', role: 'contributor', character: beastChar.id, status: 'active', name: 'tap-beast-seat', sponsor_member: null, lenses: [], lenses_from: 'none' }];
+    await route.fulfill({ response: res, json: Array.isArray(body) ? out : { ...body, [body.data ? 'data' : 'results']: out } });
+  });
   page = await ctx.newPage();
 
   // The feed's reads, held on demand. A read held is answered only when let go.
@@ -86,10 +102,13 @@ try {
   check('the spec shows', await until(() => card.isVisible()));
   await page.waitForTimeout(2500); // the feed has caught up with the walk's own writes
 
-  /** Press `target`, let a held feed read land under it, then lift. Returns whether the pressed node was replaced under the press. */
-  async function pressThroughFeed(target, decoyName) {
+  /**
+   * Press `target`, let a held feed read land under it, then lift. Returns whether the pressed node was replaced under
+   * the press. `write` makes the change the held read brings (a decoy's name, or a write of its own).
+   */
+  async function pressThroughFeed(target, write) {
     holding = true;
-    await decoy(decoyName);
+    await (typeof write === 'string' ? decoy(write) : write());
     const caught = await until(() => held.length > 0, 8000);
     const box = await target.boundingBox();
     const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
@@ -123,20 +142,23 @@ try {
     }
   }
 
-  // ---------------------------------------------------------------- a seat's row in the crew list, while the feed lands
+  // ---------------------------------------------------------------- a beast's row in the crew list, while the feed lands
+  // (only an AI no one answers for has a room: the played seat's row is the one a press opens)
   {
     await page.getByRole('tab', { name: 'Crew' }).click();
-    const row = page.locator('[data-part="crew"] button.row[data-seat]:not([data-seat="team"])').first();
-    if (await until(() => row.isVisible(), 6000)) {
-      const seatName = (await row.locator('.nm').innerText()).trim();
-      const name = `Decoy tap seat ${engineName} ${Date.now() % 100000}`;
-      const r = await pressThroughFeed(row, name);
+    const row = page.locator(`[data-part="crew"] button.row[data-seat="${beastSeat}"]`);
+    if (await until(() => row.isVisible(), 10000)) {
+      // The held read brings the beast's Character renamed, so the crew list itself is rebuilt under the press (a lore
+      // decoy moves nothing the crew list shows).
+      const seatName = `${beastName} renamed`;
+      const r = await pressThroughFeed(row, () => withLimit(api.patch('character', beastChar.id, { name: seatName }), 20000, 'the rename'));
       check('seat: the feed read was held and then landed under the press', r.caught && r.landed, `caught ${r.caught}, landed ${r.landed}`);
       check('seat: the pressed row was not replaced under the press', !r.replaced);
       check('seat: the tap lands (the seat\'s room opens)', await until(() => page.locator('.head .room-title', { hasText: `${seatName}’s room` }).isVisible(), 6000));
       await page.locator('[data-part="crew"] [data-seat="team"]').click();
+      check('seat: a person\'s row is no button', (await page.locator('[data-part="crew"] button.row[data-seat="owner"]').count()) === 0);
     } else {
-      check('seat: the crew list offers a seat with a room', false);
+      check('seat: the crew list offers the played beast\'s row, pressable', false);
     }
     await page.getByRole('tab', { name: 'Specs' }).click();
   }
@@ -185,6 +207,7 @@ try {
 } catch (err) {
   check('the walk ran to its end', false, String(err?.message ?? err).slice(0, 300));
 } finally {
+  await page?.context().unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {});
   await browser.close().catch(() => {});
   clearTimeout(watchdog);
 }
