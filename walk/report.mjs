@@ -212,6 +212,31 @@ try {
   await m.keyboard.press('Escape');
   check('member: Escape folds it, focus once on the line\'s own fold', await until(() => rcard.isHidden(), 3000)
     && await m.evaluate(() => document.activeElement?.getAttribute('data-act') === 'report-fold' && window.__composerFocus === 0), String(await m.evaluate(() => window.__composerFocus)));
+  // While the card is open the lines under it are out of reach (inert); folded, they are back.
+  await r1.locator('[data-act="report-fold"]').click();
+  await until(() => rcard.isVisible(), 3000);
+  check('member: the lines under the open card are inert', await m.evaluate(() => document.querySelector('.lines')?.inert === true));
+  await rcard.locator('[data-act="report-card-fold"]').first().click();
+  check('member: folded, the lines are back', await until(() => rcard.isHidden(), 3000) && await m.evaluate(() => document.querySelector('.lines')?.inert === false));
+  // A short screen (a phone held sideways; a keyboard that resizes the page): the story stays readable and both
+  // Folds stay inside the card and the window.
+  for (const [w, hgt] of [[750, 342], [390, 350]]) {
+    await m.setViewportSize({ width: w, height: hgt });
+    await m.waitForTimeout(400);
+    await r1.locator('[data-act="report-fold"]').scrollIntoViewIfNeeded();
+    await r1.locator('[data-act="report-fold"]').click();
+    await until(() => rcard.isVisible(), 3000);
+    const box = await m.evaluate(() => {
+      const c = document.querySelector('[data-part="report-open"]').getBoundingClientRect();
+      const story = document.querySelector('[data-part="report-open-story"]').getBoundingClientRect();
+      const folds = [...document.querySelectorAll('[data-act="report-card-fold"]')].map(b => b.getBoundingClientRect());
+      return { story: Math.round(story.height), inCard: folds.every(f => f.top >= c.top - 0.5 && f.bottom <= c.bottom + 0.5), inView: folds.every(f => f.top >= 0 && f.bottom <= innerHeight + 0.5) };
+    });
+    check(`member: at ${w}x${hgt} the story is readable and both Folds are in the card and the window`, box.story >= 120 && box.inCard && box.inView, JSON.stringify(box));
+    await m.keyboard.press('Escape');
+    await until(() => rcard.isHidden(), 3000);
+  }
+  await m.setViewportSize({ width: 1440, height: 900 });
 
   // ------------------------------------------------------------ a report on the work item, answering it
   await m.getByRole('tab', { name: /^Work/ }).click().catch(() => {});

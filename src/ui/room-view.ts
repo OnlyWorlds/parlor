@@ -1310,6 +1310,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     reportCard.hidden = true;
     reportCardKey = '';
     clear(reportCard);
+    lines.inert = false;
     draw();
     if (!had || !key) return;
     const back = lines.querySelector<HTMLElement>(`[data-focus="report-fold:${CSS.escape(key)}"]`);
@@ -1323,12 +1324,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     if (!l?.report || `${l.id}:${l.report.state}` !== reportOpen) {
       const had = reportCard.contains(document.activeElement);
       reportOpen = null;
+      lines.inert = false;
       if (!reportCard.hidden || reportCardKey) { reportCard.hidden = true; reportCardKey = ''; clear(reportCard); }
       if (had) focusBackFromCard();
       return;
     }
     const r = l.report;
     const name = room.name(l.by);
+    // The lines under the open card are out of reach: no covered Reply or Fold takes a key press.
+    lines.inert = true;
     const key = JSON.stringify([l.id, r.state, r.title, l.text, name, l.at]);
     if (key === reportCardKey) return;
     reportCardKey = key;
