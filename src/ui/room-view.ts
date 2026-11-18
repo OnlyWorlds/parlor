@@ -720,15 +720,17 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
 
   // -------------------------------------------------- an element's card (one, over the room's right side)
   const elCard = h('aside', { class: 'elcard', 'data-part': 'element-card', hidden: true, 'aria-label': 'Element' });
-  // A report's whole story, opened over the room as its own card (drawReportCard).
+  // A report's whole story, opened over the room's lines as its own card (drawReportCard). The lines and the card
+  // share one stage, so the card covers the lines only and ends above the composer: what is typed stays in view.
   const reportCard = h('aside', { class: 'repcard', 'data-part': 'report-open', hidden: true, 'aria-label': 'Report' });
+  const stage = h('div', { class: 'stage' }, lines, reportCard);
   // The room's notes under its head: a workshop world's sitting, what a reader without a PIN or a watcher may do.
   const roomNotes = h('div', { class: 'room-notes' });
   // The host panel folds by hiding, never by clearing: what it holds is drawn once per change, whether shown or not.
   const hostWrap = h('div', { class: 'host-wrap', 'data-part': 'host-panel', hidden: true }, host);
 
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane room-col', 'aria-label': 'Room' }, whoLine, hostWrap, roomHead, roomNotes, nameCard, lines, elCard, reportCard, room.canWrite ? completeCard : null, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
+  const roomPane = h('section', { class: 'pane room-col', 'aria-label': 'Room' }, whoLine, hostWrap, roomHead, roomNotes, nameCard, stage, elCard, room.canWrite ? completeCard : null, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
   const workPane = h('section', { class: 'pane side off', 'aria-label': 'Panel' }, workTabs, crewList, workList, workForm, changeList, work, specForm, board, boardForm, designList);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Crew and work');
@@ -1296,12 +1298,18 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     draw();
     reportCard.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
   }
-  /** Fold it: focus goes back to the line's own fold when the card or the line held it, else stays where it is. */
+  /**
+   * Fold it: focus goes back to the line's own fold when the card or the line held it, else stays where it is. The
+   * card is put away before the redraw, so focus lands once, never on the composer on the way (a phone's keyboard).
+   */
   function closeReport(): void {
     const key = reportOpen;
     const a = document.activeElement;
     const had = reportCard.contains(a) || (a instanceof Element && a.closest('[data-act="report-fold"]') !== null);
     reportOpen = null;
+    reportCard.hidden = true;
+    reportCardKey = '';
+    clear(reportCard);
     draw();
     if (!had || !key) return;
     const back = lines.querySelector<HTMLElement>(`[data-focus="report-fold:${CSS.escape(key)}"]`);
@@ -1727,7 +1735,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   }
 
   /**
-   * The world's recent changes (Seethe's shape A, 2026-11-18): one row per element with its last change, newest first,
+   * The world's recent changes (shape A of the Changes mock, 2026-11-18): one row per element with its last change, newest first,
    * the day said where it turns. A row: the kind's body, the name (a button that opens its card), "changed by X ·
    * through Y", and a quiet "made by" line where the maker is another seat or another day. A removed element is struck
    * and opens nothing, its name as kept at the removal (the kind's word where none was kept). Drawn only when it moved.

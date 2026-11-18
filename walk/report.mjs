@@ -184,9 +184,34 @@ try {
   check('member: the host\'s line arrives', await until(() => m.getByText(`A line between (${RUN})`).isVisible(), 30000));
   check('member: the card stays open across the redraw', await rcard.isVisible() && (await rcard.locator('[data-part="report-open-story"]').innerText()).trim() === STORY.join('\n'));
   await shot(m, 'handed-in');
+  // The card ends above the composer: what is typed there stays in view, and Tab from the bottom Fold reaches it.
+  check('member: the card ends above the composer', await m.evaluate(() => {
+    const c = document.querySelector('[data-part="report-open"]')?.getBoundingClientRect();
+    const f = document.querySelector('form.send')?.getBoundingClientRect();
+    return !!c && !!f && c.bottom <= f.top + 0.5;
+  }));
+  await rcard.locator('[data-act="report-card-fold"]').last().focus();
+  await m.keyboard.press('Tab');
+  check('member: Tab from the bottom Fold lands on something in view', await m.evaluate(() => {
+    const a = document.activeElement;
+    if (!a || a === document.body) return false;
+    const r = a.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + Math.min(8, r.width / 2), r.top + Math.min(8, r.height / 2));
+    return !!hit && (hit === a || a.contains(hit));
+  }));
+  // A fold lands focus once, on the line's own fold: the composer is never focused on the way (a phone's keyboard).
+  await m.evaluate(() => { window.__composerFocus = 0; document.querySelector('form.send textarea')?.addEventListener('focus', () => { window.__composerFocus++; }); });
   await rcard.locator('[data-act="report-card-fold"]').last().click();
   check('member: Fold at the bottom closes it, focus back on the line\'s own fold', await until(() => rcard.isHidden(), 3000)
     && await m.evaluate(() => document.activeElement?.getAttribute('data-act') === 'report-fold'));
+  check('member: folding never focused the composer on the way', await m.evaluate(() => window.__composerFocus === 0), String(await m.evaluate(() => window.__composerFocus)));
+  // The same by Escape from inside the card.
+  await r1.locator('[data-act="report-fold"]').click();
+  await until(() => rcard.isVisible(), 3000);
+  await m.evaluate(() => { window.__composerFocus = 0; });
+  await m.keyboard.press('Escape');
+  check('member: Escape folds it, focus once on the line\'s own fold', await until(() => rcard.isHidden(), 3000)
+    && await m.evaluate(() => document.activeElement?.getAttribute('data-act') === 'report-fold' && window.__composerFocus === 0), String(await m.evaluate(() => window.__composerFocus)));
 
   // ------------------------------------------------------------ a report on the work item, answering it
   await m.getByRole('tab', { name: /^Work/ }).click().catch(() => {});
