@@ -28,7 +28,7 @@
  */
 
 import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readReportLine, readReportLines, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
-import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when';
+import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when.ts';
 
 export interface El {
   id: string;
