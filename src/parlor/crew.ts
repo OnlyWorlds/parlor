@@ -205,6 +205,22 @@ function noteText(el: El): string {
   return typeof el.name === 'string' ? el.name : '';
 }
 
+/**
+ * Whether the room says a seat is working (the ring, "since", "asked by"). Off: nothing in a world records a seat's
+ * session yet, so no seat is shown as working. The derivation below stays whole; turning this on is the one change.
+ */
+export const SHOW_WORKING = false;
+
+/**
+ * A work line as the room shows it: with SHOW_WORKING off, the Note's words and elements only (the seat's own status
+ * line), never working, since or asked by; and no line at all for a seat with no Note.
+ */
+export function shownWorkLine(wl: WorkLine | null, show: boolean = SHOW_WORKING): WorkLine | null {
+  if (!wl || show) return wl;
+  if (!wl.noteAt) return null;
+  return { ...wl, working: false, since: null, askedBy: null };
+}
+
 /** A seat's work line, from its newest Note and the work item it holds taken. Null when it has neither. */
 export function workLineOf(note: El | null, held: WorkItem | null, els: ReadonlyMap<string, El>, seat: MemberKey | null = null): WorkLine | null {
   if (!note && !held) return null;

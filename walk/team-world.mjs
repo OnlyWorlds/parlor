@@ -156,9 +156,12 @@ try {
     && await crew.locator('.wrap', { has: h.locator('.fold') }).first().locator('.fold').innerText({ timeout: 4000 }).catch(() => '').then(t => /1 AI/.test(t)));
   check('crew: an AI with no Character has no room you can see, and is not pressable', /no room you can see/.test(await helper.innerText({ timeout: 4000 }).catch(() => '')) && (await crew.locator(`.kid div.row.none`, { hasText: `Host's helper ${RUN}` }).count()) === 1);
   const bRow = crew.locator(`button.row[data-seat="${bWho}"]`);
-  check('crew: the member\'s row reads its Note\'s first line and wears the working ring', await until(async () =>
-    (await bRow.innerText({ timeout: 4000 }).catch(() => '')).includes(`Building the walk screen ${RUN}`) && (await bRow.locator('.ring').count()) === 1, 20000), await bRow.innerText({ timeout: 4000 }).catch(() => ''));
-  check('crew: the member\'s row says since when, and carries its Note\'s two elements', /since /.test(await bRow.innerText({ timeout: 4000 }).catch(() => '')) && (await bRow.locator('.dots .body').count()) === 2);
+  // No seat is shown as working yet (nothing records a seat's session): the member holds a taken work item, and still
+  // its row wears no ring and says no "since"; its newest Note is its status line.
+  check('crew: the member\'s row reads its Note\'s first line, with no working ring', await until(async () =>
+    (await bRow.innerText({ timeout: 4000 }).catch(() => '')).includes(`Building the walk screen ${RUN}`), 20000) && (await bRow.locator('.ring').count()) === 0, await bRow.innerText({ timeout: 4000 }).catch(() => ''));
+  check('crew: the member\'s row says no "since" and no working, and carries its Note\'s two elements', !/since |working/.test(await bRow.innerText({ timeout: 4000 }).catch(() => '')) && (await bRow.locator('.dots .body').count()) === 2);
+  check('crew: no row anywhere wears a working ring', (await crew.locator('.ring').count()) === 0);
   // The fold is kept: fold the owner's AIs, a feed tick later still folded.
   await crew.locator('.fold').first().click();
   check('crew: a person\'s AIs fold', await until(() => helper.isHidden(), 5000));
@@ -172,7 +175,8 @@ try {
   check('room: a press opens the member\'s room, named in the head', await until(() => h.locator('.head .room-title', { hasText: `${bName}’s room` }).isVisible(), 5000));
   check('room: the work line is the Note\'s first line as written', (await h.locator('[data-part="work-line"]').innerText({ timeout: 4000 }).catch(() => '')) === `Building the walk screen ${RUN}`);
   const meta = await h.locator('[data-part="work-meta"]').innerText({ timeout: 4000 }).catch(() => '');
-  check('room: since, its Note\'s time and asked by the work item\'s maker', /since /.test(meta) && /its Note at /.test(meta) && /asked by Host C/.test(meta), meta);
+  check('room: its Note\'s time, and no "since", no "asked by", no ring in the head', /its Note at /.test(meta) && !/since |asked by/.test(meta)
+    && (await h.locator('.head .ring').count()) === 0, meta);
   check('room: the Note\'s elements as chips', (await h.locator('[data-part="work-elements"] .chip').count()) === 2);
   check('room: the write box says whom it writes to', (await h.locator('.send textarea').getAttribute('placeholder')) === `Write to ${bName} (everyone can read it)`);
 

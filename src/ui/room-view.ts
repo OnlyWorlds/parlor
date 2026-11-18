@@ -7,7 +7,7 @@
  */
 
 import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
-import { seatRoom, thread, heldWork, workLineOf, designFolds, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
+import { seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
 import { newestNote } from '../parlor/team';
 import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
 import { isAfter } from '../parlor/when';
@@ -843,7 +843,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const work = room.work();
     const notes = room.roster ? [...room.els.values()].filter(el => el.type === 'narrative' && el.supertype === 'Note') : [];
     lineOf = new Map([...seatsNow.values()].map(s => [s.key, room.roster
-      ? workLineOf(newestNote(notes as never[], s.key, room.roster) as El | null, heldWork(work, s), room.els, s.key) : null]));
+      ? shownWorkLine(workLineOf(newestNote(notes as never[], s.key, room.roster) as El | null, heldWork(work, s), room.els, s.key)) : null]));
     drawTop();
     drawReportMode();
     drawComplete();

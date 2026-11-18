@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { OwMember } from '@onlyworlds/sdk';
 import { readLines, readWork, readDesignParts, type El, type Sitting } from './shapes';
-import { crewOf, seatRoom, thread, heldWork, workLineOf, workshopRuns, designFolds, cardOf, firstLine, seatsByKey } from './crew';
+import { crewOf, seatRoom, thread, heldWork, workLineOf, shownWorkLine, SHOW_WORKING, workshopRuns, designFolds, cardOf, firstLine, seatsByKey } from './crew';
 import { buildTeam, newestNote, age } from './team';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
@@ -175,6 +175,19 @@ describe('who asked, and working', () => {
 
   it('holds none for a seat that holds nothing taken', () => {
     expect(heldWork(work, { key: 'm-x', character: 'c-x' })).toBeNull();
+  });
+
+  it('shows no seat as working while SHOW_WORKING is off: the Note stays, working, since and asked by go', () => {
+    expect(SHOW_WORKING).toBe(false);
+    const held = heldWork(work, { key: 'a-von', character: 'c-v' });
+    const note = { id: 'n', type: 'narrative', supertype: 'Note', story: 'Building it', objects: ['o1'], created_at: '2026-11-18T11:00:00Z' } as El;
+    const els = new Map<string, El>([['o1', { id: 'o1', type: 'object', name: 'Exam trainer' } as El]]);
+    const wl = workLineOf(note, held, els, 'a-von');
+    expect(shownWorkLine(wl)).toEqual({ on: 'Building it', noteAt: '2026-11-18T11:00:00Z', links: ['o1'], working: false, since: null, askedBy: null });
+    // A held item with no Note shows nothing; turned on, the derivation is whole again.
+    expect(shownWorkLine(workLineOf(null, held, els, 'a-von'))).toBeNull();
+    expect(shownWorkLine(wl, true)).toEqual(wl);
+    expect(wl?.working && wl.askedBy === 'm-bb').toBe(true);
   });
 
   it('never counts an item the seat made about itself, unless its own take holds it; asked by never names the seat', () => {
