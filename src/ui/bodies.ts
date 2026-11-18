@@ -91,7 +91,8 @@ export function linkGraph(centreType: string, links: ReadonlyArray<{ label: stri
     svg.append(label);
     const name = s('text', { class: 'nb-name', x: x + 19, y: y + 4 });
     name.textContent = l.name;
-    const g = s('g', { class: 'nb', role: 'button', tabindex: 0, 'aria-label': `Open ${l.name}, ${l.label}`, 'data-step': l.id },
+    // data-focus: a redraw of the card puts focus back on the same neighbour.
+    const g = s('g', { class: 'nb', role: 'button', tabindex: 0, 'aria-label': `Open ${l.name}, ${l.label}`, 'data-step': l.id, 'data-focus': `card:g:${l.id}` },
       s('rect', { class: 'hit', x: x - 16, y: y - 15, width: W - x + 12, height: 30, rx: 8 }),
       kindBody(l.type, 24, { x: x - 12, y: y - 12 }),
       name);

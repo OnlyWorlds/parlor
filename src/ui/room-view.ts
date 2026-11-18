@@ -61,6 +61,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const openDesigns = new Set<string>();
   // The element whose card is open over the room, and the link fields its card lists open.
   let cardId: string | null = null;
+  // The `data-focus` of what opened the card: a close that took focus from the card gives it back there.
+  let cardOpener: string | null = null;
   const cardFields = new Set<string>();
   // The crew as this draw read it, once per draw.
   let crewNow: Crew = { beasts: [], people: [] };
@@ -741,7 +743,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   /** The `data-focus` of what holds focus under `box`, read before a rebuild. */
   function focusIn(box: Element): string | null {
     const a = document.activeElement;
-    return a instanceof HTMLElement && box.contains(a) ? a.closest('[data-focus]')?.getAttribute('data-focus') ?? null : null;
+    // Any element: the card's neighbours are SVG nodes (bodies.ts), not HTML ones.
+    return a instanceof Element && box.contains(a) ? a.closest('[data-focus]')?.getAttribute('data-focus') ?? null : null;
   }
   /** Focus goes back to the rebuilt node with the same `data-focus`, the page left where it was scrolled. */
   function refocus(box: Element, key: string | null): void {
@@ -790,9 +793,28 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const elName = (el: El): string => (typeof el.name === 'string' && el.name.trim()) || 'Untitled';
   /** Open an element's card over the room, or close it when it is the one open. */
   function openCard(id: string): void {
-    cardId = cardId === id ? null : id;
+    if (cardId === id) { closeCard(); return; }
+    // What opened it, so a close gives focus back there.
+    const a = document.activeElement;
+    if (a instanceof Element && !elCard.contains(a)) cardOpener = a.closest('[data-focus]')?.getAttribute('data-focus') ?? null;
+    cardId = id;
     cardFields.clear();
     draw();
+  }
+  /** Close the card (drawCard gives focus back when the card held it, whatever closed it). */
+  function closeCard(): void {
+    cardId = null;
+    draw();
+  }
+  /** Focus goes back to what opened the card, else to the composer or the room's lines. */
+  function focusBackFromCard(): void {
+    for (const el of root.querySelectorAll<HTMLElement>('[data-focus]')) {
+      if (cardOpener && el.getAttribute('data-focus') === cardOpener && el.isConnected) { el.focus({ preventScroll: true }); return; }
+    }
+    const field = send.querySelector<HTMLElement>('textarea');
+    if (field) { field.focus({ preventScroll: true }); return; }
+    lines.setAttribute('tabindex', '-1');
+    lines.focus({ preventScroll: true });
   }
   /** Step to a neighbour in the open card: the card shows it, and focus goes to its name. */
   function stepCard(id: string): void {
@@ -1064,7 +1086,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const el = cardId ? room.els.get(cardId) : undefined;
     if (!cardId || !isShowable(el)) {
       cardId = null;
+      // An element that left the reader's view while its card held focus: focus goes back, never to the page.
+      const had = elCard.contains(document.activeElement);
       if (!elCard.hidden || cardKey) { elCard.hidden = true; cardKey = ''; cardMark?.dispose(); cardMark = null; clear(elCard); }
+      if (had) focusBackFromCard();
       return;
     }
     const view = cardOf(el, room.els, room.work());
@@ -1087,7 +1112,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       h('div', { class: 'ttl' }, kindBody(view.type, 30),
         h('div', { class: 'ttl-words' }, h('h2', { tabindex: '-1' }, view.name),
           h('div', { class: 'kind' }, h('span', { class: `kind-word k-${kindGroup(view.type)}` }, view.kind), view.state ? ` · ${view.state}` : '')),
-        h('button', { class: 'x', type: 'button', 'aria-label': 'Close', 'data-focus': 'card:x', onclick: () => { cardId = null; draw(); } }, '×')),
+        h('button', { class: 'x', type: 'button', 'aria-label': 'Close', 'data-focus': 'card:x', onclick: () => closeCard() }, '×')),
       view.text ? h('p', { class: whole ? 'card-text whole' : 'card-text', 'data-part': 'card-text' }, view.text) : null,
       view.links.length && !many ? linkGraph(view.type, view.links, stepCard) : null,
       many ? h('ul', { class: 'card-fields', 'data-part': 'card-fields' }, [...fields].map(([label, ls]) => {
@@ -1106,11 +1131,14 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     elCard.hidden = false;
     refocus(elCard, focused);
   }
-  // Escape closes the open card (a picture's viewer closes itself first).
+  // Escape closes the open card (a picture's viewer closes itself first, and an open fan-out of its mark holds it).
+  // Typed in a field outside the card (the composer, a form), Escape stays that field's: the card stays open.
   const onKey = (e: KeyboardEvent): void => {
-    if (e.key !== 'Escape' || !cardId || viewer.open) return;
-    cardId = null;
-    draw();
+    if (e.key !== 'Escape' || !cardId || viewer.open || e.defaultPrevented) return;
+    const a = document.activeElement;
+    if (a instanceof HTMLElement && !elCard.contains(a) && (a.isContentEditable || a.matches('input, textarea, select'))) return;
+    if (cardMark && waymarkOpenIn(elCard)) return;
+    closeCard();
   };
   document.addEventListener('keydown', onKey);
 

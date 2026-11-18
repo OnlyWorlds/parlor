@@ -188,12 +188,22 @@ try {
   check('card: its words and the part under it, by the link\'s name', /A trainer the walk drew/.test(await card.innerText({ timeout: 4000 }).catch(() => '')) && await card.locator('.graph .edge-label', { hasText: 'Under it' }).isVisible());
   await h.waitForTimeout(4000);
   check('card: the card holds through the feed', await card.isVisible());
+  // Escape typed in the composer is the composer's: the card stays open.
+  const composerBox = h.locator('.send textarea');
+  await composerBox.focus();
+  await h.keyboard.press('Escape');
+  await h.waitForTimeout(300);
+  check('card: Escape in the composer leaves the card open', await card.isVisible());
   await card.locator('.graph .nb', { hasText: `Walk screen ${RUN}` }).click();
   check('card: a neighbour steps the card to it', await until(async () => (await card.locator('h2').innerText({ timeout: 4000 }).catch(() => '')) === `Walk screen ${RUN}`, 5000)
     && await card.locator('.graph .edge-label', { hasText: 'Parent object' }).isVisible());
   await shot(h, 'card');
-  await card.getByRole('button', { name: 'Close' }).click();
+  // × by the keyboard: the card closes and focus goes back to the chip that opened it, never to the page.
+  await card.getByRole('button', { name: 'Close' }).focus();
+  await h.keyboard.press('Enter');
   check('card: × closes it', await until(() => card.isHidden(), 3000));
+  const back = await h.evaluate(() => document.activeElement?.closest('[data-el]')?.textContent ?? document.activeElement?.tagName ?? '');
+  check('card: focus goes back to the chip that opened it', back.includes(`Walk trainer ${RUN}`), back);
 
   // A line written in the member's room names the member's Character, and carries the world's mark (no workshop runs).
   const toB = `To you in your room ${RUN}`;
