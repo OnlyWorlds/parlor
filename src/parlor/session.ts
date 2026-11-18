@@ -48,6 +48,17 @@ const STORE = 'parlor.session.v1';
 export const SIGN_IN_RECORD_KEY = 'ow_signin:parlor';
 export const RESUME_KEY = 'parlor.signin.resume';
 
+/** The prefix of the removed elements' names a room keeps per world and reader (room.ts): Sign out forgets them. */
+export const KEPT_REMOVALS = 'parlor.removed.';
+
+function forgetKeptRemovals(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith(KEPT_REMOVALS)) keys.push(k); }
+    for (const k of keys) localStorage.removeItem(k);
+  } catch { /* no storage, nothing kept */ }
+}
+
 /** A sign-in by another door, or a sign-out, leaves no round trip waiting. */
 function dropSignInRecord(): void {
   try {
@@ -173,6 +184,7 @@ class Session {
     this.s = null;
     save(null);
     dropSignInRecord();
+    forgetKeptRemovals();
   }
 
   private account(): OwV2Client {

@@ -8,7 +8,7 @@ import { OwApiError, OwNetworkError, OwPreconditionFailedError, type OwMe, type 
 import { RoomFeed, type Removal } from './feed';
 import { serialQueue } from './serial';
 import { newestFirst } from './when';
-import { session, type AccountWorld } from './session';
+import { session, KEPT_REMOVALS, type AccountWorld } from './session';
 import {
   OWNER, type El, type Switches, type Kind, type BoardColour, readLines, readLinesAsGiven, orderLines, readHearts, readSpecs, readVotes,
   readSittings, readCharter, readMemberCharacters, linesOfSitting, linesOfUnseenSitting, myHearts, tally, newSpec, newHeart,
@@ -385,10 +385,11 @@ export class Room {
   }
 
   /**
-   * The names of removed elements, kept per world in this browser (a convenience: a walk from zero names no removed
-   * element, so a removal seen here keeps its name on the next visit; nothing breaks without it).
+   * The names of removed elements, kept per world and per reader in this browser (a convenience: a walk from zero
+   * names no removed element, so a removal seen here keeps its name on the next visit; nothing breaks without it).
+   * Per reader, since what one seat was served another may not be; Sign out forgets them all (session.ts).
    */
-  private removedKey = (): string => `parlor.removed.${this.world.id}`;
+  private removedKey = (): string => `${KEPT_REMOVALS}${this.world.id}.${this.meBy}`;
   private seedRemovals(): void {
     try {
       const kept = JSON.parse(localStorage.getItem(this.removedKey()) ?? '[]') as unknown;
