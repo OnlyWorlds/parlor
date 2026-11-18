@@ -2,12 +2,12 @@
 // and no sitting, and each line keeps its room mark. In a world with no Charter mark the
 // room shows the newest sitting's lines by that mark and says what a watcher is not shown;
 // the test world's Charter is marked, so it is a team world, whose room holds every
-// sitting's lines, and whose Crew tab says a guest is not shown the crew. The host
+// sitting's lines, and whose Crew tab shows the crew as served (a guest's key reads the roster). The host
 // (crew-walk-c, after seed.mjs) starts two sittings with one line each, recorded
 // for teardown; crew-walk-a is lowered from its role to guest for the walk and put
 // back after, read back.
 //   WALK_STATE=<scratch file> PARLOR_URL=<served build> node --experimental-strip-types walk/watcher.mjs [chromium|firefox]
-//   A control: PARLOR_URL at a build before the team world, where the earlier sitting's line and the Crew tab's line fail.
+//   A control: PARLOR_URL at a build before the team world, where the earlier sitting's line, the room's line and the Crew tab's own row fail.
 import { OwV2Client } from '@onlyworlds/sdk';
 import { chromium, firefox } from 'playwright';
 import { account, readState, writeState, accountCall, API } from './accounts.mjs';
@@ -73,8 +73,11 @@ try {
   const says = await p.getByText('You can read this room.').isVisible().catch(() => false);
   check(says, 'the room says the watcher can read it');
   await p.getByRole('tab', { name: 'Crew' }).click().catch(() => {});
-  const refused = await until(() => p.locator('[data-part="crew-refused"]').isVisible(), 8000);
-  check(refused, 'the Crew tab says in one line that a guest is not shown the crew');
+  // OnlyWorlds serves the roster to any key on the world, a guest's read key included (the API spec's GET /members),
+  // so the watcher's Crew tab is the crew as served: its own row says "watcher, you", and no line says it is refused.
+  const ownRow = await until(() => p.locator('[data-seat] .st', { hasText: 'watcher, you' }).first().isVisible(), 8000);
+  const refused = await p.locator('[data-part="crew-refused"]').isVisible().catch(() => false);
+  check(ownRow && !refused, 'the Crew tab shows the crew as served, the watcher\'s own row saying "watcher, you"');
   check(!errors.length, `no page error (${errors.join(' | ')})`);
   const sess = await p.evaluate(() => JSON.parse(localStorage.getItem('parlor.session.v1') ?? 'null')).catch(() => null);
   for (const k of [...Object.values(sess?.keys ?? {}), ...Object.values(sess?.readKeys ?? {})]) {
