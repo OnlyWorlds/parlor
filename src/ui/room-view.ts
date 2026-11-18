@@ -95,8 +95,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   /** The design parts as this draw read them, once per draw (the gate's S1); a press reads its own. */
   let partsNow: DesignPart[] = [];
   let stickToEnd = true;
-  // The reports whose story a person unfolded: kept across redraws, forgotten with the room.
-  const openReports = new Set<string>();
+  // The report whose whole story is open over the room (`<id>:<state>`), as its own card with its own scroll, so the
+  // room's lines never move apart: kept across redraws, forgotten with the room.
+  let reportOpen: string | null = null;
 
   // -------------------------------------------------- the composer (built once)
   const text = h('textarea', { rows: 1, 'aria-label': 'Write a line', placeholder: 'Write a line' });
@@ -713,13 +714,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
 
   // -------------------------------------------------- an element's card (one, over the room's right side)
   const elCard = h('aside', { class: 'elcard', 'data-part': 'element-card', hidden: true, 'aria-label': 'Element' });
+  // A report's whole story, opened over the room as its own card (drawReportCard).
+  const reportCard = h('aside', { class: 'repcard', 'data-part': 'report-open', hidden: true, 'aria-label': 'Report' });
   // The room's notes under its head: a workshop world's sitting, what a reader without a PIN or a watcher may do.
   const roomNotes = h('div', { class: 'room-notes' });
   // The host panel folds by hiding, never by clearing: what it holds is drawn once per change, whether shown or not.
   const hostWrap = h('div', { class: 'host-wrap', 'data-part': 'host-panel', hidden: true }, host);
 
   // -------------------------------------------------- the layout
-  const roomPane = h('section', { class: 'pane room-col', 'aria-label': 'Room' }, whoLine, hostWrap, roomHead, roomNotes, nameCard, lines, elCard, room.canWrite ? completeCard : null, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
+  const roomPane = h('section', { class: 'pane room-col', 'aria-label': 'Room' }, whoLine, hostWrap, roomHead, roomNotes, nameCard, lines, elCard, reportCard, room.canWrite ? completeCard : null, room.canWrite ? replyBar : null, room.canWrite ? reportNote : null, room.canWrite ? keeperPart : null, room.canWrite ? chips : null, room.canWrite ? send : null, viewer);
   const workPane = h('section', { class: 'pane side off', 'aria-label': 'Panel' }, workTabs, crewList, workList, workForm, changeList, work, specForm, board, boardForm, designList);
   const tabRoom = h('button', { type: 'button', 'aria-selected': 'true', onclick: () => phoneTab('room') }, 'Room');
   const tabWork = h('button', { type: 'button', 'aria-selected': 'false', onclick: () => phoneTab('work') }, 'Crew and work');
@@ -798,6 +801,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const a = document.activeElement;
     if (a instanceof Element && !elCard.contains(a)) cardOpener = a.closest('[data-focus]')?.getAttribute('data-focus') ?? null;
     cardId = id;
+    // One card over the room at a time: an open report gives way.
+    reportOpen = null;
     cardFields.clear();
     draw();
   }
@@ -1021,6 +1026,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       return row;
     }) : h('div', { class: 'sys' }, seat ? `No lines to ${seat.name} yet.` : room.canWrite ? 'No lines yet. Say hello.' : 'No lines yet.'));
     refocus(lines, focused);
+    drawReportCard(shownLines.map(t => t.line));
     if (stickToEnd) lines.scrollTop = lines.scrollHeight;
     if (room.feed.lastError) roomNotes.append(h('p', { class: 'problem' }, problemLine(room.feed.lastError, 'following the room')));
   }
@@ -1134,8 +1140,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // Escape closes the open card (a picture's viewer closes itself first, and an open fan-out of its mark holds it).
   // Typed in a field outside the card (the composer, a form), Escape stays that field's: the card stays open.
   const onKey = (e: KeyboardEvent): void => {
-    if (e.key !== 'Escape' || !cardId || viewer.open || e.defaultPrevented) return;
+    if (e.key !== 'Escape' || viewer.open || e.defaultPrevented) return;
     const a = document.activeElement;
+    // An open report folds the same way.
+    if (!cardId && reportOpen) {
+      if (a instanceof HTMLElement && !reportCard.contains(a) && (a.isContentEditable || a.matches('input, textarea, select'))) return;
+      closeReport();
+      return;
+    }
+    if (!cardId) return;
     if (a instanceof HTMLElement && !elCard.contains(a) && (a.isContentEditable || a.matches('input, textarea, select'))) return;
     if (cardMark && waymarkOpenIn(elCard)) return;
     closeCard();
@@ -1226,15 +1239,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const sitName = sitId ? String(room.els.get(sitId)?.name ?? '').replace(/\s+/g, ' ').trim() || 'Untitled' : null;
     // Keyed by the state too: Show all on a handed-in report is not the completed one's fold of what was handed in.
     const foldKey = `${l.id}:${r.state}`;
-    const open = openReports.has(foldKey);
+    const open = reportOpen === foldKey;
+    // The whole story opens over the room as its own card (drawReportCard), never into the line.
     const fold = (label: string) => h('button', { class: 'act', type: 'button', 'data-act': 'report-fold', 'data-focus': `report-fold:${foldKey}`, 'aria-expanded': String(open), onclick: () => {
-      if (openReports.has(foldKey)) openReports.delete(foldKey); else openReports.add(foldKey);
-      draw();
+      if (reportOpen === foldKey) closeReport(); else openReport(foldKey);
     } }, open ? 'Fold' : label);
     const start = storyStart(l.text);
     const story = r.state === 'completed'
-      ? [h('div', null, fold('The report as written')), open ? h('div', { class: 'txt', 'data-part': 'report-story' }, l.text) : null]
-      : [h('div', { class: 'txt', 'data-part': 'report-story' }, open || !start.cut ? l.text : start.text), start.cut ? h('div', null, fold('Show all')) : null];
+      ? [h('div', null, fold('The report as written'))]
+      : [h('div', { class: 'txt', 'data-part': 'report-story' }, start.cut ? start.text : l.text), start.cut ? h('div', null, fold('Show all')) : null];
     return h('div', { class: `line report${ai ? ' ai' : ''}${hidden || hiddenMine ? ' hidden' : ''}`, 'data-report': r.state },
       seatBody(name, ai, false, 26),
       h('div', null,
@@ -1265,6 +1278,56 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           : null,
         ...story,
         fileBlock(l.id, l.by)));
+  }
+
+  // -------------------------------------------------- a report's whole story, over the room (rebuilt only when it moved)
+  let reportCardKey = '';
+  /** Open a report's whole story over the room: an open element card gives way, and focus goes to the report's name. */
+  function openReport(key: string): void {
+    reportOpen = key;
+    cardId = null;
+    draw();
+    reportCard.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+  }
+  /** Fold it: focus goes back to the line's own fold when the card or the line held it, else stays where it is. */
+  function closeReport(): void {
+    const key = reportOpen;
+    const a = document.activeElement;
+    const had = reportCard.contains(a) || (a instanceof Element && a.closest('[data-act="report-fold"]') !== null);
+    reportOpen = null;
+    draw();
+    if (!had || !key) return;
+    const back = lines.querySelector<HTMLElement>(`[data-focus="report-fold:${CSS.escape(key)}"]`);
+    if (back) back.focus({ preventScroll: true }); else focusBackFromCard();
+  }
+  function drawReportCard(ls: readonly Line[]): void {
+    const at = reportOpen ? reportOpen.lastIndexOf(':') : -1;
+    const id = reportOpen && at > 0 ? reportOpen.slice(0, at) : null;
+    const l = id ? ls.find(x => x.id === id) : undefined;
+    // A report that went, or moved to another state, folds; focus held in the card goes back.
+    if (!l?.report || `${l.id}:${l.report.state}` !== reportOpen) {
+      const had = reportCard.contains(document.activeElement);
+      reportOpen = null;
+      if (!reportCard.hidden || reportCardKey) { reportCard.hidden = true; reportCardKey = ''; clear(reportCard); }
+      if (had) focusBackFromCard();
+      return;
+    }
+    const r = l.report;
+    const name = room.name(l.by);
+    const key = JSON.stringify([l.id, r.state, r.title, l.text, name, l.at]);
+    if (key === reportCardKey) return;
+    reportCardKey = key;
+    const focused = focusIn(reportCard);
+    const foldBtn = (where: string) => h('button', { class: 'btn quiet', type: 'button', 'data-act': 'report-card-fold', 'data-focus': `report-card:${where}`, onclick: () => closeReport() }, 'Fold');
+    clear(reportCard,
+      h('div', { class: 'ttl' },
+        h('div', { class: 'ttl-words' }, h('h2', { tabindex: '-1' }, r.title || 'Report'),
+          h('div', { class: 'kind' }, [name, hhmm(l.at), r.state === 'completed' ? 'the report as written' : `Report · ${r.state === 'other' ? (r.word || 'report') : r.state}`].filter(Boolean).join(' · '))),
+        foldBtn('top')),
+      h('div', { class: 'txt repcard-story', 'data-part': 'report-open-story', tabindex: '0', 'aria-label': 'The whole report' }, l.text),
+      h('div', { class: 'repcard-foot' }, foldBtn('bottom')));
+    reportCard.hidden = false;
+    refocus(reportCard, focused);
   }
 
   /** A line's files under its text: what the world's list holds, then mine still on their way. */

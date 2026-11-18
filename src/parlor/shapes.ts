@@ -79,6 +79,8 @@ export const ROOM_ITEM = 'x_room_item';
 // The standard's fold: trim Unicode's White_Space set (JavaScript's trim() strips a byte order mark and keeps U+0085,
 // so it is not that set), then simple case folding; nothing normalized.
 const fold = (s: unknown): string => (typeof s === 'string' ? simpleCaseFold(s.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '')) : '');
+/** A name folded by the standard's rule, for an order compared code point by code point (never a locale's collation). */
+export const foldName = fold;
 
 const ID_FORM = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
 

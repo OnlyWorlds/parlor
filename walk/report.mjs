@@ -166,14 +166,27 @@ try {
   check('member: the first three lines show, and that a host reads it next', (await r1.locator('[data-part="report-story"]').innerText()).trim() === STORY.slice(0, 3).join('\n')
     && /Not completed yet: a host reads it next\./.test(await r1.innerText()));
   check('member: its file is on it', await until(async () => (await r1.locator('.file[data-file]', { hasText: 'findings.md' }).count()) === 1, 30000));
+  // Show all opens the whole story over the room as its own card with its own scroll: the room's lines stay put, and
+  // Fold sits at the card's top and its bottom (2026-11-18).
+  const before = await r1.evaluate(el => el.getBoundingClientRect().height);
   await r1.locator('[data-act="report-fold"]').click();
-  check('member: Show all unfolds the whole story', (await r1.locator('[data-part="report-story"]').innerText()).trim() === STORY.join('\n'));
-  // A line from the host redraws the member's room: the fold stays open.
+  const rcard = m.locator('[data-part="report-open"]');
+  check('member: Show all opens the whole story over the room', await until(async () => await rcard.isVisible()
+    && (await rcard.locator('[data-part="report-open-story"]').innerText()).trim() === STORY.join('\n'), 5000));
+  check('member: the line itself keeps its first lines, the room\'s lines not pushed apart', (await r1.locator('[data-part="report-story"]').innerText()).trim() === STORY.slice(0, 3).join('\n')
+    && Math.abs((await r1.evaluate(el => el.getBoundingClientRect().height)) - before) < 2);
+  check('member: the card has Fold at its top and its bottom, focus on its name', (await rcard.locator('[data-act="report-card-fold"]').count()) === 2
+    && await m.evaluate(() => document.activeElement?.tagName === 'H2' && !!document.activeElement.closest('[data-part="report-open"]')));
+  check('member: the story scrolls inside the card', await rcard.locator('[data-part="report-open-story"]').evaluate(el => getComputedStyle(el).overflowY === 'auto'));
+  // A line from the host redraws the member's room: the card stays open.
   await host.locator('form.send textarea').fill(`A line between (${RUN})`);
   await host.keyboard.press('Enter');
   check('member: the host\'s line arrives', await until(() => m.getByText(`A line between (${RUN})`).isVisible(), 30000));
-  check('member: the fold stays open across the redraw', (await r1.locator('[data-part="report-story"]').innerText()).trim() === STORY.join('\n'));
+  check('member: the card stays open across the redraw', await rcard.isVisible() && (await rcard.locator('[data-part="report-open-story"]').innerText()).trim() === STORY.join('\n'));
   await shot(m, 'handed-in');
+  await rcard.locator('[data-act="report-card-fold"]').last().click();
+  check('member: Fold at the bottom closes it, focus back on the line\'s own fold', await until(() => rcard.isHidden(), 3000)
+    && await m.evaluate(() => document.activeElement?.getAttribute('data-act') === 'report-fold'));
 
   // ------------------------------------------------------------ a report on the work item, answering it
   await m.getByRole('tab', { name: /^Work/ }).click().catch(() => {});

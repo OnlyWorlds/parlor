@@ -6,7 +6,8 @@
 import { OwV2Client, type OwJoinPreview } from '@onlyworlds/sdk';
 import { apiBase, session, signInLine, joinCodeIn, type AccountWorld } from '../parlor/session';
 import { beginOnlyWorldsSignIn, canSignInWithOnlyWorlds, NEEDS_CONNECTION_LINE, NO_STORAGE_LINE, type Resume } from '../parlor/signin';
-import { h, clear } from './dom';
+import { splitWorlds } from '../parlor/worlds';
+import { h, clear, initial } from './dom';
 
 const SITE = 'https://www.onlyworlds.com';
 
@@ -147,7 +148,9 @@ export function confirmJoinView(root: HTMLElement, preview: OwJoinPreview, onJoi
 }
 
 export function worldsView(root: HTMLElement, onOpen: (w: AccountWorld) => void, onJoined: (worldId: string) => void): void {
-  const list = h('ul', { class: 'worlds' }, h('li', { class: 'sys' }, 'Reading your worlds…'));
+  // The worlds as the OnlyWorlds Dashboard shows them: the ones you own, then those shared with you, each a grid of
+  // cards in name order.
+  const list = h('div', { class: 'wsecs', 'data-part': 'worlds' }, h('p', { class: 'sys' }, 'Reading your worlds…'));
   const pin = h('input', { id: 'pin', type: 'password', inputmode: 'numeric', autocomplete: 'off', value: session.pin });
   const pinNote = h('p', { class: 'sys' }, session.pin ? 'Your PIN is kept in this browser.' : 'Writing in a world needs your account PIN, once.');
   const link = h('input', { id: 'invite', type: 'text', placeholder: 'https://www.onlyworlds.com/join#…' });
@@ -178,29 +181,36 @@ export function worldsView(root: HTMLElement, onOpen: (w: AccountWorld) => void,
     },
   }, h('label', { for: 'invite' }, 'Join with an invite link'), h('div', { class: 'row' }, link, h('button', { class: 'btn std', type: 'submit' }, 'Join')));
 
-  clear(root, h('div', { class: 'center' }, h('div', { class: 'land' },
+  clear(root, h('main', { class: 'wpick' },
     h('div', { class: 'brand' }, 'PARLOR'),
     h('h1', null, 'Your worlds'),
-    h('p', null, `Signed in${session.login && !session.login.includes('@') ? ` as ${session.login}` : ''}. Every world you can enter has a room.`),
+    h('p', { class: 'wlead' }, `Signed in${session.login && !session.login.includes('@') ? ` as ${session.login}` : ''}. Every world you can enter has a room.`),
     list,
-    joinForm,
-    problem,
-    h('label', { for: 'pin' }, 'Your PIN'),
-    h('div', { class: 'row' }, pin, h('button', { class: 'btn std', type: 'button', onclick: savePin }, 'Keep')),
-    pinNote,
-    h('div', { class: 'btns' }, h('button', { class: 'btn quiet', type: 'button', onclick: () => { session.signOut(); location.hash = ''; location.reload(); } }, 'Sign out')),
-  )));
+    h('div', { class: 'land wfoot' },
+      joinForm,
+      problem,
+      h('label', { for: 'pin' }, 'Your PIN'),
+      h('div', { class: 'row' }, pin, h('button', { class: 'btn std', type: 'button', onclick: savePin }, 'Keep')),
+      pinNote,
+      h('div', { class: 'btns' }, h('button', { class: 'btn quiet', type: 'button', onclick: () => { session.signOut(); location.hash = ''; location.reload(); } }, 'Sign out'))),
+  ));
 
+  const cardFor = (w: AccountWorld) => h('li', null, h('button', { class: 'wcard', type: 'button', onclick: () => { savePin(); onOpen(w); } },
+    h('span', { class: 'wring', 'aria-hidden': 'true' }, initial(w.name || '?')),
+    h('span', { class: 'wcard-body' },
+      h('span', { class: 'wcard-name' }, w.name || 'Untitled'),
+      h('span', { class: 'wcard-meta' }, w.role === 'owner' ? 'Yours: you host' : roleWords(w.member_role)))));
+  const section = (label: string, ws: AccountWorld[]) => ws.length
+    ? h('section', { class: 'wsec' }, h('p', { class: 'wlabel' }, label), h('ul', { class: 'worlds wgrid' }, ws.map(cardFor)))
+    : null;
   session.worlds().then(worlds => {
     if (!worlds.length) {
-      clear(list, h('li', { class: 'sys' }, 'No worlds yet. Join one with an invite link below.'));
+      clear(list, h('p', { class: 'sys' }, 'No worlds yet. Join one with an invite link below.'));
       return;
     }
-    clear(list, worlds.map(w => h('li', null, h('button', { type: 'button', onclick: () => { savePin(); onOpen(w); } },
-      h('div', null, w.name),
-      h('div', { class: 'm' }, w.role === 'owner' ? 'Yours: you host' : roleWords(w.member_role)),
-    ))));
-  }).catch(() => clear(list, h('li', { class: 'problem' }, 'Your worlds could not be read. Sign out and in again.')));
+    const { own, shared } = splitWorlds(worlds);
+    clear(list, section('Your worlds', own), section('Shared with you', shared));
+  }).catch(() => clear(list, h('p', { class: 'problem' }, 'Your worlds could not be read. Sign out and in again.')));
 }
 
 function roleWords(r: AccountWorld['member_role']): string {
