@@ -703,8 +703,16 @@ export function linesOfSitting(lines: readonly Line[], sittings: readonly Sittin
   if (i < 0) return [...lines];
   const from = sittings[i].at;
   const to = sittings[i + 1]?.at ?? null;
-  // An unreadable time comes after every readable one (the message profile): such a line is in the last sitting.
-  return lines.filter(l => earlierFirst(l.at, from) >= 0 && (to === null || earlierFirst(l.at, to) < 0));
+  // The mark decides where a line was said (the room profile): a line marked with one of
+  // these sittings is that sitting's, whatever its time. Time places only a line with no sitting's mark (an older
+  // writer's world mark, or a sitting this room does not hold).
+  const ids = new Set(sittings.map(s => s.id));
+  return lines.filter(l => {
+    const mark = l.el[ROOM_MARK];
+    if (typeof mark === 'string' && ids.has(mark)) return mark === sittingId;
+    // An unreadable time comes after every readable one (the message profile): such a line is in the last sitting.
+    return earlierFirst(l.at, from) >= 0 && (to === null || earlierFirst(l.at, to) < 0);
+  });
 }
 
 // ---------------------------------------------------------------- the board

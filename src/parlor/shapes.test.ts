@@ -429,6 +429,25 @@ describe('sittings', () => {
     expect(linesOfSitting(lines, sittings, null).map(l => l.id)).toEqual(['l0', 'l1', 'l2']);
   });
 
+  it("a line's sitting mark decides where it was said; time places only a line without one", () => {
+    const sittings = readSittings([
+      el({ id: 's1', type: 'event', supertype: 'Sitting', created_at: '2026-10-22T09:00:00Z' }),
+      el({ id: 's2', type: 'event', supertype: 'Sitting', created_at: '2026-10-22T11:00:00Z' }),
+    ]);
+    const lines = readLines([
+      // Written late for the first sitting, after the second began (a slow tab, an agent answering late).
+      el({ id: 'late', type: 'narrative', supertype: 'Message', created_at: '2026-10-22T11:30:00Z', x_room_of: 's1' }),
+      // Marked for the second, with a clock a little behind its start.
+      el({ id: 'early', type: 'narrative', supertype: 'Message', created_at: '2026-10-22T10:59:00Z', x_room_of: 's2' }),
+      // The world's mark (an older writer): placed by its time.
+      el({ id: 'old', type: 'narrative', supertype: 'Message', created_at: '2026-10-22T10:00:00Z', x_room_of: W }),
+      // A mark that names no sitting this room holds: placed by its time too.
+      el({ id: 'other', type: 'narrative', supertype: 'Message', created_at: '2026-10-22T11:10:00Z', x_room_of: 's-gone' }),
+    ]);
+    expect(linesOfSitting(lines, sittings, 's1').map(l => l.id)).toEqual(['old', 'late']);
+    expect(linesOfSitting(lines, sittings, 's2').map(l => l.id)).toEqual(['early', 'other']);
+  });
+
   it("a watcher sees no sitting: its lines are the newest line's room mark, the world's alone when none names another", () => {
     const line = (id: string, at: string, mark?: string) =>
       el({ id, type: 'narrative', supertype: 'Message', created_at: at, x_room_of: mark });
