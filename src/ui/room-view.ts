@@ -1127,7 +1127,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     // A workshop world has no seat rooms: its rows only say who is here.
     const target = !room.teamWorld ? null : s.plays ? (seatsNow.get(s.plays)?.character ? s.plays : null) : s.character ? s.key : null;
     const busy = !!wl?.working;
-    const status = s.plays ? `plays ${personName ?? 'its person'}` : !s.character ? 'no room you can see' : wl?.on ? '' : s.ai ? 'free' : `${s.role ?? 'member'}${s.you ? ', you' : ''}`;
+    const status = s.plays ? `plays ${personName ?? 'its person'}` : !s.character && room.teamWorld ? 'no room you can see' : wl?.on ? '' : s.ai ? 'free' : `${s.role ?? 'member'}${s.you ? ', you' : ''}`;
     const inner = [
       seatBody(s.name, s.ai, busy, wl?.on ? 38 : 26),
       h('span', { class: 'mid' }, h('span', { class: 'nm' }, s.name), status ? h('span', { class: 'st' }, status) : null,
@@ -1143,7 +1143,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       : h('div', { class: `${cls} none`, 'data-seat': s.key }, inner);
   }
   function drawCrew(): void {
-    const view = [space, [...shut], !!room.roster, room.world.name,
+    // The team-world check is in the key: a Charter marked from inside the room makes the rows pressable at once (gate 2's D1).
+    const view = [space, [...shut], !!room.roster, room.world.name, room.teamWorld,
       [...seatsNow.values()].map(s => [s, lineOf.get(s.key) ?? null, (lineOf.get(s.key)?.links ?? []).map(id => room.els.get(id)?.type)]),
       crewNow.people.map(p => [p.seat.key, p.ais.map(a => a.key)]), crewNow.beasts.map(b => b.key)];
     const key = JSON.stringify(view);
