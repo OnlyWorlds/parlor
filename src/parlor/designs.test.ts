@@ -43,6 +43,10 @@ describe('readDesignParts', () => {
     expect(readDesignParts(els).map(p => p.id)).toEqual(['o-a', 'o-b', 'o-door', 'c-l']);
     expect(readDesignParts(els).find(p => p.id === 'o-door')?.state).toBe('locked');
   });
+  it("the state's trim is Unicode's White_Space set: a trailing U+0085 trims, a byte order mark stays", () => {
+    const parts = readDesignParts([obj('o-nel', 'Nel', 'locked\u0085'), obj('o-bom', 'Bom', '﻿locked'), obj('o-ls', 'Long s', 'in deſign')]);
+    expect(parts.map(p => [p.id, p.state])).toEqual([['o-ls', 'in design'], ['o-nel', 'locked']]);
+  });
   it('never hidden (by the mark or the room\'s own list), known of, proposed, a room element or a reading aid', () => {
     const ids = readDesignParts(els, new Set(['o-b'])).map(p => p.id);
     expect(ids).toEqual(['o-a', 'o-door', 'c-l']);

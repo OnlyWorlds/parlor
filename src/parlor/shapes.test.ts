@@ -488,6 +488,9 @@ describe('charter', () => {
     expect(unmarkedCharters([lore({ id: 'd', type: 'law', supertype: 'Charter', x_review_proposed: 'agent' })])).toEqual([]);
     expect(unmarkedCharters([lore({ id: 'h', type: 'law', supertype: 'Charter', hidden: true })])).toEqual([]);
     expect(unmarkedCharters([lore({ id: 'a', type: 'law', supertype: 'Charter', name: 'the Kingdom' }), lore({ id: 'b', type: 'law', supertype: 'Charter', name: 'How we work' })]).map(c => c.id)).toEqual(['b', 'a']);
+    // By folded name, code point by code point, never a locale's collation: 'é' (U+00E9) after 'z'; trimmed by White_Space.
+    const ch = (id: string, name: string) => lore({ id, type: 'law', supertype: 'Charter', name });
+    expect(unmarkedCharters([ch('e', 'école'), ch('z', 'Zebra'), ch('n', '\u0085apple')]).map(c => c.id)).toEqual(['n', 'z', 'e']);
   });
 
   it("completing a report writes step 2's fields only, keeps the reporter's links, and says each item it set done", () => {

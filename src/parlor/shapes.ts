@@ -76,7 +76,9 @@ export const ROOM_MARK = 'x_room_of';
 /** The room profile's second field, on a Take only: the work item's id (no Relation field links a Relation). */
 export const ROOM_ITEM = 'x_room_item';
 
-const fold = (s: unknown): string => (typeof s === 'string' ? simpleCaseFold(s.trim()) : '');
+// The standard's fold: trim Unicode's White_Space set (JavaScript's trim() strips a byte order mark and keeps U+0085,
+// so it is not that set), then simple case folding; nothing normalized.
+const fold = (s: unknown): string => (typeof s === 'string' ? simpleCaseFold(s.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '')) : '');
 
 const ID_FORM = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
 
@@ -1061,7 +1063,8 @@ export function unmarkedCharters(els: Iterable<El>): Charter[] {
   if (readCharter(all)) return [];
   return all.filter(el => readingAidOf(el) === 'charter' && !isCharterElement(el) && !handsOnAsProposed(el) && el.hidden !== true && el.known_of !== true)
     .map(el => ({ id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() }))
-    .sort((a, b) => simpleCaseFold(a.name).localeCompare(simpleCaseFold(b.name)) || byCodePoint(a.id, b.id));
+    // By folded name compared by code point (never a locale's collation), ties by id.
+    .sort((a, b) => byCodePoint(fold(a.name), fold(b.name)) || byCodePoint(a.id, b.id));
 }
 
 // ---------------------------------------------------------------- completing a report (the report profile's step 2)
