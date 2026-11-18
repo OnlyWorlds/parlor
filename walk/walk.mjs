@@ -436,6 +436,28 @@ try {
   const loreRow = host.locator('.changes li', { hasText: loreName });
   check('host: the world\'s change shows, said as a script\'s', await until(async () => (await loreRow.innerText()).includes('through a script'), 8000));
   check('host: a room line is not a change to the world', !(await host.locator('.changes').getByText(workAnswer).count()) && !(await host.locator('.changes').getByText(lineText).count()));
+  // One row per element, the day said where it turns; its name a button that opens its card (2026-11-18).
+  check('changes: the day is said above the rows', (await host.locator('.changes li.day').first().innerText({ timeout: 4000 }).catch(() => '')).trim().toLowerCase() === 'today');
+  check('changes: one row for the element', (await host.locator('.changes li.ch', { hasText: loreName }).count()) === 1);
+  {
+    const nameBtn = loreRow.locator('button.nm');
+    await nameBtn.click();
+    const elCard = host.locator('[data-part="element-card"]');
+    check('changes: the name opens the element\'s card', await until(async () => (await elCard.locator('h2').innerText({ timeout: 2000 }).catch(() => '')) === loreName, 5000));
+    await elCard.getByRole('button', { name: 'Close' }).click();
+    check('changes: the card closes and focus is back on the name', await until(() => elCard.isHidden(), 3000)
+      && await host.evaluate(n => document.activeElement?.classList.contains('nm') && document.activeElement.textContent === n, loreName));
+    // A removed element: struck, not pressable, its name as it was at the removal, the word "removed".
+    const goneName = `Walk removed ${engineName} ${stamp}`;
+    const gone = await decoy('character', { name: goneName });
+    await until(async () => (await host.locator('.changes li.ch', { hasText: goneName }).count()) === 1, 15000);
+    await api.delete('character', gone.id);
+    const goneRow = host.locator('.changes li.ch', { hasText: goneName });
+    check('changes: a removed element stays, struck, its name kept, not pressable', await until(async () =>
+      (await goneRow.locator('.nm.gone').count()) === 1 && (await goneRow.locator('button.nm').count()) === 0, 15000));
+    check('changes: it says removed, by whom', /^removed by /.test((await goneRow.locator('[data-part="change-by"]').innerText({ timeout: 2000 }).catch(() => '')).trim()),
+      await goneRow.innerText().catch(() => ''));
+  }
   // The OnlyWorlds mark: after the changed element's name, its first row the element's own page.
   {
     const mark = loreRow.locator('.parlor-waymark .ow-waymark__mark');

@@ -5,7 +5,7 @@
  */
 
 import { OwApiError, OwNetworkError, OwPreconditionFailedError, type OwMe, type OwMember, type OwV2Client } from '@onlyworlds/sdk';
-import { RoomFeed } from './feed';
+import { RoomFeed, type Removal } from './feed';
 import { serialQueue } from './serial';
 import { newestFirst } from './when';
 import { session, type AccountWorld } from './session';
@@ -105,6 +105,8 @@ export class Room {
     await room.loadHidden();
     room.feed.subscribe(room.rosterWatch);
     room.feed.subscribe(room.filesWatch);
+    room.seedRemovals();
+    room.feed.subscribe(room.keepRemovals);
     await room.feed.start();
     room.files.start();
     room.rosterTimer = setInterval(() => { if (document.visibilityState === 'visible') void room.refreshRoster(); }, 30000);
@@ -379,8 +381,31 @@ export class Room {
 
   /** The world's own recent changes (a world's parlor's work surface). */
   changes() {
-    return readChanges(this.els.values());
+    return readChanges(this.els.values(), 40, this.feed.removals.values());
   }
+
+  /**
+   * The names of removed elements, kept per world in this browser (a convenience: a walk from zero names no removed
+   * element, so a removal seen here keeps its name on the next visit; nothing breaks without it).
+   */
+  private removedKey = (): string => `parlor.removed.${this.world.id}`;
+  private seedRemovals(): void {
+    try {
+      const kept = JSON.parse(localStorage.getItem(this.removedKey()) ?? '[]') as unknown;
+      if (!Array.isArray(kept)) return;
+      for (const r of kept as Removal[]) {
+        if (r && typeof r.id === 'string' && typeof r.at === 'string' && typeof r.type === 'string') this.feed.removals.set(r.id, r);
+      }
+    } catch { /* none kept */ }
+  }
+  private keptRemovals = '';
+  private keepRemovals = (): void => {
+    const named = [...this.feed.removals.values()].filter(r => r.name !== null).sort((a, b) => newestFirst(a.at, b.at)).slice(0, 60);
+    const json = JSON.stringify(named);
+    if (json === this.keptRemovals) return;
+    this.keptRemovals = json;
+    try { localStorage.setItem(this.removedKey(), json); } catch { /* private window */ }
+  };
 
   /** Every room work item in the world, whatever sitting made it. */
   work() {

@@ -15,9 +15,9 @@ class FakeKeel implements FeedClient {
     const seq = ++this.seq;
     this.log.push({ op: 'upsert', id, type: 'Narrative', element: { id, name: id, ...extra } as never, updated_at: '', change_seq: seq });
   }
-  remove(id: string, reason?: 'deleted' | 'hidden'): void {
+  remove(id: string, reason?: 'deleted' | 'hidden', extra: Record<string, unknown> = {}): void {
     const seq = ++this.seq;
-    this.log.push({ op: 'delete', id, type: 'narrative', deleted_at: '', change_seq: seq, reason });
+    this.log.push({ op: 'delete', id, type: 'narrative', deleted_at: '', change_seq: seq, reason, ...extra });
   }
   /** What a walk from zero yields: the live elements, once each (keel compacts). */
   private live(): OwChange[] {
@@ -122,6 +122,47 @@ describe('RoomFeed', () => {
     k.remove('a', 'hidden');
     await f.sync();
     expect(ids(f)).toEqual([]);
+  });
+
+  it('records a removal with the name the copy held at the removal, who and through which door', async () => {
+    const k = new FakeKeel();
+    k.upsert('a', { name: 'The old gate' });
+    const f = new RoomFeed(k);
+    await f.sync();
+    k.remove('a', 'deleted', { type: 'object', deleted_at: '2026-11-18T20:00:00Z', deleted_by: 'm1', deleted_via: 'mcp' });
+    await f.sync();
+    expect(f.removals.get('a')).toEqual({ id: 'a', type: 'object', name: 'The old gate', room: false, by: 'm1', via: 'mcp', client: null, at: '2026-11-18T20:00:00Z' });
+  });
+
+  it('a removal the copy never held keeps no name; one hidden from this reader is no removal; a return clears it', async () => {
+    const k = new FakeKeel();
+    const f = new RoomFeed(k);
+    k.upsert('b');
+    await f.sync();
+    k.remove('x', 'deleted', { type: 'character', deleted_at: '2026-11-18T20:00:00Z' });
+    k.remove('b', 'hidden', { deleted_at: '2026-11-18T20:01:00Z' });
+    await f.sync();
+    expect(f.removals.get('x')?.name).toBeNull();
+    expect(f.removals.get('x')?.room).toBeNull();
+    expect(f.removals.has('b')).toBe(false);
+    k.upsert('x', { name: 'Back' });
+    await f.sync();
+    expect(f.removals.has('x')).toBe(false);
+  });
+
+  it('a removal and its name outlast a walk from zero', async () => {
+    const k = new FakeKeel();
+    k.upsert('a', { name: 'Kept' });
+    const f = new RoomFeed(k);
+    await f.sync();
+    k.remove('a', 'deleted', { deleted_at: '2026-11-18T20:00:00Z' });
+    await f.sync();
+    // A rewind walks from zero; the record stays.
+    const tomb = k.log[k.log.length - 1];
+    k.log = [tomb];
+    k.seq = 0;
+    await f.sync();
+    expect(f.removals.get('a')?.name).toBe('Kept');
   });
 
   it('never runs two polls at once', async () => {

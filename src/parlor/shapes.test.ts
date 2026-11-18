@@ -761,6 +761,21 @@ describe('recent changes (sheet §2)', () => {
     expect(c[1].name).toBe('Untitled');
   });
 
+  it('carries who made it and when, and removed elements among the rows, newest first; a removal that may have been the room\'s is left out', () => {
+    const c = readChanges([
+      lore({ id: 'a', type: 'object', name: 'Gate', created_at: '2026-11-17T08:00:00Z', updated_at: '2026-11-18T09:00:00Z', changed_by: 'm2', created_by: 'm1' }),
+    ], 40, [
+      { id: 'r1', type: 'object', name: 'Old gate', room: false, by: 'm3', via: 'mcp', client: null, at: '2026-11-18T10:00:00Z' },
+      { id: 'r2', type: 'location', name: null, room: null, by: null, via: 'site', client: null, at: '2026-11-18T08:00:00Z' },
+      { id: 'r3', type: 'narrative', name: 'A line', room: true, by: 'm1', via: null, client: null, at: '2026-11-18T11:00:00Z' },
+      { id: 'r4', type: 'construct', name: null, room: null, by: 'm1', via: null, client: null, at: '2026-11-18T11:00:00Z' },
+      { id: 'r5', type: 'object', name: null, room: null, by: null, via: 'server', client: null, at: '2026-11-18T07:00:00Z' },
+    ]);
+    expect(c.map(x => [x.id, x.removed, x.name, x.by])).toEqual([['r1', true, 'Old gate', 'm3'], ['a', false, 'Gate', 'm2'], ['r2', true, null, OWNER], ['r5', true, null, '']]);
+    expect([c[1].madeBy, c[1].madeAt]).toEqual(['m1', '2026-11-17T08:00:00Z']);
+    expect(c[0].el.changed_via).toBe('mcp');
+  });
+
   it('a report a room left behind (narrative/Report with the mark) is no change and no pick; the same report without the mark is lore (SDK 4.146.0)', () => {
     const marked = el({ id: 'r', type: 'narrative', supertype: 'Report', name: 'Sitting report', updated_at: '2026-10-25T10:00:00Z' });
     const unmarked = lore({ id: 'u', type: 'narrative', supertype: 'Report', name: 'A lore report', updated_at: '2026-10-25T09:00:00Z' });

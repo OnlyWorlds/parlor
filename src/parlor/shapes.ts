@@ -27,7 +27,7 @@
  * may write that mark, never the room's.
  */
 
-import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, readReportLine, readReportLines, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
+import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, ROOM_PAIRS, readReportLine, readReportLines, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
 import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when.ts';
 
 export interface El {
@@ -1010,27 +1010,49 @@ export function isPickable(el: El): boolean {
 export interface Change {
   id: string;
   type: string;
-  name: string;
-  /** Who last changed it: changed_by, else (an element no v2 write touched) who made it. */
+  /** Its name; for a removed element, the name kept at the removal, null when none was kept. */
+  name: string | null;
+  /** Who last changed it: changed_by, else (an element no v2 write touched) who made it. Who removed it, for a removal; empty when no one is recorded. */
   by: string;
   at: string;
   /** Never changed since it was made. */
   made: boolean;
+  /** Removed from the world: it has no card. */
+  removed: boolean;
+  /** Who made it and when (created_by, created_at); null for a removal. */
+  madeBy: string | null;
+  madeAt: string | null;
+  /** The element, or for a removal its door as an element carries one (changed_via, changed_client). */
   el: El;
 }
 
+/** What a removal is, as the feed recorded it (feed.ts `Removal`). */
+export interface RemovalRow { id: string; type: string; name: string | null; room: boolean | null; by: string | null; via: string | null; client: string | null; at: string }
+
+/** The types a room element can be: a removal whose copy was never held may have been the room's, so it is left out. */
+const ROOM_TYPES = new Set(ROOM_PAIRS.map(p => fold(p.type)));
+
 /**
- * The world's own elements, newest change first (sheet §2: a world's parlor's work surface). Room
- * elements are the room, not changes to the world, so they are left out.
+ * The world's own elements, newest change first (sheet §2: a world's parlor's work surface), one row each with its
+ * last change, removed elements among them. Room elements are the room, not changes to the world, so they are left
+ * out, and so is a removal that may have been one (its copy never held, its type a room type).
  */
-export function readChanges(els: Iterable<El>, max = 40): Change[] {
+export function readChanges(els: Iterable<El>, max = 40, removals: Iterable<RemovalRow> = []): Change[] {
   const out: Change[] = [];
   for (const el of els) {
     if (isRoomElement(el as Parameters<typeof isRoomElement>[0])) continue;
     const at = el.updated_at ?? el.created_at ?? '';
     if (!at) continue;
     const by = 'changed_by' in el ? (typeof el.changed_by === 'string' && el.changed_by ? el.changed_by : OWNER) : whoMade(el);
-    out.push({ id: el.id, type: fold(el.type), name: (el.name ?? '').toString().trim() || 'Untitled', by, at, made: !!el.created_at && el.created_at === el.updated_at, el });
+    out.push({ id: el.id, type: fold(el.type), name: (el.name ?? '').toString().trim() || 'Untitled', by, at, made: !!el.created_at && el.created_at === el.updated_at,
+      removed: false, madeBy: whoMade(el), madeAt: typeof el.created_at === 'string' && el.created_at ? el.created_at : null, el });
+  }
+  for (const r of removals) {
+    if (r.room === true || (r.room === null && ROOM_TYPES.has(fold(r.type)))) continue;
+    // keel names no one for the world's owner, and for a removal the server made itself (its door says so).
+    const by = r.by ?? (r.via === 'server' ? '' : OWNER);
+    out.push({ id: r.id, type: fold(r.type), name: r.name, by, at: r.at, made: false, removed: true, madeBy: null, madeAt: null,
+      el: { id: r.id, type: fold(r.type), changed_via: r.via, changed_client: r.client } as El });
   }
   return out.sort((a, b) => newestFirst(a.at, b.at) || byCodePoint(a.id, b.id)).slice(0, max);
 }

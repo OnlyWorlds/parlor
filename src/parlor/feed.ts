@@ -9,8 +9,25 @@
  * it (the SDK's rule; never empty a copy on our own).
  */
 
-import type { OwChange } from '@onlyworlds/sdk';
+import { isRoomElement, type OwChange } from '@onlyworlds/sdk';
 import type { El } from './shapes';
+
+/**
+ * An element removed from the world, as the feed's delete row says it (who, through which door, when), with its name
+ * and whether it was a room element kept from the copy that held it at the removal; both null when this copy never
+ * held it (a walk from zero names no removed element).
+ */
+export interface Removal {
+  id: string;
+  type: string;
+  name: string | null;
+  room: boolean | null;
+  /** The membership that removed it; null for the world's owner, or for a removal from before writes recorded it. */
+  by: string | null;
+  via: string | null;
+  client: string | null;
+  at: string;
+}
 
 /** The two calls the feed makes: an OwV2Client, or a fake in the tests. */
 export interface FeedClient {
@@ -25,6 +42,8 @@ type Listener = () => void;
 
 export class RoomFeed {
   readonly els = new Map<string, El>();
+  /** The elements removed from the world (never one hidden from this reader), by id. */
+  readonly removals = new Map<string, Removal>();
   private cursor: string | undefined;
   private appliedHead = -1;
   private appliedEpoch: number | null = null;
@@ -123,7 +142,7 @@ export class RoomFeed {
       for (;;) {
         const step = await it.next();
         if (step.done) { end = step.value; break; }
-        applyChange(fresh, step.value);
+        applyChange(fresh, step.value, this.removals, this.els);
       }
     } catch (err) {
       if (since !== undefined && isResync(err)) {
@@ -156,12 +175,31 @@ export class RoomFeed {
   }
 }
 
-export function applyChange(els: Map<string, El>, ch: OwChange): void {
+/**
+ * One change onto the copy. With `removals`, a delete row whose element is gone from the world (not one hidden from
+ * this reader) is recorded, its name taken from the copy that held it (`els`, else `before`, else an earlier record).
+ */
+export function applyChange(els: Map<string, El>, ch: OwChange, removals?: Map<string, Removal>, before?: ReadonlyMap<string, El>): void {
   if (ch.op === 'upsert') {
     els.set(ch.id, { ...(ch.element as unknown as El), id: ch.id, type: ch.type.toLowerCase() });
-  } else {
-    els.delete(ch.id);
+    removals?.delete(ch.id);
+    return;
   }
+  const old = els.get(ch.id) ?? before?.get(ch.id);
+  els.delete(ch.id);
+  if (!removals || (ch.reason !== undefined && ch.reason !== 'deleted') || !ch.deleted_at) return;
+  const prev = removals.get(ch.id);
+  const name = old ? ((typeof old.name === 'string' && old.name.trim()) || 'Untitled') : prev?.name ?? null;
+  removals.set(ch.id, {
+    id: ch.id,
+    type: ch.type.toLowerCase(),
+    name,
+    room: old ? isRoomElement(old as Parameters<typeof isRoomElement>[0]) : prev?.room ?? null,
+    by: ch.deleted_by ?? null,
+    via: ch.deleted_via ?? null,
+    client: ch.deleted_client ?? null,
+    at: ch.deleted_at,
+  });
 }
 
 function isResync(err: unknown): boolean {

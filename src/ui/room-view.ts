@@ -13,7 +13,7 @@ import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } 
 import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
-import { h, clear, notice, hhmm, initial } from './dom';
+import { h, clear, notice, hhmm } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot, waymarkOpenIn } from './waymark';
 import { afterPress } from './press';
 import { OwNetworkError, fileKindOf, proposedMarkOf, type OwWorldFileRow } from '@onlyworlds/sdk';
@@ -1726,27 +1726,71 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     workMarks.after(focused);
   }
 
-  /** The world's recent changes: who, which door, an AI's rows marked (sheet §2). Drawn only when the list moved. */
+  /**
+   * The world's recent changes (Seethe's shape A, 2026-11-18): one row per element with its last change, newest first,
+   * the day said where it turns. A row: the kind's body, the name (a button that opens its card), "changed by X ·
+   * through Y", and a quiet "made by" line where the maker is another seat or another day. A removed element is struck
+   * and opens nothing, its name as kept at the removal (the kind's word where none was kept). Drawn only when it moved.
+   */
   let changesKey = '';
+  const dayOf = (iso: string): string => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toDateString(); };
+  const dateWord = (iso: string): string => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
+  function dayWords(iso: string): string {
+    const today = new Date();
+    const yday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const d = dayOf(iso);
+    return d === today.toDateString() ? 'Today' : d === yday.toDateString() ? 'Yesterday' : dateWord(iso);
+  }
   function drawChanges(): void {
-    const rows = room.changes().map(c => ({ c, who: room.name(c.by), ai: room.isAi(c.by, c.el.changed_via), door: doorLine(c.el), fresh: isAfter(c.at, seenBefore) }));
-    const key = JSON.stringify(rows.map(r => [r.c.id, r.c.name, r.c.at, r.who, r.ai, r.door, r.fresh]));
+    const rows = room.changes().map(c => {
+      const who = c.by ? room.name(c.by) : null;
+      const ai = !!c.by && room.isAi(c.by, c.el.changed_via);
+      // "made by" only where it says something the change does not: another seat, or another day.
+      const maker = !c.removed && !c.made && c.madeBy && c.madeAt && (c.madeBy !== c.by || dayOf(c.madeAt) !== dayOf(c.at))
+        ? { who: room.name(c.madeBy), when: dayOf(c.madeAt) === dayOf(c.at) ? `at ${hhmm(c.madeAt)}` : dayWords(c.madeAt) === 'Yesterday' ? 'yesterday' : `on ${dateWord(c.madeAt)}` }
+        : null;
+      const opens = !c.removed && isShowable(room.els.get(c.id));
+      return { c, who, ai, door: doorLine(c.el), fresh: isAfter(c.at, seenBefore), maker, opens, day: dayWords(c.at) };
+    });
+    const key = JSON.stringify([rows.map(r => [r.c.id, r.c.name, r.c.at, r.c.removed, r.c.type, r.who, r.ai, r.door, r.fresh, r.maker, r.opens, r.day]), cardId]);
     if (key === changesKey) return;
     // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.
     if (changeMarks.held()) return;
     changesKey = key;
     const focused = changeMarks.before();
+    const focusedName = focusIn(changeList);
     const world = { id: room.world.id, name: room.world.name };
+    const items: HTMLElement[] = [];
+    let lastDay = '';
+    for (const { c, who, ai, door, fresh, maker, opens, day } of rows) {
+      if (day !== lastDay) { items.push(h('li', { class: 'day', 'data-part': 'change-day' }, day)); lastDay = day; }
+      const kind = typeWord(c.type);
+      const verb = c.removed ? 'removed' : c.made ? 'made' : 'changed';
+      const said = [who ? `${verb} by ${who}` : verb, door ?? ''].filter(Boolean).join(' · ');
+      const name = c.removed
+        ? (c.name !== null
+          ? h('span', { class: 'nm gone', 'data-part': 'change-gone', title: `${c.name}: removed, so it has no card` }, c.name)
+          : h('span', { class: 'nm gone anon', 'data-part': 'change-gone', title: `${kind}, removed: no name was kept for it, and it has no card` }, kind))
+        : opens
+          ? tipped(h('button', { class: 'nm', type: 'button', 'data-el': c.id, 'data-focus': `change-name:${c.id}`, 'aria-pressed': String(cardId === c.id),
+            'aria-label': `${c.name ?? 'Untitled'}, ${kind}: open its card`, onclick: () => openCard(c.id) }, c.name ?? 'Untitled'), room.els.get(c.id))
+          : h('span', { class: 'nm' }, c.name ?? 'Untitled');
+      items.push(h('li', { class: `ch${c.removed ? ' removed' : ''}${ai ? ' ai' : ''}`, 'data-change': c.id },
+        h('span', { class: c.removed ? 'kb gone' : 'kb' }, kindBody(c.type, 24)),
+        h('div', { class: 'mid' },
+          h('div', { class: 'l1' }, name, fresh ? h('span', { class: 'chip on' }, 'New') : null,
+            !c.removed ? changeMarks.mark(waymarkPlan(world, { ...c.el, id: c.id, type: c.type, name: c.name ?? 'Untitled' }), `change:${c.id}`) : null,
+            h('span', { class: 'tm' }, hhmm(c.at))),
+          h('div', { class: 'l2' }, who ? seatBody(who, ai, false, 16) : null, h('span', { class: 'tx', 'data-part': 'change-by', title: said }, said)),
+          maker ? h('div', { class: 'l3', 'data-part': 'change-made' }, h('span', { class: 'tx' }, `made by ${maker.who} ${maker.when}`)) : null)));
+    }
     clear(changeList,
       h('p', { class: 'sys' }, seenBefore ? 'What changed in the world, newest first; new since you last opened the room are marked.' : 'What changed in the world, newest first.'),
-      rows.length ? h('ul', { class: 'changes' }, rows.map(({ c, who, ai, door, fresh }) => h('li', { class: ai ? 'ai' : '' },
-        h('span', { class: ai ? 'bdg a' : 'bdg' }, ai ? 'AI' : initial(who)),
-        h('div', null,
-          h('div', null, h('span', { class: 'nm' }, c.name), changeMarks.mark(waymarkPlan(world, { ...c.el, id: c.id, type: c.type, name: c.name }), `change:${c.id}`), ' ', h('span', { class: 't' }, c.type.charAt(0).toUpperCase() + c.type.slice(1)), fresh ? h('span', { class: 'chip on' }, 'New') : null),
-          h('div', { class: 't' }, [`${c.made ? 'made' : 'changed'} by ${who}`, ai ? 'an AI' : '', door ?? '', hhmm(c.at)].filter(Boolean).join(' · '))))))
+      rows.length ? h('ul', { class: 'changes' }, items)
         : h('div', { class: 'empty' }, h('h3', null, 'Nothing yet'), h('p', null, 'When someone adds to the world or changes it, it shows here.')),
     );
     changeMarks.after(focused);
+    if (!focused) refocus(changeList, focusedName);
   }
 
   // A fan-out that settled lets its panel's held rebuild run.
