@@ -20,6 +20,8 @@ import {
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
 import { RoomFiles, filesName } from './files';
+import { crewOf, workshopRuns, type Crew } from './crew';
+import { newestNote, type MemberKey } from './team';
 import { hostLine, isHostRefusal } from './host';
 
 /** A report born completed, pressed by a seat that no longer keeps the world: nothing was sent. */
@@ -73,6 +75,8 @@ export class Room {
   hidden = new Set<string>();
   /** The sitting the room shows; null = the newest. */
   showSitting: string | null = null;
+  /** The Charter the front door named when the room opened, or null. */
+  charterAtOpen: string | null = null;
 
   /** The files on the room's lines (keel's files lane; the feed never sees a file arrive). */
   readonly files: RoomFiles;
@@ -95,6 +99,9 @@ export class Room {
     const room = new Room(world, client);
     room.me = await client.me();
     room.role = roomRole(room.me.role);
+    // The world's Charter as the front door names it, read once here; the feed's read stands in where it names none.
+    const door = (room.me as { front_door?: { charter?: unknown } }).front_door;
+    room.charterAtOpen = typeof door?.charter === 'string' && door.charter ? door.charter : null;
     await room.refreshRoster();
     await room.loadHidden();
     room.feed.subscribe(room.rosterWatch);
@@ -212,8 +219,29 @@ export class Room {
     return !!this.showSitting && this.showSitting !== all[all.length - 1]?.id;
   }
 
+  /**
+   * A team world: its Charter is marked (the front door's word at open, else the feed's). Its room is the team chat and
+   * each seat's room, every line across every sitting; a workshop runs in it only while a switch is on. A world with no
+   * Charter mark is a workshop world, and its room works as it always has.
+   */
+  get teamWorld(): boolean {
+    return !!this.charterAtOpen || !!this.charter();
+  }
+
+  /** A workshop runs while any switch of the newest sitting is on. */
+  get workshopRuns(): boolean {
+    return workshopRuns(this.sittings());
+  }
+
+  /** Where the sitting counts for what is written: a workshop world, or a team world while a workshop runs. */
+  get sittingCounts(): boolean {
+    return !this.teamWorld || this.workshopRuns;
+  }
+
   /** Lines stay by time: a line written while a new sitting is still on its way keeps its place. */
   lines() {
+    // A team world's room holds every line, whatever sitting it was said in.
+    if (this.teamWorld) return readLines(this.els.values());
     const all = this.sittings();
     // A watcher is served the room's lines but no sitting: the newest sitting's lines by their mark.
     if (!all.length && this.role === 'watcher') return linesOfUnseenSitting(readLines(this.els.values()), this.world.id);
@@ -233,7 +261,7 @@ export class Room {
 
   /** The newest sitting's: what every write reads and changes, whatever the room shows. */
   private live(): El[] {
-    return ofRoom(this.els.values(), this.roomOfNow());
+    return ofRoom(this.els.values(), this.sittingOfNow());
   }
 
   hearts() {
@@ -295,7 +323,39 @@ export class Room {
    * designs here, whatever its subtypes say (a locked Object is a door in a fantasy world).
    */
   designs(): DesignPart[] {
-    return this.charter() ? readDesignParts(this.els.values(), this.hidden) : [];
+    return this.teamWorld ? readDesignParts(this.els.values(), this.hidden) : [];
+  }
+
+  /**
+   * The crew: each person with the AI seats that are theirs, and the AI seats no one answers for, by the team rule
+   * the OnlyWorlds Dashboard uses. Empty when the roster cannot be read (a guest is refused it).
+   */
+  crew(): Crew {
+    if (!this.roster) return { beasts: [], people: [] };
+    const seatsOf = (this.me as { front_door?: { my_seats?: unknown } }).front_door?.my_seats;
+    const mySeats = Array.isArray(seatsOf) ? seatsOf.filter((x): x is { id: string } => !!x && typeof (x as { id?: unknown }).id === 'string') : [];
+    return crewOf({
+      members: this.roster,
+      me: this.meBy,
+      mySeats,
+      charName: c => this.characterShown(c),
+      memberCharacters: this.members(),
+    });
+  }
+
+  /** A Character's name when this reader is served it, else null (never a name the reader cannot see). */
+  characterShown(id: string | null): string | null {
+    if (!id) return null;
+    const el = this.els.get(id);
+    if (!el || String(el.type).toLowerCase() !== 'character' || el.hidden === true || el.known_of === true) return null;
+    return (el.name ?? '').toString().trim() || null;
+  }
+
+  /** A seat's newest Note (a Narrative with supertype Note the seat wrote by its own hand), or null. */
+  newestNote(key: MemberKey): El | null {
+    if (!this.roster) return null;
+    const notes = [...this.els.values()].filter(el => el.type === 'narrative' && el.supertype === 'Note');
+    return newestNote(notes as never[], key, this.roster) as El | null;
   }
 
   /**
@@ -383,10 +443,17 @@ export class Room {
   private serial = serialQueue();
 
   /**
-   * The mark for a line, spec, heart or vote: the newest sitting when the
-   * write's turn comes (never the one a host is browsing), else the world.
+   * The mark for a line, a board entry or a work item: the newest sitting when the write's turn comes (never the one
+   * a host is browsing) where the sitting counts, else the world. In a team world a line written while no workshop
+   * runs carries the world's mark, so the room and the board keep it whatever sitting comes next.
    */
   private roomOfNow(): string {
+    if (!this.sittingCounts) return this.world.id;
+    return this.sittingOfNow();
+  }
+
+  /** A spec, heart or vote's mark: the newest sitting, else the world (a workshop's own things are its sitting's). */
+  private sittingOfNow(): string {
     const all = this.sittings();
     return all[all.length - 1]?.id ?? this.world.id;
   }
@@ -407,10 +474,10 @@ export class Room {
    * go after it, on their own queue (never behind the room's writes), to the line this call made: its id is
    * captured here, whatever the room shows when they land. Text may be empty when files come with it.
    */
-  post(text: string, anchor: Anchor | null = null, files: ReadonlyArray<File> = []): Promise<void> {
+  post(text: string, anchor: Anchor | null = null, files: ReadonlyArray<File> = [], to: string | null = null): Promise<void> {
     this.showSitting = null;
     return this.serial(async () => {
-      const made = await this.client.create('narrative', newLineAt(text, this.myCharacter(), anchor, this.roomOfNow(), filesName(files)));
+      const made = await this.client.create('narrative', newLineAt(text, this.myCharacter(), anchor, this.roomOfNow(), filesName(files), to));
       // Once the line exists its files go to it, and nothing after can turn this Send into a failure the
       // composer would answer by giving the files back (a second Send would make the line twice).
       if (files.length) this.files.attach((made as { id: string }).id, files);
@@ -438,9 +505,10 @@ export class Room {
   reportBody(text: string, on: { parent?: string | null; item?: string | null; answers?: boolean; part?: Anchor | null }, keeper: KeeperPart | null): Record<string, unknown> | null {
     const narrator = this.myCharacter();
     if (!narrator || !text.trim()) return null;
-    // Said now, so in the newest sitting (where a report shows once sent, as a line does), never one being browsed.
+    // Said now, so in the newest sitting (where a report shows once sent, as a line does), never one being browsed; in
+    // a team world only while a workshop runs.
     const all = this.sittings();
-    const sitting = all[all.length - 1]?.id ?? null;
+    const sitting = this.sittingCounts ? all[all.length - 1]?.id ?? null : null;
     return newReport(text, narrator, this.world.id, localDay(new Date()), { ...on, sitting }, keeper);
   }
 
@@ -652,7 +720,7 @@ export class Room {
         if (kind) patch.subtype = kind;
         this.landed(await this.client.patch('construct', had.id, patch));
       } else if (kind) {
-        this.landed(await this.client.create('construct', newSpec(title, text, kind, this.roomOfNow())));
+        this.landed(await this.client.create('construct', newSpec(title, text, kind, this.sittingOfNow())));
       }
     });
   }
@@ -696,7 +764,7 @@ export class Room {
         this.feed.poke();
         return;
       }
-      this.landed(await this.client.create('relation', newHeart(specId, specTitle, this.myCharacter(), this.roomOfNow())));
+      this.landed(await this.client.create('relation', newHeart(specId, specTitle, this.myCharacter(), this.sittingOfNow())));
     });
   }
 
@@ -705,7 +773,7 @@ export class Room {
     return this.serial(async () => {
       if (!this.newestSitting()?.voting) return false;
       const had = newestOf(readVotes(this.live()).filter(v => v.by === this.meBy));
-      const body = newVote(picks, this.myCharacter(), this.roomOfNow());
+      const body = newVote(picks, this.myCharacter(), this.sittingOfNow());
       this.landed(had ? await this.client.patch('relation', had.id, { constructs: body.constructs })
         : await this.client.create('relation', body));
       return true;
@@ -742,6 +810,18 @@ export class Room {
       const s = this.newestSitting();
       if (!s) return;
       this.landed(await this.client.patch('event', s.id, switchPatch(which, on)));
+    });
+  }
+
+  /** End the workshop: each switch of the newest sitting that is on, turned off (the same write as a switch press). */
+  endWorkshop(): Promise<void> {
+    return this.serial(async () => {
+      const s = this.newestSitting();
+      if (!s) return;
+      for (const which of ['hearts', 'specs', 'voting'] as const) {
+        const now = this.newestSitting();
+        if (now?.id === s.id && now[which]) this.landed(await this.client.patch('event', s.id, switchPatch(which, false)));
+      }
     });
   }
 

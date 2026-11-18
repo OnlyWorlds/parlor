@@ -141,6 +141,11 @@ export interface Line {
   about: string | null;
   /** The Objects then the Constructs the line names: a design part among them is a talk on it (`designsOf`). */
   named: string[];
+  /**
+   * The Characters a Message is addressed to (its `characters`): a line written in a seat's room names that seat's
+   * Character. Always empty on a report, whose `characters` says what it touched, never whom it speaks to.
+   */
+  to: string[];
   at: string;
   /** A report (the report profile's pair and the mark): its own parts; null for a Message. `text` is its story. */
   report: ReportPart | null;
@@ -173,6 +178,7 @@ export function readLinesAsGiven(els: Iterable<El>): Line[] {
       parent: link(el, 'parent_narrative'),
       about: links(el, 'relations')[0] ?? null,
       named: [...links(el, 'objects'), ...links(el, 'constructs')],
+      to: report ? [] : links(el, 'characters'),
       at: el.created_at ?? '',
       report: report ? readReportPart(el) : null,
       el,
@@ -383,10 +389,14 @@ export function lineName(text: string): string {
 export type AnchorLink = 'parent_narrative' | 'relations' | 'objects' | 'constructs';
 export interface Anchor { link: AnchorLink; id: string }
 
-/** A new line's body: the text, the narrator, the room's mark and, when it answers something, its one anchor. */
-export function newLineAt(text: string, narrator: string | null, anchor: Anchor | null, roomOf: string, nameIfNoText = ''): Record<string, unknown> {
+/**
+ * A new line's body: the text, the narrator, the room's mark and, when it answers something, its one anchor. `to`: the
+ * Character a line written in a seat's room is addressed to, in `characters`; a line in the team chat names no one.
+ */
+export function newLineAt(text: string, narrator: string | null, anchor: Anchor | null, roomOf: string, nameIfNoText = '', to: string | null = null): Record<string, unknown> {
   const body = newLine(text, narrator, null, roomOf, null, nameIfNoText);
   if (anchor) body[anchor.link] = anchor.link === 'parent_narrative' ? anchor.id : [anchor.id];
+  if (to) body.characters = [to];
   return body;
 }
 
