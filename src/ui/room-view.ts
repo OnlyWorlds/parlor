@@ -1619,6 +1619,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   return () => {
     gone = true;
     window.removeEventListener('beforeunload', onLeavePage);
+    document.removeEventListener('keydown', onKey);
+    cardMark?.dispose();
+    designMarks.dispose();
     off();
     root.removeEventListener(WAYMARK_SETTLED, onSettled);
     workMarks.dispose();
