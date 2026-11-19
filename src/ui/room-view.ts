@@ -7,7 +7,7 @@
  */
 
 import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, WORK_STATE_WORD, workStateKey, workStateLine, workOffers, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
-import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, bySize, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
+import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, bySize, cardOf, firstLine, seatsByKey, isShowable, isHiddenPart, hiddenAnswerNote, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
 import { newestNote } from '../parlor/team';
 import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
 import { isAfter } from '../parlor/when';
@@ -929,7 +929,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // The world's name and its mark are built once: the bar's buttons are only shown, hidden and named on each draw, and
   // the mark is never moved, so an open fan-out and the focus on the mark stay where they are.
   const worldMark = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, null), 'world');
-  const rulesBtn = h('button', { class: 'btn quiet top-btn', type: 'button', 'data-part': 'rules', hidden: true, onclick: () => { const c = room.charter(); if (c) openCard(c.id); } }, 'Rules');
+  const rulesBtn = h('button', { class: 'btn quiet top-btn', type: 'button', 'data-part': 'rules', hidden: true, onclick: () => { const c = room.rulesCharter(); if (c) openCard(c.id); } }, 'Rules');
   const runBtn = h('button', { class: 'btn std top-btn', type: 'button', 'data-part': 'run-workshop', hidden: true, onclick: () => { void runOrEnd(); } }, 'Run a workshop');
   top.append(
     h('div', { class: 'brand-row' }, h('img', { class: 'mark', src: '/icons/owlogo.png', alt: 'OnlyWorlds', width: 22, height: 22 }), h('span', { class: 'brand' }, 'PARLOR'),
@@ -951,7 +951,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function drawTop(): void {
     // The room's role, for whoever reads the page by its parts (a test); the Crew tab says it in words.
     top.setAttribute('data-room-role', room.role);
-    const charter = room.charter();
+    // Rules only where the charter's card opens for this seat (never a press that opens nothing).
+    const charter = room.rulesCharter();
     rulesBtn.hidden = !charter;
     rulesBtn.setAttribute('aria-pressed', String(!!charter && cardId === charter.id));
     runBtn.hidden = !(room.isHost && room.teamWorld);
@@ -1623,8 +1624,12 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       if (answering(p)) { if (mq.matches) phoneTab('room'); text.focus(); return; }
       replyTo = { id: p.id, title: p.title, link: designLink(p) };
       drawReply();
-      // An answer goes to the team chat: from a seat's room, the composer moves there, saying so.
-      toTeamChat('An answer goes to the team chat: the composer moved there.');
+      // An answer goes to the team chat: from a seat's room, the composer moves there, saying so. A hidden part is said
+      // once, with it: everyone reads the answer, and only those served the part see what it names.
+      const note = hiddenAnswerNote(p, room.hidden, room.isHost);
+      const moved = space !== 'team';
+      toTeamChat(note ? `An answer goes to the team chat: the composer moved there. ${note}` : 'An answer goes to the team chat: the composer moved there.');
+      if (note && !moved) notice(note);
       if (mq.matches) phoneTab('room');
       text.focus();
     } }, answering(p) ? 'Answering' : 'Answer') : null;
@@ -1636,7 +1641,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       : h('span', { class: cls, 'data-el': p.id }, kindBody(p.type, cls === 'n' ? 20 : 18), p.title), p.el);
     const state = (p: DesignPart) => h('span', { class: `pill ${p.state === 'locked' ? 's-done' : 's-open'}` }, DESIGN_WORD[p.state]);
     // A hidden part (a keeper reads it; its maker too) is marked as the Work tab marks hidden work.
-    const hid = (p: DesignPart): boolean => room.hidden.has(p.id) || p.el.hidden === true;
+    const hid = (p: DesignPart): boolean => isHiddenPart(p, room.hidden);
     const hidWords = (p: DesignPart) => hid(p)
       ? h('span', { class: 'c', 'data-part': 'design-hidden' }, room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : null;
     clear(designList,
@@ -1751,7 +1756,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
             } }, mine ? 'Release' : 'Take') : null,
             can && (offers.markDone || offers.reopen) ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
               try { await room.setWorkState(w.id, offers.reopen ? 'open' : 'done'); } catch (err) {
-                notice(err instanceof ItemMoved ? 'That work item changed meanwhile: it is gone, or its state moved. Nothing was changed.'
+                notice(err instanceof ItemMoved ? 'That work item changed since you opened it, or it is gone. Nothing was changed: look again, then try.'
                   : problemLine(err, 'changing the work item'), true);
               }
             } }, offers.reopen ? 'Reopen' : 'Mark done') : null,

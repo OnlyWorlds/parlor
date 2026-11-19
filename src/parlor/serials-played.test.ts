@@ -17,7 +17,7 @@ vi.hoisted(() => {
 import { OwApiError, OwPreconditionFailedError, type OwMe, type OwV2Client } from '@onlyworlds/sdk';
 import { Room, ItemMoved } from './room';
 import { roomRole } from './roster';
-import { cardOf, heldWork } from './crew';
+import { cardOf, heldWork, hiddenAnswerNote } from './crew';
 import { ROOM_MARK, ROOM_ITEM, newWorkItem, workOffers, workStateLine, WORK_STATE_WORD, workStateKey, type El } from './shapes';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
@@ -226,6 +226,31 @@ describe('the Charter for each seat (the charter profile, serial 135; keel serve
     expect(r.charter()?.id).toBe('law-1');
     expect(r.teamWorld).toBe(true);
     expect(r.designs().map(p => p.id)).toEqual(['o-part']);
+  });
+
+  it('Rules is offered only where the Charter\'s card opens: not to a co-host or the maker reading it hidden, yes to the owner reading it visible', () => {
+    const cohost = room('co_builder', [law({ hidden: true }), part]);
+    cohost.hidden = new Set(['law-1']);
+    expect(cohost.charter()?.id).toBe('law-1');
+    expect(cohost.rulesCharter()).toBeNull();
+    const maker = room('contributor', [law({ hidden: true, created_by: 'm-1' }), part]);
+    expect(maker.charter()?.id).toBe('law-1');
+    expect(maker.rulesCharter()).toBeNull();
+    expect(room('owner', [law(), part]).rulesCharter()?.id).toBe('law-1');
+    expect(room('guest', [law(), part]).rulesCharter()?.id).toBe('law-1');
+  });
+
+  it('answering a hidden part says once that it is hidden from the room; a visible part says nothing', () => {
+    const host = room('owner', [law(), part, { id: 'o-hid', type: 'object', name: 'The secret hook', subtype: 'in design' } as El]);
+    host.hidden = new Set(['o-hid']);
+    const parts = new Map(host.designs().map(p => [p.id, p]));
+    expect(hiddenAnswerNote(parts.get('o-hid')!, host.hidden, host.isHost))
+      .toBe('The secret hook is hidden from the room: everyone reads your answer, and only the hosts see the part it names.');
+    expect(hiddenAnswerNote(parts.get('o-part')!, host.hidden, host.isHost)).toBeNull();
+    const maker = room('contributor', [law(), { id: 'o-mine', type: 'object', name: 'My hook', subtype: 'locked', hidden: true, created_by: 'm-1' } as El]);
+    const mine = maker.designs().find(p => p.id === 'o-mine')!;
+    expect(hiddenAnswerNote(mine, maker.hidden, maker.isHost))
+      .toBe('My hook is hidden from the room: everyone reads your answer, and only you and the hosts see the part it names.');
   });
 
   it('a keeper marking a Charter mid-visit turns the team world on at once', async () => {

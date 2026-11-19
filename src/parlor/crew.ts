@@ -261,6 +261,22 @@ export function workLineOf(note: El | null, held: WorkItem | null, els: Readonly
 
 // ---------------------------------------------------------------- designs as folds
 
+/** A design part hidden from the room: in a host's hidden list, or served to its maker marked hidden. */
+export function isHiddenPart(p: DesignPart, hidden: ReadonlySet<string>): boolean {
+  return hidden.has(p.id) || p.el.hidden === true;
+}
+
+/**
+ * What the composer says, once, when a hidden part is answered: the line goes to everyone in the room, and the part it
+ * names is seen only by those it is served to. Null for a part that is not hidden.
+ */
+export function hiddenAnswerNote(p: DesignPart, hidden: ReadonlySet<string>, isHost: boolean): string | null {
+  if (!isHiddenPart(p, hidden)) return null;
+  return isHost
+    ? `${p.title} is hidden from the room: everyone reads your answer, and only the hosts see the part it names.`
+    : `${p.title} is hidden from the room: everyone reads your answer, and only you and the hosts see the part it names.`;
+}
+
 /** A design and the parts under it in the Object tree (`parent_object`), its size their number. */
 export interface DesignFold { design: DesignPart; parts: DesignPart[] }
 

@@ -29,7 +29,7 @@
 
 import {
   FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, ROOM_PAIRS, readReportLine, readReportLines, readingAidOf, simpleCaseFold,
-  askerOf, designPartsOf, isOpenWork, reportTalksOf, talksOf, workOf, workStateOf, type OwLensReader, type OwWorkState,
+  designPartsOf, isOpenWork, reportTalksOf, talksOf, workOf, workStateOf, type OwLensReader, type OwWorkState,
 } from '@onlyworlds/sdk';
 import { byCodePoint, earlierFirst, isAfter, newestFirst, sameMoment } from './when.ts';
 
@@ -828,7 +828,7 @@ export interface WorkItem {
   /** The live takes on it, first taken first (who by `created_by`, never `actor`); always empty when it is no open work. */
   takes: Take[];
   /**
-   * The Character who asked for it (`x_packet_from`, the packet profile's rule 8, read by the SDK's `askerOf`): a
+   * The Character who asked for it (`x_packet_from`, the packet profile's rule 8, read by the SDK's `workOf`, as `askerOf` reads it): a
    * Character this reader is served, written exactly so; null when it names none. Never the maker, never `actor`.
    */
   askedBy: string | null;
@@ -912,16 +912,28 @@ export function addressOf(w: Pick<WorkItem, 'forWho' | 'forTitles'>, me: string 
 
 /**
  * The world a work item's asker is read in (the packet profile's rule 8, the SDK's `workOf` and `askerOf`): the ids of
- * the Characters this reader is served, and of every other element it is served, each as written.
+ * the Characters this reader is served, and of every other element it is served, each as written; and the ids of its
+ * Titles (for `x_packet_for`). One pass, each type folded once.
  */
-function workWorld(all: readonly El[]): { characters: string[]; others: string[] } {
+function workWorld(all: readonly El[]): { characters: string[]; others: string[]; titles: Set<string> } {
   const characters: string[] = [];
   const others: string[] = [];
-  for (const el of all) (fold(el.type) === 'character' ? characters : others).push(el.id);
-  return { characters, others };
+  const titles = new Set<string>();
+  for (const el of all) {
+    const type = fold(el.type);
+    if (type === 'character') characters.push(el.id);
+    else {
+      others.push(el.id);
+      if (type === 'title') titles.add(el.id);
+    }
+  }
+  return { characters, others, titles };
 }
 
-/** The Work tab's order by state (contract K5): open work first, then standing, then no state, then done. */
+/** A key of one of workOf's maps, its own property (never one inherited from Object). */
+const has = (map: object, key: string): boolean => Object.prototype.hasOwnProperty.call(map, key);
+
+/** The Work tab's order by state: open work first, then standing, then no state, then done. */
 const STATE_RANK = (s: WorkState): number => (s === 'open' || s === 'taken' ? 0 : s === 'standing' ? 1 : s === null ? 2 : 3);
 
 /**
@@ -936,15 +948,14 @@ const STATE_RANK = (s: WorkState): number => (s === 'open' || s === 'taken' ? 0 
 export function readWork(els: Iterable<El>, worldId: string, live: (by: string) => boolean = () => true): WorkItem[] {
   const all = [...els];
   const takes = readTakes(all, live);
-  const titles = new Set(all.filter(el => fold(el.type) === 'title').map(el => el.id));
   const items = all.filter(el => isA(el, 'relation', SUPERTYPE.workItem));
-  const world = workWorld(all);
-  const packets = workOf(items, world);
+  const { characters, others, titles } = workWorld(all);
+  const packets = workOf(items, { characters, others });
   const out: WorkItem[] = [];
   for (const el of items) {
     const own = workStateOf(el);
     const taken = isOpenWork(el) ? takes.get(el.id) ?? [] : [];
-    const packet: WorkElement[] = (Object.prototype.hasOwnProperty.call(packets.elements, el.id) ? packets.elements[el.id] : [])
+    const packet: WorkElement[] = (has(packets.elements, el.id) ? packets.elements[el.id] : [])
       .map(e => ({ type: fold(e.type), id: e.id, reason: e.reason }));
     const source = el.x_packet_source as { world?: unknown } | null | undefined;
     const elements = packet.length ? packet : Object.entries(LINK_FIELDS).flatMap(([type, field]) => links(el, field).map(id => ({ type, id, reason: null })));
@@ -963,7 +974,9 @@ export function readWork(els: Iterable<El>, worldId: string, live: (by: string) 
       // mark is settled, and any other value a doubt, shown settled (a lint's to report).
       proposed: proposedMarkOf(el) !== null,
       takes: taken,
-      askedBy: askerOf(el, world),
+      // workOf's own asker per item (askerOf's reading, read once for every item: askerOf alone builds the world's set
+      // of Characters on each call, which made this read cost items times Characters).
+      askedBy: has(packets.askers, el.id) ? packets.askers[el.id] : null,
       el,
     });
   }

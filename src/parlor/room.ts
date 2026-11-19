@@ -20,7 +20,7 @@ import {
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
 import { RoomFiles, filesName } from './files';
-import { crewOf, workshopRuns, type Crew } from './crew';
+import { crewOf, isShowable, workshopRuns, type Crew } from './crew';
 import { hostLine, isHostRefusal } from './host';
 
 /** A report born completed, pressed by a seat that no longer keeps the world: nothing was sent. */
@@ -48,7 +48,11 @@ export class DoneNoReport extends Error {
   constructor(readonly item: { id: string; title: string }, readonly failure: unknown) { super("done, no report"); }
 }
 
-/** A write's precondition at the version a fresh read answered (keel's `change_seq`), when it answered one. */
+/**
+ * A write's precondition at the version a fresh read answered (keel's `change_seq`), when it answered one. OnlyWorlds
+ * serves `change_seq` on every element it answers, so the write without a precondition is only a fallback for a
+ * server that does not.
+ */
 function atSeq(fresh: El): { ifMatch: number } | undefined {
   return typeof fresh.change_seq === 'number' ? { ifMatch: fresh.change_seq } : undefined;
 }
@@ -301,6 +305,16 @@ export class Room {
   /** The world's charter for this seat: a Charter the hidden mark keeps from a seat is not its own (the charter profile, serial 135). */
   charter() {
     return readCharter(this.els.values(), this.view());
+  }
+
+  /**
+   * The house rules this seat can open: the charter, when its card opens here. A Charter served to this seat marked
+   * hidden (a co-host's read, or its maker's) opens no card yet, so Rules is not offered for it rather than a press
+   * that opens nothing.
+   */
+  rulesCharter() {
+    const c = this.charter();
+    return c && isShowable(this.els.get(c.id)) ? c : null;
   }
 
   /** Every room board entry, whatever sitting raised it: an entry waits across sittings. */
