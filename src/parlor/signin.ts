@@ -7,6 +7,7 @@
 
 import { OwV2Client, OwSignInError, detectKeyKind } from '@onlyworlds/sdk';
 import { API_BASE, joinCodeIn, session, RESUME_KEY } from './session';
+import { isRoomHash } from './address';
 
 /** keel's registry (`GET /api/v2/auth/clients`) lists `parlor` with exactly this address. */
 export const SIGN_IN_CLIENT_ID = 'parlor';
@@ -46,14 +47,14 @@ export interface Resume {
   hash?: string;
 }
 
-/** Only what the parlor itself would write (P5): a join code, a room's address; anything else is dropped. */
+/** Only what the parlor itself would write (P5): a join code, a room's address or a work item's in it; anything else is dropped. */
 export function resumeOf(raw: unknown): Resume {
   if (!raw || typeof raw !== 'object') return {};
   const r = raw as { join?: unknown; hash?: unknown };
   const out: Resume = {};
   const join = typeof r.join === 'string' ? joinCodeIn(r.join) : null;
   if (join && join === r.join) out.join = join;
-  if (typeof r.hash === 'string' && /^#\/w\/[\w-]+$/.test(r.hash)) out.hash = r.hash;
+  if (typeof r.hash === 'string' && isRoomHash(r.hash)) out.hash = r.hash;
   return out;
 }
 
@@ -146,7 +147,7 @@ export const NOT_KEPT_LINE = 'That sign-in did not give the parlor an account to
 
 /** Where the return lands and what it says. */
 export interface Landing {
-  /** `#/` or a room's address. */
+  /** `#/`, a room's address, or a work item's in it. */
   hash: string;
   /** An invite to resume; a signed-in browser asks before it joins (P6). */
   join?: string;

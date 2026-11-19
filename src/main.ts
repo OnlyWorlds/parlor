@@ -11,6 +11,7 @@ import './style.css';
 import { session, joinCodeIn, type AccountWorld } from './parlor/session';
 import { isSignInCallback, startSignInCallback, takeResume, applySignInOutcome, type SignInOutcome } from './parlor/signin';
 import { Room, problemLine } from './parlor/room';
+import { readAddress, resumeHashOf } from './parlor/address';
 import { signInView, confirmJoinView, worldsView, previewOf } from './ui/doors';
 import { roomView } from './ui/room-view';
 import { h, clear, notice } from './ui/dom';
@@ -61,11 +62,6 @@ function signOutHere(): void {
   location.reload();
 }
 
-function worldInHash(): string | null {
-  const m = /^#\/w\/([\w-]+)/.exec(location.hash);
-  return m ? m[1] : null;
-}
-
 /** The exchange's answer: the token kept, then the address set once with no entry to come back to (P11). */
 async function finishSignIn(pending: Promise<SignInOutcome>): Promise<void> {
   clear(root, h('div', { class: 'center' }, h('p', { class: 'sys' }, 'Signing in…')));
@@ -105,13 +101,14 @@ async function route(): Promise<void> {
     landingProblem = undefined;
     const form = openForm;
     openForm = false;
-    const room = worldInHash();
+    // Where the person was going: a room, or a work item in it, carried whole through the round trip.
+    const room = resumeHashOf(location.hash);
     signInView(root, preview, () => {
       // The person typed the account: the invite they were shown joins at once, never another (C1).
       joinWithoutAsking = !!shown && pendingJoin === shown;
       void route();
     }, stale, {
-      resume: { ...(preview && shown ? { join: shown } : {}), ...(room ? { hash: `#/w/${room}` } : {}) },
+      resume: { ...(preview && shown ? { join: shown } : {}), ...(room ? { hash: room } : {}) },
       problem,
       openForm: form,
     });
@@ -156,17 +153,20 @@ async function route(): Promise<void> {
       notice(STALE_INVITE, true);
     }
   }
-  const worldId = worldInHash();
-  if (worldId) {
-    await openRoom(worldId, overtaken);
+  const at = readAddress(location.hash);
+  if (at) {
+    await openRoom(at.world, overtaken, at.work);
     return;
   }
   justSignedIn = false;
   worldsView(root, w => { location.hash = `#/w/${w.id}`; }, id => { location.hash = `#/w/${id}`; });
 }
 
-/** `overtaken`: a newer route() took the page during an await, so this one draws nothing more (Firefox's late room over a newer screen). */
-async function openRoom(worldId: string, overtaken: () => boolean): Promise<void> {
+/**
+ * `overtaken`: a newer route() took the page during an await, so this one draws nothing more (Firefox's late room over a newer screen).
+ * `work`: the work item the address names; the room opens at it (its Work tab, its card, its Answer).
+ */
+async function openRoom(worldId: string, overtaken: () => boolean, work: string | null = null): Promise<void> {
   clear(root, h('div', { class: 'center' }, h('p', { class: 'sys' }, 'Opening the room…')));
   let world: AccountWorld | undefined;
   try {
@@ -190,7 +190,7 @@ async function openRoom(worldId: string, overtaken: () => boolean): Promise<void
     }
     const signedInAs = justSignedIn ? { name: session.login, signOut: signOutHere } : undefined;
     justSignedIn = false;
-    leaveRoom = roomView(root, room, () => { location.hash = '#/'; }, signedInAs);
+    leaveRoom = roomView(root, room, () => { location.hash = '#/'; }, signedInAs, work);
   } catch (err) {
     const e = err as { status?: number };
     if (e.status === 401) session.forgetKey(worldId);

@@ -16,6 +16,7 @@ const only = process.argv[2];
 const TOKEN = 'ow_a_' + 'h'.repeat(40);
 const CODE = 'ow_j_' + 'w'.repeat(24);
 const WORLD = '0f0f0f0f-0000-4000-8000-00000000a1a1';
+const ITEM = '1a1a1a1a-0000-4000-8000-00000000b2b2';
 let failures = 0;
 let firstFail = null;
 const check = (tag, ok, what) => {
@@ -161,6 +162,13 @@ async function walk(engine, tag) {
   await page.waitForFunction(w => location.hash === `#/w/${w}`, WORLD, { timeout: 15000 });
   for (let i = 0; i < 30 && !keel.calls.includes('GET /api/v2/account/worlds'); i++) await page.waitForTimeout(200);
   check(tag, keel.calls.includes('POST /api/v2/auth/token') && keel.calls.includes('GET /api/v2/account/worlds'), `the room's address came back and its worlds are read (${new URL(page.url()).hash}; the room itself and its Signed in line are the live walk's, ROOM=1)`);
+
+  // P5: a work item's address comes back whole, not cut to the room (the room at it is work-address.mjs's).
+  await fresh(`${PROD}/#/w/${WORLD}/work/${ITEM}`);
+  await button().waitFor();
+  await button().click();
+  const whole = await page.waitForFunction(([w, i]) => location.hash === `#/w/${w}/work/${i}`, [WORLD, ITEM], { timeout: 15000 }).then(() => true, () => false);
+  check(tag, whole, `a work item's address came back whole through the sign-in (${new URL(page.url()).hash})`);
 
   // P5 and P6: an invite comes back, and the join is asked, naming the account.
   await fresh(`${PROD}/#/join/${CODE}`);

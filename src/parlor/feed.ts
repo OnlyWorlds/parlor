@@ -60,6 +60,11 @@ export class RoomFeed {
     return this.appliedHead;
   }
 
+  /** True once a walk has completed: the copy is the world as served, not a first read that failed or has not run. */
+  get walked(): boolean {
+    return this.cursor !== undefined;
+  }
+
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);

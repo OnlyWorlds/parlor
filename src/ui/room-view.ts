@@ -13,6 +13,7 @@ import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } 
 import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
+import { readAddress, roomHash, workArrival, WORK_NOT_HERE, WORK_READ_ONLY, type WorkArrival } from '../parlor/address';
 import { h, clear, notice, hhmm } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot, waymarkOpenIn } from './waymark';
 import { afterPress } from './press';
@@ -28,8 +29,11 @@ export interface SignedInAs {
   signOut: () => void;
 }
 
-/** `signedInAs`: the room was reached by a sign-in just now, so it names the account (the sign-in gate's G2). */
-export function roomView(root: HTMLElement, room: Room, onLeave: () => void, signedInAs?: SignedInAs): () => void {
+/**
+ * `signedInAs`: the room was reached by a sign-in just now, so it names the account (the sign-in gate's G2).
+ * `arriveAt`: the work item a work item's address names (`#/w/<world>/work/<id>`): the room opens at it.
+ */
+export function roomView(root: HTMLElement, room: Room, onLeave: () => void, signedInAs?: SignedInAs, arriveAt: string | null = null): () => void {
   const top = h('header', { class: 'top' });
   const whoLine = signedInAs
     ? h('p', { class: 'sys', 'data-part': 'signed-in-as' },
@@ -98,6 +102,23 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // The report whose whole story is open over the room (`<id>:<state>`), as its own card with its own scroll, so the
   // room's lines never move apart: kept across redraws, forgotten with the room.
   let reportOpen: string | null = null;
+  // A work item's address: the room lands on the Work tab with that item's card in view, and its Answer open where this
+  // seat may answer it, once the room's read is whole. The address stays in the bar while that card is the one in view,
+  // so a reload reopens it; the room's own address comes back when the person moves (another tab, another room, the
+  // answer let go, sent or swapped for another).
+  let addressed: string | null = arriveAt;
+  let landed = false;
+  let answeredHere = false;
+  function leaveAddress(): void {
+    if (!addressed) return;
+    addressed = null;
+    answeredHere = false;
+    // Replaced, never pushed, and replaceState fires no hashchange, so the room is not opened again (main.ts).
+    const at = readAddress(location.hash);
+    if (at?.work && at.world === room.world.id) history.replaceState(history.state, '', roomHash(room.world.id));
+    // The card loses its mark on the next draw, after whatever press moved the person has drawn.
+    queueMicrotask(redraw);
+  }
 
   // -------------------------------------------------- the composer (built once)
   const text = h('textarea', { rows: 1, 'aria-label': 'Write a line', placeholder: 'Write a line' });
@@ -385,6 +406,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // The box answers one work item: answering another (or none) starts it unticked again.
   let finishFor: string | null = null;
   function drawReply(): void {
+    // An answer to anything but the address's item, or the answer the address opened let go or sent: the person moved on.
+    if (addressed && (replyTo ? !(replyTo.link === 'relations' && replyTo.id === addressed) : answeredHere)) leaveAddress();
     const answeringId = replyTo?.id ?? null;
     const fresh = answeringId !== finishFor;
     if (fresh) { finishBox.checked = false; finishFor = answeringId; }
@@ -706,7 +729,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   type Tab = PanelTab;
   const TAB_WORDS: Record<Tab, string> = { crew: 'Crew', work: 'Work', designs: 'Designs', changes: 'Changes', board: 'Board', specs: 'Specs' };
   // Each tab an icon and a short word; the word may drop at a narrow width, the tab's name stays for a screen reader.
-  const tabBtn = (t: Tab) => h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', 'aria-label': TAB_WORDS[t], 'data-tab': t, onclick: () => { workTab = t; draw(); } },
+  const tabBtn = (t: Tab) => h('button', { type: 'button', role: 'tab', 'aria-selected': 'false', 'aria-label': TAB_WORDS[t], 'data-tab': t, onclick: () => {
+    workTab = t;
+    if (t !== 'work') leaveAddress();
+    draw();
+  } },
     tabIcon(t), h('span', { class: 'tab-word', 'aria-hidden': 'true' }, TAB_WORDS[t]));
   const tabCrew = tabBtn('crew');
   const tabWorkItems = tabBtn('work');
@@ -781,7 +808,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       if (reporting) { reporting = false; finishBox.checked = false; drawReportMode(); }
       if (replyTo && !replyTo.line) { replyTo = null; drawReply(); notice('A seat\'s room takes plain lines: the answer was let go, your text is kept.'); }
     }
-    if (space !== next) { cardId = null; stickToEnd = true; dropLineReply(); }
+    if (space !== next) { cardId = null; stickToEnd = true; dropLineReply(); leaveAddress(); }
     space = next;
     draw();
     if (mq.matches) phoneTab('room');
@@ -882,6 +909,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     // A seat whose room went (it left, or its Character is no longer served) brings the room back to the team chat.
     // A workshop world has no seat rooms.
     if (space !== 'team' && (!room.teamWorld || !roomSeat(crewNow, space))) { space = 'team'; cardId = null; dropLineReply(); }
+    const landing = land();
     const work = room.work();
     const notes = room.roster ? [...room.els.values()].filter(el => el.type === 'narrative' && el.supertype === 'Note') : [];
     lineOf = new Map([...seatsNow.values()].map(s => [s.key, room.roster
@@ -900,6 +928,37 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     drawDesigns();
     drawTabs();
     rereadDesignReply(partsNow);
+    if (landing) settle(landing);
+  }
+
+  /**
+   * The arrival at a work item's address, once: only after the room's read is whole (a first read that failed waits for
+   * one that works), never a "not here" over a list that has not been read. The Work tab is selected; where this seat
+   * may answer, the card's own Answer opens (no other way to answer).
+   */
+  function land(): WorkArrival | null {
+    if (landed || !addressed) return null;
+    const work = room.work();
+    const how = workArrival(addressed, work, room.feed.walked, room.canWrite);
+    if (how === 'wait') return null;
+    landed = true;
+    workTab = 'work';
+    const w = work.find(x => x.id === addressed);
+    if (how === 'answer' && w) {
+      replyTo = { id: w.id, title: w.title || 'Untitled', link: 'relations' };
+      answeredHere = true;
+      drawReply();
+    }
+    return how;
+  }
+  /** After the arrival's draw: the composer takes focus (on a phone, its pane shows), or the card or the line does. */
+  function settle(how: WorkArrival): void {
+    const card = workList.querySelector<HTMLElement>('[data-here]');
+    if (mq.matches) phoneTab(how === 'answer' ? 'room' : 'work');
+    if (how === 'answer') text.focus();
+    card?.scrollIntoView({ block: 'nearest' });
+    if (how === 'read') card?.focus({ preventScroll: true });
+    if (how === 'not-here') workList.querySelector<HTMLElement>('[data-part="work-not-here"]')?.focus({ preventScroll: true });
   }
 
   /** The host panel shows for a host in a workshop world, and in a team world after Run a workshop or while one runs. */
@@ -1695,16 +1754,21 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       return order.flatMap(g => [...(order.length > 1 ? [h('h3', { class: 'wgroup' }, GROUP[g])] : []), ...rows.filter(r => r.addr === g).map(card)]);
     };
     const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.addr, v.by, v.answers, v.els, v.takers, v.mine, v.asker, v.offers, v.reported]),
-      room.canWrite, room.isHost, room.needsName(), workOpen, deleting]);
+      room.canWrite, room.isHost, room.needsName(), workOpen, deleting, addressed, landed]);
     if (key === workKey) return;
     // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.
     if (workMarks.held()) return;
     workKey = key;
     const focused = workMarks.before();
+    const focusedName = focusIn(workList);
     const world = { id: room.world.id, name: room.world.name };
+    // The address's item: said not here only once the room's read is whole and the item is not among those served.
+    const notHere = !!addressed && landed && !view.some(v => v.w.id === addressed);
     clear(workList,
       h('p', { class: 'sys' }, 'Work on this world: each item says what it is about, and opens in the room when you answer it.'),
-      view.length ? grouped(view, ({ w, can, hidden, who, by, answers, els, takers, mine, asker, offers, reported }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}`, 'data-state': workStateKey(w.state) },
+      notHere ? h('p', { class: 'problem', 'data-part': 'work-not-here', tabindex: '-1' }, WORK_NOT_HERE) : null,
+      view.length ? grouped(view, ({ w, can, hidden, who, by, answers, els, takers, mine, asker, offers, reported }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}${w.id === addressed ? ' here' : ''}`, 'data-state': workStateKey(w.state), 'data-work': w.id,
+        ...(w.id === addressed ? { 'data-here': 'true', 'data-focus': `work:${w.id}`, tabindex: '-1' } : {}) },
         h('div', { class: 'ttl' }, h('span', { class: `chip s-${workStateKey(w.state)}` }, WORK_STATE_WORD[workStateKey(w.state)]), w.proposed ? h('span', { class: 'chip prop' }, 'Proposed') : null,
           h('h3', null, w.title || 'Untitled')),
         h('div', { class: 'm', 'data-part': 'for' }, `${who ? `For ${who}` : 'Not addressed to anyone'} · made by ${by}`),
@@ -1727,6 +1791,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         answers || hidden ? h('div', { class: 'm' }, [answers ? `${answers} answer${answers === 1 ? '' : 's'} in the room` : '',
           hidden ? (room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : ''].filter(Boolean).join(' · ')) : null,
         reported ? h('div', { class: 'm', 'data-part': 'reported' }, 'A completed report answers this item: Mark done once the work is there.') : null,
+        w.id === addressed && !room.canWrite ? h('div', { class: 'm', 'data-part': 'work-read-only' }, WORK_READ_ONLY) : null,
         deleting === w.id
           ? h('div', { class: 'btns' }, h('span', { class: 'sys' }, 'Delete this work item for everyone?'),
             h('button', { class: 'btn std', type: 'button', onclick: async () => {
@@ -1767,6 +1832,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       room.canWrite && !workOpen ? h('div', { class: 'btns' }, h('button', { class: 'btn entry', type: 'button', onclick: openWorkForm }, 'Add a work item')) : null,
     );
     workMarks.after(focused);
+    if (!focused) refocus(workList, focusedName);
   }
 
   /**

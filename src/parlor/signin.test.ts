@@ -64,6 +64,16 @@ describe('P5, only what the parlor would write comes back', () => {
     expect(resumeOf({ hash: '#/join/x' })).toEqual({});
     expect(resumeOf({ join: 42 })).toEqual({});
   });
+  it('keeps a work item\'s address in a room, exactly, and no other tail', () => {
+    expect(resumeOf({ hash: '#/w/0f0f-aa/work/1a2b-cc' })).toEqual({ hash: '#/w/0f0f-aa/work/1a2b-cc' });
+    for (const hash of ['#/w/a/work/', '#/w/a/work', '#/w/a/work/b/c', '#/w/a/work/b/', '#/w/a/work/../x', '#/w/a/work/b?x=1', '#/w/a/other/b', '#/w/a/', 'https://evil.example/#/w/a/work/b']) {
+      expect(resumeOf({ hash })).toEqual({});
+    }
+  });
+  it('a note read back from storage keeps the work item\'s address through the round trip', () => {
+    store.set(RESUME_KEY, JSON.stringify({ hash: '#/w/abc/work/i-1' }));
+    expect(takeResume()).toEqual({ hash: '#/w/abc/work/i-1' });
+  });
 });
 
 describe('P7, a refusal in the parlor\'s words', () => {
@@ -119,6 +129,12 @@ describe('P4, the token kept; keys and the PIN only for the same account', () =>
     expect(session.signedIn).toBe(true);
     expect(session.login).toBe('wren');
     expect(kept()?.token).toBe(TOKEN);
+    session.signOut();
+  });
+  it('signed out, then in: a work item\'s address comes back whole, not cut to the room', () => {
+    session.signOut();
+    const l = applySignInOutcome({ ok: true, token: TOKEN, account: { id: 'acc-1', username: 'wren' } }, resumeOf({ hash: '#/w/abc/work/i-1' }));
+    expect(l).toEqual({ hash: '#/w/abc/work/i-1', signedIn: true, join: undefined });
     session.signOut();
   });
   it('a token of another kind is not kept', () => {
