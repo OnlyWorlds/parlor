@@ -61,7 +61,19 @@ export function isolated(text: string): string {
   return `${FSI}${text}${PDI}`;
 }
 
-/** A character's width in the picture's units: a wide one (CJK, a full-width form, most emoji) counts two. */
+/** The minimal shape of `Intl.Segmenter` this file uses (the parlor's TypeScript lib predates its types). */
+type Segmenter = new (locale?: string, options?: { granularity: 'grapheme' }) => { segment(text: string): Iterable<{ segment: string }> };
+const SEGMENTER = (Intl as unknown as { Segmenter?: Segmenter }).Segmenter;
+
+/**
+ * A text's graphemes, what a reader sees as one character: an emoji sequence joined by ZWJ, a letter and its combining
+ * marks. A cut is only ever made between two of them. Where the browser has no `Intl.Segmenter`, code points.
+ */
+export function graphemes(text: string): string[] {
+  return SEGMENTER ? Array.from(new SEGMENTER(undefined, { granularity: 'grapheme' }).segment(text), s => s.segment) : Array.from(text);
+}
+
+/** A grapheme's width in the picture's units, by its first code point: a wide one (CJK, a full-width form, most emoji) counts two. */
 function width(ch: string): number {
   const c = ch.codePointAt(0) ?? 0;
   return (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff)
@@ -69,12 +81,12 @@ function width(ch: string): number {
 }
 
 /**
- * A name fitted to `room` units of the picture: whole when it fits, else cut at a character (never inside a pair of
- * surrogates) and ended with an ellipsis. `cut` says it was cut, so the whole name goes to the node's accessible name
+ * A name fitted to `room` units of the picture: whole when it fits, else cut between two graphemes (never inside an
+ * emoji sequence or a letter's marks) and ended with an ellipsis. `cut` says it was cut, so the whole name goes to the node's accessible name
  * and its title.
  */
 export function fitName(name: string, room: number): { text: string; cut: boolean } {
-  const chars = Array.from(name);
+  const chars = graphemes(name);
   let used = 0;
   for (const ch of chars) used += width(ch);
   if (used <= room) return { text: name, cut: false };
@@ -98,12 +110,12 @@ export const LABEL_PX = 124;
 
 /**
  * A text fitted to `room` by its drawn width (`measure`, the browser's own length of a candidate as drawn): whole when it
- * fits, else the longest start, cut at a character, that fits with an ellipsis after it. Letters differ in width (a row
+ * fits, else the longest start, cut between two graphemes, that fits with an ellipsis after it. Letters differ in width (a row
  * of capitals is wider than its count says), so the count is only ever a first guess.
  */
 export function fitToWidth(text: string, measure: (candidate: string) => number, room: number): { text: string; cut: boolean } {
   if (measure(text) <= room) return { text, cut: false };
-  const chars = Array.from(text);
+  const chars = graphemes(text);
   const at = (k: number): string => `${chars.slice(0, k).join('').trimEnd()}…`;
   let lo = 0;
   let hi = chars.length - 1;

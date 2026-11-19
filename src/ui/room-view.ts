@@ -6,7 +6,7 @@
  * only when what they show moved, their open state kept apart, so a tick never eats a fold, an open card or focus.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, WORK_STATE_WORD, workStateKey, workStateLine, workOffers, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, answeredWord, readLines, WORK_STATE_WORD, workStateKey, workStateLine, workOffers, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
 import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, bySize, firstLine, seatsByKey, isHiddenPart, hiddenAnswerNote, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
 import type { CardGroup, CardModel } from '../parlor/element-card';
 import { closeMovesFocus, escapeClosesCard, focusAfterRedraw, foldStays, linkNote, linkPresses, markLines, moreQuestions, questionHref, questionWords, GROUP_TRIMMED, MARK_WORDS, QUESTIONS_SHOWN, SHOW_ALL, SHOW_LESS } from './card-rules';
@@ -19,7 +19,7 @@ import { releasedHash, releasesAddress, workArrival, WORK_NOT_HERE, WORK_READ_ON
 import { h, clear, notice, hhmm } from './dom';
 import { WAYMARK_SETTLED, focusWaymark, markSet, waymarkFocusIn, waymarkPlan, waymarkSlot, waymarkOpenIn } from './waymark';
 import { afterPress } from './press';
-import { OwNetworkError, fieldLabel, fileKindOf, isOpenWork, proposedMarkOf, workStateOf, type OwWorldFileRow } from '@onlyworlds/sdk';
+import { OwNetworkError, fieldLabel, fileKindOf, isOpenWork, type OwWorldFileRow } from '@onlyworlds/sdk';
 import { ACCEPT as FILES_ACCEPT, MAX_PICKS, adderOf, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
 
 /** A press refused before anything was sent, in the person's words. */
@@ -535,13 +535,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     // Every work item it answers, by its pair, room mark or not (the profile's reader reads one either way).
     const items = l.report.answers.map(x => room.els.get(x)).filter((el): el is NonNullable<typeof el> => !!el && isWorkItemPair(el));
     // Each item's state by the SDK's reader (the packet profile's rule 5): only open work, not proposed, is set done.
-    const said = (el: (typeof items)[number]): string => {
-      const state = workStateOf(el);
-      if (state === 'done') return 'done already';
-      if (maySetDone(el)) return state ?? 'open';
-      if (isOpenWork(el) && proposedMarkOf(el)) return 'proposed: left open';
-      return state === 'standing' ? 'standing: left as it is' : state === null ? 'no state: left as it is' : 'left as it is';
-    };
+    const said = answeredWord;
     const settable = items.filter(el => maySetDone(el));
     const words = items.map(el => `${(el.name ?? '').toString().trim() || 'Untitled'} (${said(el)})`);
     cSetShown = settable.length > 0;
@@ -889,10 +883,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       el.focus({ preventScroll: true });
       return;
     }
-    const tab = cardOpenerInPanel ? workTabs.querySelector<HTMLElement>('[aria-selected="true"]') : null;
-    if (tab && tab.getClientRects().length) { tab.focus({ preventScroll: true }); return; }
+    // Else the first of these that is drawn (on a phone a pane may be put away, and focus on a node not drawn is lost to
+    // the page): the panel's selected tab when the opener sat in the panel, the room's lines, the panel's selected tab,
+    // then the phone's own selected tab.
+    const panelTab = workTabs.querySelector<HTMLElement>('[aria-selected="true"]');
     lines.setAttribute('tabindex', '-1');
-    lines.focus({ preventScroll: true });
+    const phoneTabNow = root.querySelector<HTMLElement>('nav.mtabs [aria-selected="true"]');
+    for (const to of [cardOpenerInPanel ? panelTab : null, lines, panelTab, phoneTabNow]) {
+      if (to && to.getClientRects().length) { to.focus({ preventScroll: true }); return; }
+    }
   }
   /** Step to a neighbour in the open card: the card shows it, its words folded, and focus goes to its name. */
   function stepCard(id: string): void {
@@ -1044,7 +1043,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // The world's name and its mark are built once: the bar's buttons are only shown, hidden and named on each draw, and
   // the mark is never moved, so an open fan-out and the focus on the mark stay where they are.
   const worldMark = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, null), 'world');
-  const rulesBtn = h('button', { class: 'btn quiet top-btn', type: 'button', 'data-part': 'rules', hidden: true, onclick: () => { const c = room.rulesCharter(); if (c) openCard(c.id, true); } }, 'Rules');
+  const rulesBtn = h('button', { class: 'btn quiet top-btn', type: 'button', 'data-part': 'rules', 'data-focus': 'rules', hidden: true, onclick: () => { const c = room.rulesCharter(); if (c) openCard(c.id, true); } }, 'Rules');
   const runBtn = h('button', { class: 'btn std top-btn', type: 'button', 'data-part': 'run-workshop', hidden: true, onclick: () => { void runOrEnd(); } }, 'Run a workshop');
   top.append(
     h('div', { class: 'brand-row' }, h('img', { class: 'mark', src: '/icons/owlogo.png', alt: 'OnlyWorlds', width: 22, height: 22 }), h('span', { class: 'brand' }, 'PARLOR'),

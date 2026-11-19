@@ -19,6 +19,9 @@ const ME = 'c0c0c0c0-0000-4000-8000-0000000000c1';
 const id = (p, n) => `${p}-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const ADA = id('c0000000', 1), BO = id('c0000000', 2), LONG = id('c0000000', 3), STUB = id('c0000000', 4), HID = id('c0000000', 5);
 const WIDE = id('c0000000', 6), GONE1 = id('c0000000', 7), GONE2 = id('c0000000', 8);
+// A marked charter (so the room is a team world, with Rules), an Object in design, and a line that answers it: its chip
+// in the room's lines opens a card from the room's own pane.
+const LAW = id('d0000000', 1), LAMP = id('b0000000', 1), LINE = id('e0000000', 1);
 const HOME = id('a0000000', 1), PROP = id('a0000000', 2);
 const Q1 = id('1a1a1a1a', 1), Q2 = id('1a1a1a1a', 2);
 const LONG_NAME = 'Wilhelmina Theodora Lanternkeeper of the Northern Harbour';
@@ -47,6 +50,9 @@ function world(o = {}) {
     { id: LONG, type: 'Character', name: LONG_NAME, friends: [ADA], created_at: at(5), updated_at: at(9) },
     { id: STUB, type: 'Character', name: 'Stubby', known_of: true, description: 'Only its words are served.', created_at: at(6) },
     { id: WIDE, type: 'Character', name: WIDE_NAME, created_at: at(12), updated_at: at(12) },
+    { id: LAW, type: 'Law', name: 'House rules', supertype: 'Charter', x_charter_of: WORLD, description: 'Be kind.\nWrite plainly.', created_at: at(15), updated_at: at(15) },
+    { id: LAMP, type: 'Object', name: 'Harbour lamp', subtype: 'in design', created_at: at(16), updated_at: at(16) },
+    { id: LINE, type: 'Narrative', name: 'On the lamp', supertype: 'Message', story: 'The lamp needs a new wick.', x_room_of: WORLD, objects: [LAMP], narrator: ME, created_by: 'm-1', created_at: at(17) },
     ...(o.gone1 ? [] : [{ id: GONE1, type: 'Character', name: 'Soon gone', created_at: at(13), updated_at: at(13) }]),
     ...(o.gone2 ? [] : [{ id: GONE2, type: 'Character', name: 'Gone too', created_at: at(14), updated_at: at(14) }]),
     { id: PROP, type: 'Location', name: 'Proposed place', x_review_proposed: { by: 'an agent' }, created_at: at(7), updated_at: at(25) },
@@ -248,6 +254,31 @@ async function walk(engine, tag) {
     const g = await page.evaluate(() => { const a = document.activeElement; return { tag: a?.tagName, tab: a?.getAttribute('data-tab') ?? null, selected: a?.getAttribute('aria-selected') ?? null }; });
     check(tag, !(await cardOpen()) && g.tag !== 'BODY' && g.tab === 'changes' && g.selected === 'true',
       `deleted while focus is in its card: the card closes, focus on the panel's Changes tab (${JSON.stringify(g)})`);
+
+    // 9d. The Rules card closes back onto Rules.
+    await press(page.locator('[data-part="rules"]'));
+    await card.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    check(tag, await headingIs('House rules') && (await card.locator('[data-part="card-text"]').textContent().catch(() => '')) === 'Be kind.\nWrite plainly.', 'Rules opens the house rules, read whole');
+    await press(card.locator('[data-focus="card:x"]'));
+    await settle(150);
+    check(tag, !(await cardOpen()) && (await focusKey()) === 'rules', `closing the Rules card gives focus back to Rules (${await focusKey()})`);
+
+    // 9e. A card opened from a chip in the room's lines; on a phone the panel's Work tab chosen meanwhile; then ×: focus
+    // lands on something drawn (the chip on a desk, the panel's selected tab on a phone), never the page.
+    await toRoom();
+    const chip = page.locator(`[data-focus="chip:line:${LINE}:${LAMP}"]`);
+    await press(chip);
+    await card.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    check(tag, await headingIs('Harbour lamp'), 'a chip in the room\'s lines opens its card');
+    if (phone) {
+      await toPanel();
+      await press(page.locator('.wtabs [data-tab="work"]'));
+    }
+    await press(card.locator('[data-focus="card:x"]'));
+    await settle(150);
+    const back = await page.evaluate(() => { const a = document.activeElement; return { tag: a?.tagName, key: a?.closest('[data-focus]')?.getAttribute('data-focus') ?? null, tab: a?.getAttribute('data-tab') ?? null, drawn: !!a && a.getClientRects().length > 0 }; });
+    check(tag, !(await cardOpen()) && back.tag !== 'BODY' && back.drawn && (phone ? back.tab === 'work' : back.key === `chip:line:${LINE}:${LAMP}`),
+      `closed with ×: focus on ${phone ? 'the panel\'s Work tab' : 'the chip that opened it'}, never the page (${JSON.stringify(back)})`);
 
     // 10. A keeper: the proposed row opens its card, marked; a hidden neighbour is listed marked, and opens marked.
     keel.me = { role: 'owner', scope: 'write', membership: null, character: ME, kind: 'person' };

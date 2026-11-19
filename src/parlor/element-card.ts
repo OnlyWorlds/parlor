@@ -29,7 +29,7 @@
  *   state, else the subtype, else the supertype, as written and trimmed.
  */
 
-import { byCodePoint, fieldLabel, FIELD_SCHEMA, handsOnAsProposed, isOpenWork, isRoomElement, typeWord, workStateOf } from '@onlyworlds/sdk';
+import { byCodePoint, fieldLabel, FIELD_SCHEMA, handsOnAsProposed, isOpenWork, isRoomElement, trimAndFold, typeWord, workStateOf } from '@onlyworlds/sdk';
 
 // ---------------------------------------------------------------- what the card takes
 
@@ -239,9 +239,11 @@ export interface QuestionTarget {
 
 /**
  * The elements a work item is about, the one rule for a card's questions and a tool's list of work: first its packet's
- * entries (`x_packet_elements`, each with its type, id and reason all strings and the id not blank), in their order,
- * in this world unless `x_packet_source` names another; then its typed links (each a Relation link field, an id each
- * once) that the packet does not name, always in this world (keel checks a typed link against it).
+ * entries (`x_packet_elements`, each with its type, id and reason all strings, and the id not blank once Unicode's
+ * White_Space is trimmed by the SDK's `trimAndFold`, the profiles' one trim, as `workOf` reads it: a byte order mark is
+ * no White_Space), in their order, in this world unless `x_packet_source` names another; then its typed links (each a
+ * Relation link field, an id each once) that the packet does not name, always in this world (keel checks a typed link
+ * against it).
  */
 export function questionTargets(item: CardRow, worldId: string): QuestionTarget[] {
   const out: QuestionTarget[] = [];
@@ -252,7 +254,7 @@ export function questionTargets(item: CardRow, worldId: string): QuestionTarget[
   if (Array.isArray(packet)) {
     for (const e of packet) {
       const r = e && typeof e === 'object' ? e as Record<string, unknown> : null;
-      if (!r || typeof r.type !== 'string' || typeof r.id !== 'string' || typeof r.reason !== 'string' || r.id.trim() === '') continue;
+      if (!r || typeof r.type !== 'string' || typeof r.id !== 'string' || typeof r.reason !== 'string' || trimAndFold(r.id) === '') continue;
       out.push({ type: r.type, id: r.id, reason: r.reason, here });
       named.add(r.id);
     }

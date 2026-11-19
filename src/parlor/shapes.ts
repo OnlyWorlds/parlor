@@ -324,10 +324,23 @@ export interface KeeperPart {
 
 /**
  * A work item's own state lets a keeper's report set it done: open work (the packet profile's rule 5, serial 136: open
- * or taken, read by the SDK's `isOpenWork`; a standing item and one with no state never), and not proposed.
+ * or taken, read by the SDK's `isOpenWork`; a standing item and one with no state never), and not proposed, read as the
+ * element card and the Work tab read it (the SDK's `handsOnAsProposed`: a review mark that cannot be read is proposed).
  */
 export function maySetDone(el: El): boolean {
-  return isOpenWork(el) && proposedMarkOf(el) === null;
+  return isOpenWork(el) && !handsOnAsProposed(el);
+}
+
+/**
+ * How a keeper's report says a work item it answers stands, beside the item's name: only open work that is not proposed
+ * is set done; a proposed item (a doubt among them, as `maySetDone` reads it) is left open.
+ */
+export function answeredWord(el: El): string {
+  const state = workStateOf(el);
+  if (state === 'done') return 'done already';
+  if (maySetDone(el)) return state ?? 'open';
+  if (isOpenWork(el) && handsOnAsProposed(el)) return 'proposed: left open';
+  return state === 'standing' ? 'standing: left as it is' : state === null ? 'no state: left as it is' : 'left as it is';
 }
 
 /**

@@ -2,7 +2,7 @@
 // (R6) and after a redraw (S1), the fold (S6, N7), long names in the link picture and bidi (S5), the marks' words (S3,
 // R3, R7), the questions' words and where a question goes (M3, R8), and a press only where there is a card (R4).
 import { describe, expect, it } from 'vitest';
-import { closeMovesFocus, escapeClosesCard, fitName, fitToWidth, focusAfterRedraw, foldStays, isolated, linkNote, linkPresses, markLines, moreQuestions, questionHref, questionWords, LABEL_ROOM, NAME_PX, NAME_ROOM } from './card-rules';
+import { closeMovesFocus, escapeClosesCard, fitName, fitToWidth, graphemes, focusAfterRedraw, foldStays, isolated, linkNote, linkPresses, markLines, moreQuestions, questionHref, questionWords, LABEL_ROOM, NAME_PX, NAME_ROOM } from './card-rules';
 import { readAddress } from '../parlor/address';
 
 const esc = (over: Partial<{ key: string; isComposing: boolean; keyCode: number; defaultPrevented: boolean }> = {}) => ({ key: 'Escape', isComposing: false, keyCode: 27, defaultPrevented: false, ...over });
@@ -94,6 +94,21 @@ describe('a long name in the link picture (S5) and bidi', () => {
     expect(measure(f.text)).toBeLessThanOrEqual(NAME_PX);
     expect(measure(`${'W'.repeat(Array.from(f.text).length)}…`)).toBeGreaterThan(NAME_PX);
     expect(fitToWidth('Ada', measure, NAME_PX)).toEqual({ text: 'Ada', cut: false });
+  });
+  it('cuts between graphemes: an emoji sequence or a letter and its marks never end mid-sequence', () => {
+    const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}';
+    const accented = 'e\u0301';
+    const measure = (t: string) => Array.from(t).length * 6;
+    for (const unit of [family, accented]) {
+      const f = fitToWidth(unit.repeat(20), measure, 60);
+      expect(f.cut).toBe(true);
+      const kept = f.text.slice(0, -1);
+      expect(kept.length % unit.length).toBe(0);
+      expect(kept).toBe(unit.repeat(kept.length / unit.length));
+      const g = fitName(unit.repeat(40), NAME_ROOM).text.slice(0, -1);
+      expect(g).toBe(unit.repeat(g.length / unit.length));
+    }
+    expect(graphemes(`a${family}${accented}`)).toEqual(['a', family, accented]);
   });
   it('isolates a name for bidi inside SVG text (FIRST STRONG ISOLATE, POP DIRECTIONAL ISOLATE)', () => {
     expect(isolated('שלום')).toBe('\u2068שלום\u2069');

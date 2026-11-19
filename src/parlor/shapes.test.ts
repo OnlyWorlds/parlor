@@ -6,9 +6,10 @@ import {
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
   newReport, reportName, localDay, REPORT_ANSWERS, storyStart, saidIn, consequenceLine,
-  unmarkedCharters, writtenId, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED, foldName,
+  unmarkedCharters, writtenId, completionPatch, maySetDone, answeredWord, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED, foldName,
 } from './shapes';
 import { questionTargets } from './element-card';
+import { workOf } from '@onlyworlds/sdk';
 // schema-dist's room profile (v0.34.1-dist.136, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
 // schema-dist's report lines (v0.34.1-dist.129, profiles/report-lines.fixture.json): its world reads every line here.
@@ -728,6 +729,11 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     expect(w.elements).toEqual([{ type: 'location', id: 'home', reason: 'there', here: false }, { type: 'character', id: 'ada', reason: null, here: true }]);
     expect(w.elements.map(e => [e.id, e.here])).toEqual(questionTargets(w.el, 'w1').map(t => [t.id, t.here]));
     // A packet in this world and a typed link it does not name: both, the packet's first.
+    // A blank packet id is read by the SDK's White_Space trim, as workOf reads it: U+0085 is White_Space, a byte order
+    // mark is not.
+    const odd = item({ id: 'o', x_packet_elements: [{ type: 'object', id: '\u0085', reason: 'r' }, { type: 'object', id: '\uFEFF', reason: 'r' }] });
+    expect(questionTargets(odd, 'w1').map(t => t.id)).toEqual(['\uFEFF']);
+    expect(questionTargets(odd, 'w1').map(t => t.id)).toEqual(workOf([odd], { characters: [], others: [] }).elements.o.map(e => e.id));
     const [both] = readWork([item({ id: 'b', characters: ['bo'], x_packet_elements: [{ type: 'character', id: 'ada', reason: 'asked' }] })], 'w1');
     expect(both.elements.map(e => e.id)).toEqual(['ada', 'bo']);
   });
@@ -755,6 +761,19 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     for (const w of ['done', 'blocked', 'standing', ' Standing ', '', '   ', null, undefined]) expect(maySetDone(item({ id: 'p', subtype: w }))).toBe(false);
     expect(maySetDone(item({ id: 'p', subtype: 'open', x_review_proposed: { by: 'm1' } }))).toBe(false);
     expect(maySetDone(item({ id: 'p', subtype: 'open', x_review_proposed: '' }))).toBe(true);
+  });
+
+  it('a doubt is proposed in the report flow too: never set done, said as left open (as the card and the Work tab read it)', () => {
+    for (const v of ['maybe', 0, false, ['m1']]) {
+      const el = item({ id: 'p', subtype: 'open', x_review_proposed: v });
+      expect(maySetDone(el)).toBe(false);
+      expect(answeredWord(el)).toBe('proposed: left open');
+    }
+    expect(answeredWord(item({ id: 'p', subtype: 'open', x_review_proposed: { by: 'm1' } }))).toBe('proposed: left open');
+    expect(answeredWord(item({ id: 'p', subtype: ' Taken ' }))).toBe('taken');
+    expect(answeredWord(item({ id: 'p', subtype: 'done' }))).toBe('done already');
+    expect(answeredWord(item({ id: 'p', subtype: 'standing' }))).toBe('standing: left as it is');
+    expect(answeredWord(item({ id: 'p', subtype: 'blocked' }))).toBe('no state: left as it is');
   });
 
   it("only the world's own elements of a linkable type can be picked", () => {
