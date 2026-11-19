@@ -17,7 +17,7 @@ vi.hoisted(() => {
 import { OwApiError, OwPreconditionFailedError, type OwMe, type OwV2Client } from '@onlyworlds/sdk';
 import { Room, ItemMoved } from './room';
 import { roomRole } from './roster';
-import { cardOf, heldWork, hiddenAnswerNote } from './crew';
+import { heldWork, hiddenAnswerNote } from './crew';
 import { ROOM_MARK, ROOM_ITEM, newWorkItem, workOffers, workStateLine, WORK_STATE_WORD, workStateKey, type El } from './shapes';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
@@ -97,7 +97,7 @@ describe('a take on an item that turned standing', () => {
     expect(WORK_STATE_WORD[workStateKey(w.state)]).toBe('Standing');
     expect(workStateLine(w.state)).toBe('A standing list: never done.');
     expect(heldWork(r.work(), { key: 'm-2', character: null })).toBeNull();
-    expect(cardOf(thing, r.els, r.work()).questions).toEqual([]);
+    expect(r.card(thing.id)!.questions.items).toEqual([]);
   });
 
   it('Take refuses when the server holds it standing though the page still read it open: nothing made', async () => {
@@ -167,7 +167,7 @@ describe('a stateless item', () => {
     expect(WORK_STATE_WORD[workStateKey(none.state)]).toBe('No state');
     expect(workStateLine(none.state)).toBe('No state set, so this is not open work.');
     expect(workOffers(none)).toEqual({ take: false, markDone: false, reopen: false });
-    expect(cardOf(thing, r.els, work).questions.map(q => q.id)).toEqual(['open']);
+    expect(r.card(thing.id, { work })!.questions.items.map(q => q.id)).toEqual(['open']);
   });
 
   it('a keeper\'s report never sets it done: nothing is sent', async () => {

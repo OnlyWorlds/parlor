@@ -1,12 +1,13 @@
 /**
  * The team world's reads (pure, so every rule has a unit test): who is on the crew and which seat has a room, what
- * a seat's room holds, the work line on top of it, whether a workshop runs, the designs as folds, and what an
- * element's card shows. Every line read here comes from the room's one line reader (`readLines`); a seat's room is a
- * filter over it and the parent chain, never a second parser.
+ * a seat's room holds, the work line on top of it, whether a workshop runs, the designs as folds, and the parlor's call
+ * site of an element's card (its model is element-card.ts). Every line read here comes from the room's one line reader
+ * (`readLines`); a seat's room is a filter over it and the parent chain, never a second parser.
  */
 
-import { FIELD_SCHEMA, isOpenWork, isRoomElement, fieldLabel, type OwMember } from '@onlyworlds/sdk';
-import { OWNER, type El, type Line, type Sitting, type WorkItem, type DesignPart } from './shapes';
+import { FIELD_SCHEMA, isOpenWork, isRoomElement, worldGraph, type OwMember, type OwWorldGraph } from '@onlyworlds/sdk';
+import { OWNER, type El, type Line, type Sitting, type WorkItem, type DesignPart, type SeatView } from './shapes';
+import { cardModel, type CardFlags, type CardModel } from './element-card';
 import { buildTeam, keyOf, type MemberKey } from './team';
 import { roomRole, type RoomRole } from './roster';
 import { byCodePoint, earlierFirst } from './when';
@@ -235,8 +236,12 @@ export function shownWorkLine(wl: WorkLine | null, show: boolean = SHOW_WORKING)
   return { ...wl, working: false, since: null, madeBy: null, askedBy: null };
 }
 
-/** A seat's work line, from its newest Note and the work item it holds taken. Null when it has neither. */
-export function workLineOf(note: El | null, held: WorkItem | null, els: ReadonlyMap<string, El>, seat: MemberKey | null = null): WorkLine | null {
+/**
+ * A seat's work line, from its newest Note and the work item it holds taken. Null when it has neither. `opens` says which
+ * elements the reader may open (the room asks its card's model; by default the room's own showable rule).
+ */
+export function workLineOf(note: El | null, held: WorkItem | null, els: ReadonlyMap<string, El>, seat: MemberKey | null = null,
+  opens: (id: string) => boolean = id => isShowable(els.get(id))): WorkLine | null {
   if (!note && !held) return null;
   const on = note ? (noteText(note).split(/\r?\n/).map(s => s.trim()).find(Boolean) ?? '') : '';
   const ids: string[] = [];
@@ -244,7 +249,7 @@ export function workLineOf(note: El | null, held: WorkItem | null, els: Readonly
     const schema = FIELD_SCHEMA.narrative as Record<string, { type: string }>;
     for (const [field, f] of Object.entries(schema)) {
       if (NOTE_SKIP.has(field) || (f.type !== 'single_link' && f.type !== 'multi_link')) continue;
-      for (const id of links(note, field)) if (!ids.includes(id) && isShowable(els.get(id))) ids.push(id);
+      for (const id of links(note, field)) if (!ids.includes(id) && opens(id)) ids.push(id);
     }
   }
   const noteAt = note?.created_at ?? null;
@@ -319,61 +324,47 @@ export function bySize(folds: readonly DesignFold[]): DesignFold[] {
 
 // ---------------------------------------------------------------- an element's card
 
-export interface CardLink { field: string; label: string; id: string; name: string; type: string; under: boolean }
-
-export interface CardView {
-  id: string;
-  type: string;
-  /** The type in words: Construct, Object. */
-  kind: string;
-  name: string;
-  /** Its subtype, else its supertype, as written; empty when neither. */
-  state: string;
-  text: string;
-  /** What it links to one step away, and the Objects under it, that the reader may open. */
-  links: CardLink[];
-  /** The open work on it (its open questions): the room's work items about it whose state is open or taken. */
-  questions: Array<{ id: string; title: string }>;
-}
-
-const typeWord = (t: string): string => t.charAt(0).toUpperCase() + t.slice(1);
+/** The parlor's flags for the card (element-card.ts): a keeper (the owner or a co-host) sees hidden and proposed rows, marked; no one else. */
+export const cardFlags = (keeper: boolean): CardFlags => ({ hidden: keeper, proposed: keeper });
 
 /**
- * What an element's card shows: its words, each link one step away that the reader may open (by the link field's own
- * name), the Objects whose parent it is ("Under it"), and the open work items about it. Nothing hidden from the reader
- * is named: a link to an element the reader is not served is left out.
+ * The graph an element's card reads: the SDK's `worldGraph` over what this seat was served (`seatView`: a keeper as the
+ * owner with the room's hidden list, every other seat as a guest of its own rows), with the keeper's flags. `rules`
+ * brings the reading aids back, for the Rules door alone: the charter is no card of the room's.
  */
-export function cardOf(el: El, els: ReadonlyMap<string, El>, work: readonly WorkItem[]): CardView {
-  const type = String(el.type ?? '').toLowerCase();
-  const schema = (FIELD_SCHEMA as Record<string, Record<string, { type: string }>>)[type] ?? {};
-  const out: CardLink[] = [];
-  const nameOf = (x: El) => (typeof x.name === 'string' && x.name.trim()) || 'Untitled';
-  for (const [field, f] of Object.entries(schema)) {
-    if (f.type !== 'single_link' && f.type !== 'multi_link') continue;
-    for (const id of links(el, field)) {
-      const to = els.get(id);
-      if (id === el.id || !isShowable(to)) continue;
-      out.push({ field, label: fieldLabel(field), id, name: nameOf(to), type: String(to.type).toLowerCase(), under: false });
-    }
-  }
-  if (type === 'object') {
-    for (const x of els.values()) {
-      if (x.id === el.id || String(x.type).toLowerCase() !== 'object' || x.parent_object !== el.id || !isShowable(x)) continue;
-      out.push({ field: 'under', label: 'Under it', id: x.id, name: nameOf(x), type: 'object', under: true });
-    }
-  }
-  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
-  return {
-    id: el.id,
-    type,
-    kind: typeWord(type),
-    name: nameOf(el),
-    state: str(el.subtype) || str(el.supertype),
-    text: str(el.description) || str(el.story),
-    links: out,
-    // Open work only (the packet profile's rule 7): a standing item, a done one and one with no state are counted on none.
-    questions: work.filter(w => isOpenWork(w.el) && !w.otherWorld && w.elements.some(e => e.id === el.id)).map(w => ({ id: w.id, title: w.title.trim() || 'Untitled' })),
-  };
+export function parlorGraph(view: SeatView, keeper: boolean, rules = false): OwWorldGraph {
+  return worldGraph(view.world, view.reader, { ...cardFlags(keeper), readingAids: rules });
+}
+
+/**
+ * The parlor's call site of the card's model: the room's rows, its work items (the room's own reader, `readWork`), its
+ * design parts, whether the feed has walked once (before that the questions are not read yet), and the keeper's hidden
+ * list and flags. `graph` is `parlorGraph`'s answer for the same seat, built once per change of the feed.
+ */
+export function parlorCard(o: {
+  els: ReadonlyMap<string, El>;
+  graph: OwWorldGraph;
+  keeper: boolean;
+  hidden: ReadonlySet<string>;
+  id: string;
+  worldId: string;
+  work: readonly WorkItem[];
+  walked: boolean;
+  parts: readonly DesignPart[];
+  names?: unknown;
+}): CardModel | null {
+  return cardModel({
+    graph: o.graph,
+    rows: o.els,
+    id: o.id,
+    work: o.work.map(w => w.el),
+    workRead: o.walked ? 'ok' : 'pending',
+    worldId: o.worldId,
+    roomHidden: o.keeper ? o.hidden : [],
+    names: o.names,
+    flags: cardFlags(o.keeper),
+    parts: o.parts,
+  });
 }
 
 /** The first line of an element's words, for a name's hover; empty when it has none. */

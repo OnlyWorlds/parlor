@@ -4,7 +4,8 @@
  * result is shown at once and the feed brings the server's copy after.
  */
 
-import { OwApiError, OwNetworkError, OwPreconditionFailedError, isOpenWork, workStateOf, type OwMe, type OwMember, type OwV2Client } from '@onlyworlds/sdk';
+import { OwApiError, OwNetworkError, OwPreconditionFailedError, isOpenWork, workStateOf, type OwMe, type OwMember, type OwV2Client, type OwWorldGraph } from '@onlyworlds/sdk';
+import { cardable, type CardModel } from './element-card';
 import { RoomFeed, type Removal } from './feed';
 import { serialQueue } from './serial';
 import { newestFirst } from './when';
@@ -20,7 +21,7 @@ import {
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
 import { RoomFiles, filesName } from './files';
-import { crewOf, isShowable, workshopRuns, type Crew } from './crew';
+import { crewOf, isShowable, parlorCard, parlorGraph, workshopRuns, type Crew } from './crew';
 import { hostLine, isHostRefusal } from './host';
 
 /** A report born completed, pressed by a seat that no longer keeps the world: nothing was sent. */
@@ -300,6 +301,38 @@ export class Room {
    */
   view(): SeatView {
     return seatView(this.els.values(), this.isHost, this.hidden);
+  }
+
+  /**
+   * The graph an element's card reads for this seat (`parlorGraph`), built once per change of the feed, the hidden list
+   * or the seat's keeping (never once per draw: a world of thousands costs a graph milliseconds). `rules`: the Rules
+   * door's own, with the reading aids.
+   */
+  private graphs = new Map<string, { key: string; graph: OwWorldGraph }>();
+  cardGraph(rules = false): OwWorldGraph {
+    const keeper = this.isHost;
+    const key = `${this.feed.version}|${keeper}|${[...this.hidden].sort().join(',')}`;
+    const memo = this.graphs.get(String(rules));
+    if (memo && memo.key === key) return memo.graph;
+    const graph = parlorGraph(this.view(), keeper, rules);
+    this.graphs.set(String(rules), { key, graph });
+    return graph;
+  }
+
+  /** Whether this seat has a card for an element: every opener asks this before it draws a press (never a press that opens nothing). */
+  cardable(id: string): boolean {
+    return cardable(this.cardGraph(), id);
+  }
+
+  /**
+   * An element's card for this seat, or null when it has none (element-card.ts, through the parlor's call site).
+   * `work` and `parts` are the draw's own reads, when it has them. `rules`: the charter's card behind Rules.
+   */
+  card(id: string, o: { work?: readonly WorkItem[]; parts?: readonly DesignPart[]; rules?: boolean } = {}): CardModel | null {
+    return parlorCard({
+      els: this.els, graph: this.cardGraph(!!o.rules), keeper: this.isHost, hidden: this.hidden, id, worldId: this.world.id,
+      work: o.work ?? this.work(), walked: this.feed.walked, parts: o.parts ?? this.designs(),
+    });
   }
 
   /** The world's charter for this seat: a Charter the hidden mark keeps from a seat is not its own (the charter profile, serial 135). */

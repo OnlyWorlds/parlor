@@ -7,7 +7,9 @@
  */
 
 import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, WORK_STATE_WORD, workStateKey, workStateLine, workOffers, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
-import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, bySize, cardOf, firstLine, seatsByKey, isShowable, isHiddenPart, hiddenAnswerNote, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
+import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, bySize, firstLine, seatsByKey, isHiddenPart, hiddenAnswerNote, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
+import type { CardGroup, CardModel } from '../parlor/element-card';
+import { closeMovesFocus, escapeClosesCard, focusAfterRedraw, foldStays, linkNote, linkPresses, markLines, moreQuestions, questionHref, questionWords, GROUP_TRIMMED, MARK_WORDS, QUESTIONS_SHOWN, SHOW_ALL, SHOW_LESS } from './card-rules';
 import { newestNote } from '../parlor/team';
 import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
 import { isAfter } from '../parlor/when';
@@ -15,9 +17,9 @@ import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, Repo
 import { doorLine } from '../parlor/roster';
 import { releasedHash, releasesAddress, workArrival, WORK_NOT_HERE, WORK_READ_ONLY, type WorkArrival } from '../parlor/address';
 import { h, clear, notice, hhmm } from './dom';
-import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot, waymarkOpenIn } from './waymark';
+import { WAYMARK_SETTLED, focusWaymark, markSet, waymarkFocusIn, waymarkPlan, waymarkSlot, waymarkOpenIn } from './waymark';
 import { afterPress } from './press';
-import { OwNetworkError, fileKindOf, isOpenWork, proposedMarkOf, workStateOf, type OwWorldFileRow } from '@onlyworlds/sdk';
+import { OwNetworkError, fieldLabel, fileKindOf, isOpenWork, proposedMarkOf, workStateOf, type OwWorldFileRow } from '@onlyworlds/sdk';
 import { ACCEPT as FILES_ACCEPT, MAX_PICKS, adderOf, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
 
 /** A press refused before anything was sent, in the person's words. */
@@ -63,10 +65,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   const keepFolds = (): void => { try { localStorage.setItem(foldKey, JSON.stringify([...shut])); } catch { /* private window */ } };
   // The designs unfolded in Designs, for this visit.
   const openDesigns = new Set<string>();
-  // The element whose card is open over the room, and the link fields its card lists open.
+  // The element whose card is open over the room, and the link groups its card lists open (by the group's key).
   let cardId: string | null = null;
-  // The `data-focus` of what opened the card: a close that took focus from the card gives it back there.
+  // The card opened by Rules: the charter, read whole, through its own door (a reading aid is no card of the room's).
+  let cardRules = false;
+  // The card's words unfolded (Show all): kept across a redraw, let go on a step.
+  let cardMore = false;
+  // The `data-focus` of what opened the card, and whether it sat in the panel: a close gives focus back there.
   let cardOpener: string | null = null;
+  let cardOpenerInPanel = false;
   const cardFields = new Set<string>();
   // The crew as this draw read it, once per draw.
   let crewNow: Crew = { beasts: [], people: [] };
@@ -840,44 +847,76 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
 
   // -------------------------------------------------- an element named where it shows
   const elName = (el: El): string => (typeof el.name === 'string' && el.name.trim()) || 'Untitled';
-  /** Open an element's card over the room, or close it when it is the one open. */
-  function openCard(id: string): void {
-    if (cardId === id) { closeCard(); return; }
+  /**
+   * Open an element's card over the room, or close it when it is the one open. `rules`: the charter through the Rules
+   * door. Focus stays on the opener (the room's Escape closes the card from there); a step moves it to the new heading.
+   */
+  function openCard(id: string, rules = false): void {
+    if (cardId === id && cardRules === rules) { closeCard(); return; }
     // What opened it, so a close gives focus back there.
     const a = document.activeElement;
-    if (a instanceof Element && !elCard.contains(a)) cardOpener = a.closest('[data-focus]')?.getAttribute('data-focus') ?? null;
+    if (a instanceof Element && !elCard.contains(a)) {
+      cardOpener = a.closest('[data-focus]')?.getAttribute('data-focus') ?? null;
+      cardOpenerInPanel = workPane.contains(a);
+    }
     cardId = id;
+    cardRules = rules;
+    cardMore = false;
     // One card over the room at a time: an open report gives way.
     reportOpen = null;
     cardFields.clear();
     draw();
   }
-  /** Close the card (drawCard gives focus back when the card held it, whatever closed it). */
+  /** Close the card (× or Escape): drawCard gives focus back when the card or its opener held it, whatever closed it. */
   function closeCard(): void {
     cardId = null;
     draw();
   }
-  /** Focus goes back to what opened the card, else to the composer or the room's lines. */
+  /** Whether focus sits on what opened the card. */
+  const onOpener = (a: Element | null): boolean => !!cardOpener && a instanceof Element && a.closest('[data-focus]')?.getAttribute('data-focus') === cardOpener;
+  /**
+   * Focus goes back to what opened the card, by its key (a rebuilt opener is found again); else to the panel's selected
+   * tab when the opener sat in the panel, else to the room's lines.
+   */
   function focusBackFromCard(): void {
     for (const el of root.querySelectorAll<HTMLElement>('[data-focus]')) {
-      if (cardOpener && el.getAttribute('data-focus') === cardOpener && el.isConnected) { el.focus({ preventScroll: true }); return; }
+      if (cardOpener && el.getAttribute('data-focus') === cardOpener && el.isConnected && el.getClientRects().length) { el.focus({ preventScroll: true }); return; }
     }
-    const field = send.querySelector<HTMLElement>('textarea');
-    if (field) { field.focus({ preventScroll: true }); return; }
+    const tab = cardOpenerInPanel ? workTabs.querySelector<HTMLElement>('[aria-selected="true"]') : null;
+    if (tab && tab.getClientRects().length) { tab.focus({ preventScroll: true }); return; }
     lines.setAttribute('tabindex', '-1');
     lines.focus({ preventScroll: true });
   }
-  /** Step to a neighbour in the open card: the card shows it, and focus goes to its name. */
+  /** Step to a neighbour in the open card: the card shows it, its words folded, and focus goes to its name. */
   function stepCard(id: string): void {
     cardId = id;
+    cardMore = false;
     cardFields.clear();
     draw();
     elCard.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
   }
+  /**
+   * A question on the card goes to its work item: the Work tab with the item's card marked, in view and focused, and the
+   * work item's address in the bar (replaced, as the room's own address is; another tab lets it go). On a phone the
+   * element's card gives way, so the work item shows.
+   */
+  function goToWork(id: string): void {
+    addressed = id;
+    landed = true;
+    answeredHere = false;
+    history.replaceState(history.state, '', questionHref(room.world.id, id));
+    workTab = 'work';
+    if (mq.matches) { cardId = null; phoneTab('work'); }
+    draw();
+    const card = workList.querySelector<HTMLElement>('[data-here]');
+    card?.scrollIntoView({ block: 'nearest' });
+    card?.focus({ preventScroll: true });
+  }
   /** An element as a chip: its body, its name, its first line under the pointer; a press opens its card. */
   function elChip(id: string, where: string, small = false): HTMLElement | null {
     const el = room.els.get(id);
-    if (!isShowable(el)) return null;
+    // Only where this seat has a card for it: never a press that opens nothing.
+    if (!el || !room.cardable(id)) return null;
     const type = String(el.type).toLowerCase();
     return tipped(h('button', { class: `chip elc${small ? ' sm' : ''}`, type: 'button', 'data-focus': `chip:${where}:${id}`, 'data-el': id, 'aria-pressed': String(cardId === id),
       onclick: () => openCard(id) }, kindBody(type, small ? 18 : 22), elName(el)), el);
@@ -906,6 +945,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function heldDraw(): void { if (!gone) draw(); }
   /** Each seat's work line, read once per draw. */
   let lineOf = new Map<string, WorkLine | null>();
+  /** The room's work items as this draw read them, once per draw (the card's questions read the same). */
+  let workNow: ReturnType<typeof room.work> = [];
   function draw(): void {
     partsNow = room.designs();
     crewNow = room.crew();
@@ -915,9 +956,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     if (space !== 'team' && (!room.teamWorld || !roomSeat(crewNow, space))) { space = 'team'; cardId = null; dropLineReply(); }
     const landing = land();
     const work = room.work();
+    workNow = work;
     const notes = room.roster ? [...room.els.values()].filter(el => el.type === 'narrative' && el.supertype === 'Note') : [];
+    const opens = (id: string): boolean => room.cardable(id);
     lineOf = new Map([...seatsNow.values()].map(s => [s.key, room.roster
-      ? shownWorkLine(workLineOf(newestNote(notes as never[], s.key, room.roster) as El | null, heldWork(work, s), room.els, s.key)) : null]));
+      ? shownWorkLine(workLineOf(newestNote(notes as never[], s.key, room.roster) as El | null, heldWork(work, s), room.els, s.key, opens)) : null]));
     drawTop();
     drawReportMode();
     drawComplete();
@@ -992,7 +1035,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // The world's name and its mark are built once: the bar's buttons are only shown, hidden and named on each draw, and
   // the mark is never moved, so an open fan-out and the focus on the mark stay where they are.
   const worldMark = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, null), 'world');
-  const rulesBtn = h('button', { class: 'btn quiet top-btn', type: 'button', 'data-part': 'rules', hidden: true, onclick: () => { const c = room.rulesCharter(); if (c) openCard(c.id); } }, 'Rules');
+  const rulesBtn = h('button', { class: 'btn quiet top-btn', type: 'button', 'data-part': 'rules', hidden: true, onclick: () => { const c = room.rulesCharter(); if (c) openCard(c.id, true); } }, 'Rules');
   const runBtn = h('button', { class: 'btn std top-btn', type: 'button', 'data-part': 'run-workshop', hidden: true, onclick: () => { void runOrEnd(); } }, 'Run a workshop');
   top.append(
     h('div', { class: 'brand-row' }, h('img', { class: 'mark', src: '/icons/owlogo.png', alt: 'OnlyWorlds', width: 22, height: 22 }), h('span', { class: 'brand' }, 'PARLOR'),
@@ -1017,7 +1060,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     // Rules only where the charter's card opens for this seat (never a press that opens nothing).
     const charter = room.rulesCharter();
     rulesBtn.hidden = !charter;
-    rulesBtn.setAttribute('aria-pressed', String(!!charter && cardId === charter.id));
+    rulesBtn.setAttribute('aria-pressed', String(!!charter && cardRules && cardId === charter.id));
     runBtn.hidden = !(room.isHost && room.teamWorld);
     const label = hostShown() ? 'End the workshop' : 'Run a workshop';
     if (runBtn.textContent !== label) runBtn.textContent = label;
@@ -1166,71 +1209,125 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   }
 
   // -------------------------------------------------- the open element's card (rebuilt only when it moved)
+  // Its words are the card's model (src/parlor/element-card.ts), drawn to the card's view rules (src/ui/card-rules.ts):
+  // the heading, the marks, the words with their fold, the links both ways, the open questions, the mark, then ×.
   let cardKey = '';
-  let cardMark: ReturnType<typeof waymarkSlot> | null = null;
+  /** The element whose card was drawn last: the words' fold stays open across a redraw of it, never across a step. */
+  let cardShown: string | null = null;
+  /** The card's own door: its mark, which the card owns and disposes, and which holds a redraw while its fan-out is open. */
+  let cardDoor: { el: HTMLElement; dispose(): void; held(): boolean } | null = null;
+  function doorOf(el: El): { el: HTMLElement; dispose(): void; held(): boolean } {
+    const slot = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, el as unknown as Record<string, unknown>, 'Untitled'), `card:${el.id}`);
+    return { el: slot.el, dispose: () => slot.dispose(), held: () => waymarkOpenIn(slot.el) };
+  }
+  /** The link picture's short label: a field's name out, "from" a field in, "Under it" for the Objects under it. */
+  const pictureLabel = (g: CardGroup): string => (g.dir === 'out' || g.field === 'parent_object' ? g.label : `from ${fieldLabel(g.field)}`);
   function drawCard(): void {
-    const el = cardId ? room.els.get(cardId) : undefined;
-    if (!cardId || !isShowable(el)) {
+    const model: CardModel | null = cardId ? room.card(cardId, { work: workNow, parts: partsNow, rules: cardRules }) : null;
+    const el = model ? room.els.get(model.id) : undefined;
+    if (!model || !el) {
+      // Closed (×, Escape, the room left), or the element left the reader's view: focus moves only when it was in the
+      // card or on its opener; a card that closes on a feed tick leaves the composer's focus alone.
+      const a = document.activeElement;
+      const had = closeMovesFocus(elCard.contains(a), onOpener(a));
       cardId = null;
-      // An element that left the reader's view while its card held focus: focus goes back, never to the page.
-      const had = elCard.contains(document.activeElement);
-      if (!elCard.hidden || cardKey) { elCard.hidden = true; cardKey = ''; cardMark?.dispose(); cardMark = null; clear(elCard); }
+      cardRules = false;
+      cardShown = null;
+      if (!elCard.hidden || cardKey) { elCard.hidden = true; cardKey = ''; cardDoor?.dispose(); cardDoor = null; clear(elCard); }
       if (had) focusBackFromCard();
       return;
     }
-    const view = cardOf(el, room.els, room.work());
-    // The house rules are read whole, never cut.
-    const whole = room.charter()?.id === el.id;
-    const key = JSON.stringify([view, [...cardFields], whole]);
+    cardMore = foldStays(cardMore, cardShown, model.id);
+    const whole = cardRules;
+    const presses = (id: string): boolean => linkPresses(id, x => room.cardable(x));
+    const links = model.groups.flatMap(g => g.links.map(l => ({ g, l, presses: presses(l.id) })));
+    const key = JSON.stringify([model, [...cardFields], cardMore, whole, links.map(x => x.presses)]);
     if (key === cardKey) return;
-    // An open fan-out of the card's mark holds the rebuild; it runs once the fan-out settles.
-    if (cardMark && waymarkOpenIn(elCard)) return;
+    // An open fan-out of the card's mark holds the rebuild; it runs once the fan-out settles (WAYMARK_SETTLED).
+    if (cardDoor && cardDoor.held()) return;
     cardKey = key;
-    const focused = focusIn(elCard);
-    cardMark?.dispose();
-    cardMark = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, el as unknown as Record<string, unknown>, 'Untitled'), `card:${el.id}`);
-    // Past five links, one line per field with a count; a press lists that field's elements.
-    const many = view.links.length > 5;
-    const fields = new Map<string, typeof view.links>();
-    for (const l of view.links) fields.set(l.label, [...(fields.get(l.label) ?? []), l]);
-    const q = view.questions.length;
-    clear(elCard,
-      h('div', { class: 'ttl' }, kindBody(view.type, 30),
-        h('div', { class: 'ttl-words' }, h('h2', { tabindex: '-1' }, view.name),
-          h('div', { class: 'kind' }, h('span', { class: `kind-word k-${kindGroup(view.type)}` }, view.kind), view.state ? ` · ${view.state}` : '')),
-        h('button', { class: 'x', type: 'button', 'aria-label': 'Close', 'data-focus': 'card:x', onclick: () => closeCard() }, '×')),
-      view.text ? h('p', { class: whole ? 'card-text whole' : 'card-text', 'data-part': 'card-text' }, view.text) : null,
-      view.links.length && !many ? linkGraph(view.type, view.links, stepCard) : null,
-      many ? h('ul', { class: 'card-fields', 'data-part': 'card-fields' }, [...fields].map(([label, ls]) => {
-        const open = cardFields.has(label);
-        return h('li', null,
-          h('button', { class: 'field-line', type: 'button', 'aria-expanded': String(open), 'data-focus': `card:f:${label}`, onclick: () => {
-            if (open) cardFields.delete(label); else cardFields.add(label);
-            draw();
-          } }, chevron(open), `${label} · ${ls.length}`),
-          open ? h('ul', { class: 'field-list' }, ls.map(l => h('li', null, h('button', { class: 'nb-line', type: 'button', 'data-focus': `card:n:${l.id}`, onclick: () => stepCard(l.id) }, kindBody(l.type, 18), l.name)))) : null);
-      })) : null,
-      q ? h('div', { class: 'card-qs', 'data-part': 'card-questions' }, h('ul', null, view.questions.slice(0, 5).map(x => h('li', null, x.title))),
-        q > 5 ? h('p', { class: 'sys' }, `And ${q - 5} more under Work.`) : null) : null,
-      h('div', { class: 'foot' }, h('span', null, q ? `${q} open question${q === 1 ? '' : 's'}` : 'No open questions'), h('span', { class: 'sp' }),
-        h('span', { class: 'open-in' }, 'Open it', cardMark.el)));
-    elCard.hidden = false;
-    refocus(elCard, focused);
-  }
-  // Escape closes the open card (a picture's viewer closes itself first, and an open fan-out of its mark holds it).
-  // Typed in a field outside the card (the composer, a form), Escape stays that field's: the card stays open.
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key !== 'Escape' || viewer.open || e.defaultPrevented) return;
+    cardShown = model.id;
     const a = document.activeElement;
+    const inCard = elCard.contains(a);
+    const focused = focusIn(elCard);
+    const onMark = waymarkFocusIn(elCard);
+    cardDoor?.dispose();
+    cardDoor = doorOf(el);
+    const step = (id: string) => stepCard(id);
+    // Past five links, one line per group with a count; a press lists that group's elements.
+    const many = links.length > 5;
+    const marks = markLines(model.marks);
+    const q = model.questions;
+    const said = questionWords(q);
+    const more = moreQuestions(q.items.length);
+    const nb = (x: { g: CardGroup; l: CardGroup['links'][number]; presses: boolean }) => {
+      const note = linkNote(x.l.marks);
+      const inner = [kindBody(x.l.type, 18), h('bdi', null, x.l.title), note ? h('span', { class: 'nb-note' }, note) : null];
+      return x.presses
+        ? h('button', { class: 'nb-line', type: 'button', 'data-focus': `card:n:${x.g.key}:${x.l.id}`, onclick: () => step(x.l.id) }, inner)
+        : h('span', { class: 'nb-line plain' }, inner);
+    };
+    clear(elCard,
+      h('div', { class: 'ttl' }, kindBody(model.type, 30),
+        h('div', { class: 'ttl-words' }, h('h2', { tabindex: '-1', 'data-focus': 'card:h' }, h('bdi', null, model.title)),
+          h('div', { class: 'kind' }, h('span', { class: `kind-word k-${kindGroup(model.type)}` }, model.kind), model.state ? [' · ', h('bdi', null, model.state)] : null))),
+      marks.length ? h('div', { class: 'card-marks', 'data-part': 'card-marks' }, marks.map(m => h('p', null, m))) : null,
+      whole
+        ? (model.lead ? h('p', { class: 'card-text whole', 'data-part': 'card-text' }, model.rest ? `${model.lead}\n${model.rest}` : model.lead) : null)
+        : [model.lead ? h('p', { class: 'card-text', 'data-part': 'card-text' }, model.lead) : null,
+          model.rest && cardMore ? h('p', { class: 'card-text', 'data-part': 'card-more' }, model.rest) : null,
+          model.rest ? h('button', { class: 'act card-fold', type: 'button', 'aria-expanded': String(cardMore), 'data-focus': 'card:fold', onclick: () => { cardMore = !cardMore; draw(); } },
+            cardMore ? SHOW_LESS : SHOW_ALL) : null],
+      links.length && !many ? linkGraph(model.type, links.map(x => ({
+        key: `${x.g.key}:${x.l.id}`, id: x.l.id, type: x.l.type, name: x.l.title, label: pictureLabel(x.g), full: x.g.label,
+        incoming: x.g.dir === 'in', note: linkNote(x.l.marks), presses: x.presses,
+      })), step) : null,
+      many ? h('ul', { class: 'card-fields', 'data-part': 'card-fields' }, model.groups.map(g => {
+        const open = cardFields.has(g.key);
+        return h('li', null,
+          h('button', { class: 'field-line', type: 'button', 'aria-expanded': String(open), 'data-focus': `card:f:${g.key}`, onclick: () => {
+            if (open) cardFields.delete(g.key); else cardFields.add(g.key);
+            draw();
+          } }, chevron(open), `${g.label} · ${g.links.length}`, g.trimmed ? h('span', { class: 'nb-note' }, GROUP_TRIMMED) : null),
+          open ? h('ul', { class: 'field-list' }, links.filter(x => x.g === g).map(x => h('li', null, nb(x)))) : null);
+      })) : null,
+      q.items.length ? h('div', { class: 'card-qs', 'data-part': 'card-questions' },
+        h('ul', null, q.items.slice(0, QUESTIONS_SHOWN).map(x => h('li', null,
+          h('a', { class: 'q', href: questionHref(room.world.id, x.id), 'data-focus': `card:q:${x.id}`, 'data-work': x.id, onclick: (e: MouseEvent) => {
+            // A plain press goes to the work item in this room; a press that opens a new tab or window keeps the link's own way.
+            if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            goToWork(x.id);
+          } }, h('bdi', null, x.title)),
+          x.hidden ? h('span', { class: 'nb-note' }, MARK_WORDS.hidden) : null))),
+        more ? h('p', { class: 'sys' }, more) : null) : null,
+      said.note ? h('p', { class: 'sys', 'data-part': 'card-questions-note' }, said.note) : null,
+      h('div', { class: 'foot' }, h('span', { 'data-part': 'card-questions-count' }, said.foot), h('span', { class: 'sp' }),
+        h('span', { class: 'open-in' }, 'Open it', cardDoor.el)),
+      h('button', { class: 'x', type: 'button', 'aria-label': 'Close', 'data-focus': 'card:x', onclick: () => closeCard() }, '×'));
+    elCard.hidden = false;
+    // Focus back by key, else on the heading (a control that went), never to the page; the mark by its own key.
+    if (onMark) { focusWaymark(elCard, onMark); return; }
+    const keys = new Set([...elCard.querySelectorAll('[data-focus]')].map(n => n.getAttribute('data-focus') ?? ''));
+    const to = focusAfterRedraw(focused, keys, inCard);
+    if (to === 'heading') elCard.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+    else refocus(elCard, to);
+  }
+  // Escape closes the open card from anywhere but a field outside it (the room's document listener, so a card opened by
+  // a press closes from its opener too). A picture's viewer and an open fan-out of the card's mark close first; a key
+  // that composes text, or one something else already took, is left alone. The key is taken (preventDefault).
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape' || viewer.open || e.defaultPrevented || e.isComposing) return;
+    const t = e.target instanceof HTMLElement ? e.target : document.activeElement;
+    const editable = t instanceof HTMLElement && (t.isContentEditable || t.matches('input, textarea, select'));
     // An open report folds the same way.
     if (!cardId && reportOpen) {
-      if (a instanceof HTMLElement && !reportCard.contains(a) && (a.isContentEditable || a.matches('input, textarea, select'))) return;
+      if (editable && !reportCard.contains(t)) return;
       closeReport();
       return;
     }
-    if (!cardId) return;
-    if (a instanceof HTMLElement && !elCard.contains(a) && (a.isContentEditable || a.matches('input, textarea, select'))) return;
-    if (cardMark && waymarkOpenIn(elCard)) return;
+    if (!escapeClosesCard(e, { inCard: elCard.contains(t), editable }, { cardOpen: !!cardId, viewerOpen: viewer.open, fanOutOpen: !!cardDoor && cardDoor.held() })) return;
+    e.preventDefault();
     closeCard();
   };
   document.addEventListener('keydown', onKey);
@@ -1673,7 +1770,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const folds = bySize(designFolds(partsNow));
     // Rebuilt only when what it shows moved, so a feed tick never eats an Answer press or a fold (the gate's S8).
     const key = JSON.stringify([folds.map(f => [f.design.id, f.parts.map(p => p.id)]),
-      partsNow.map(p => [p.id, p.title, p.state, p.type, counts.get(p.id) ?? 0, firstLine(p.el), room.hidden.has(p.id) || p.el.hidden === true]),
+      partsNow.map(p => [p.id, p.title, p.state, p.type, counts.get(p.id) ?? 0, firstLine(p.el), room.hidden.has(p.id) || p.el.hidden === true, room.cardable(p.id)]),
       room.canWrite, room.isHost, [...openDesigns], replyTo && isDesignReply(replyTo) ? replyTo.id : null]);
     if (key === designKey) return;
     if (designMarks.held()) return;
@@ -1698,8 +1795,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     } }, answering(p) ? 'Answering' : 'Answer') : null;
     const answers = (p: DesignPart) => { const n = counts.get(p.id) ?? 0; return n ? h('span', { class: 'c' }, `${n} answer${n === 1 ? '' : 's'}`) : null; };
     // A part's name reads its first line under the pointer and on focus, and opens its card on a press.
-    // A part with no card here (a room's Spec, a row served hidden) reads its name as text, never a press that opens nothing.
-    const name = (p: DesignPart, cls: string) => tipped(isShowable(p.el)
+    // A part with no card for this seat (a room's Spec, a reading aid in design, a row served hidden to a seat that is no
+    // keeper) reads its name as text, never a press that opens nothing.
+    const name = (p: DesignPart, cls: string) => tipped(room.cardable(p.id)
       ? h('button', { class: cls, type: 'button', 'data-focus': `design-name:${p.id}`, 'data-el': p.id, onclick: () => openCard(p.id) }, kindBody(p.type, cls === 'n' ? 20 : 18), p.title)
       : h('span', { class: cls, 'data-el': p.id }, kindBody(p.type, cls === 'n' ? 20 : 18), p.title), p.el);
     const state = (p: DesignPart) => h('span', { class: `pill ${p.state === 'locked' ? 's-done' : 's-open'}` }, DESIGN_WORD[p.state]);
@@ -1742,7 +1840,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const view = room.work().map(w => ({
       w, can: room.canRetire(w.by), hidden: room.hidden.has(w.id) || (!room.isHost && w.el.hidden === true),
       who: whoOf(w), addr: room.addressOf(w), by: room.name(w.by), answers: room.answers(w.id).length,
-      els: w.elements.map(x => ({ ...x, name: w.otherWorld ? null : room.elementName(x.id) })),
+      els: w.elements.map(x => ({ ...x, name: w.otherWorld ? null : room.elementName(x.id), opens: !w.otherWorld && room.cardable(x.id) })),
       // One name per taker: a double take from two tabs is one person (the Take gate's T2-G1).
       takers: [...new Set(w.takes.map(t => t.by))].map(by => room.name(by)), mine: room.hasTaken(w.id),
       // Who asked (x_packet_from, by askerOf), named as the room names a Character; nothing when it names none.
@@ -1783,9 +1881,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         takers.length ? h('div', { class: 'm', 'data-part': 'taken-by' }, `Taken by ${takers.join(', ')}`) : null,
         w.text ? h('p', null, w.text) : null,
         els.length ? h('ul', { class: 'about' }, els.map(x => h('li', null,
-          // An element the room holds reads its first line under the pointer and on focus, and opens its card on a press.
-          !w.otherWorld && x.name !== null && isShowable(room.els.get(x.id))
-            ? tipped(h('button', { class: 'chip el', type: 'button', 'data-el': x.id, onclick: () => openCard(x.id) }, `${x.name} · ${typeWord(x.type)}`), room.els.get(x.id))
+          // An element the room holds reads its first line under the pointer and on focus, and opens its card on a press,
+          // where this seat has a card for it.
+          x.name !== null && x.opens
+            ? tipped(h('button', { class: 'chip el', type: 'button', 'data-el': x.id, 'data-focus': `work-el:${w.id}:${x.id}`, onclick: () => openCard(x.id) }, `${x.name} · ${typeWord(x.type)}`), room.els.get(x.id))
             : h('span', { class: 'chip el' }, w.otherWorld ? `In another world · ${typeWord(x.type)}` : x.name === null ? `Missing · ${typeWord(x.type)}` : `${x.name} · ${typeWord(x.type)}`),
           // A Missing element or one in another world has no page here to open. The mark takes the element
           // the room holds, its own type and body, never the type a packet claims for it.
@@ -1862,7 +1961,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       const maker = !c.removed && !c.made && c.madeBy && c.madeAt && (c.madeBy !== c.by || dayOf(c.madeAt) !== dayOf(c.at))
         ? { who: room.name(c.madeBy), when: dayOf(c.madeAt) === dayOf(c.at) ? `at ${hhmm(c.madeAt)}` : dayWords(c.madeAt) === 'Yesterday' ? 'yesterday' : `on ${dateWord(c.madeAt)}` }
         : null;
-      const opens = !c.removed && isShowable(room.els.get(c.id));
+      // Only where this seat has a card for it (a keeper's proposed row too): never a press that opens nothing.
+      const opens = !c.removed && room.cardable(c.id);
       return { c, who, ai, door: doorLine(c.el), fresh: isAfter(c.at, seenBefore), maker, opens, day: dayWords(c.at) };
     });
     const key = JSON.stringify([rows.map(r => [r.c.id, r.c.name, r.c.at, r.c.removed, r.c.type, r.who, r.ai, r.door, r.fresh, r.maker, r.opens, r.day]), cardId]);
@@ -1915,7 +2015,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     gone = true;
     window.removeEventListener('beforeunload', onLeavePage);
     document.removeEventListener('keydown', onKey);
-    cardMark?.dispose();
+    cardDoor?.dispose();
     designMarks.dispose();
     off();
     root.removeEventListener(WAYMARK_SETTLED, onSettled);

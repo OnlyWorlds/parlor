@@ -70,7 +70,14 @@ export class RoomFeed {
     return () => this.listeners.delete(fn);
   }
 
+  private moves = 0;
+  /** A count that moves with every change the room is told of: what is read from the copy once per change is keyed by it. */
+  get version(): number {
+    return this.moves;
+  }
+
   private emit(): void {
+    this.moves++;
     for (const fn of this.listeners) fn();
   }
 

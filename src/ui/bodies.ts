@@ -7,6 +7,7 @@
 
 import { elementColor, groupOf, type ElementType } from '@onlyworlds/sdk';
 import { TYPE_ICON_PATHS } from './type-icons';
+import { fitName, isolated, LABEL_ROOM, NAME_ROOM } from './card-rules';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -78,26 +79,57 @@ export function chevron(open: boolean): SVGSVGElement {
   return s('svg', { class: 'car', viewBox: '0 0 12 12', 'aria-hidden': 'true', focusable: 'false' }, s('path', { d: open ? 'M2.5 4.5 6 8l3.5-3.5' : 'M4.5 2.5 8 6 4.5 9.5' }));
 }
 
-/** An element's card's small graph: the element at the left, each link to the right by its field's name. */
-export function linkGraph(centreType: string, links: ReadonlyArray<{ label: string; name: string; type: string; id: string }>, onStep: (id: string) => void): SVGSVGElement {
+/** One neighbour in a card's picture. */
+export interface GraphLink {
+  /** Unique on the card (the group and the id): the focus key a redraw puts focus back by. */
+  key: string;
+  id: string;
+  type: string;
+  /** Its whole name (or "<Kind> with no name"). */
+  name: string;
+  /** The link's label in the picture: a field's name, "from" a field, or "Under it". */
+  label: string;
+  /** The group's whole label, for the accessible name. */
+  full: string;
+  /** A link into the element (drawn dashed). */
+  incoming: boolean;
+  /** Its marks in a few words, or empty. */
+  note: string;
+  /** Whether the reader has a card for it: only then is it a press. */
+  presses: boolean;
+}
+
+/**
+ * An element's card's small graph: the element at the left, each neighbour to the right with its link's label, a link
+ * into the element dashed. A name or a label longer than its room ends in an ellipsis, the whole of it the node's
+ * accessible name and its title; a name is isolated for bidi (SVG text takes no <bdi>).
+ */
+export function linkGraph(centreType: string, links: ReadonlyArray<GraphLink>, onStep: (id: string) => void): SVGSVGElement {
   const n = links.length;
   const W = 338, H = n ? Math.max(60, 26 + (n - 1) * 46 + 26) : 0, cx = 40, cy = H / 2, x = 146;
   const svg = s('svg', { class: 'graph', width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'group' });
   links.forEach((l, i) => {
     const y = n === 1 ? cy : 26 + i * ((H - 52) / (n - 1));
-    svg.append(s('path', { class: 'edge', d: `M${cx + 19} ${cy} C ${cx + 60} ${cy}, ${x - 56} ${y}, ${x - 15} ${y}`, fill: 'none', 'stroke-width': 1.3 }));
+    svg.append(s('path', { class: l.incoming ? 'edge in' : 'edge', d: `M${cx + 19} ${cy} C ${cx + 60} ${cy}, ${x - 56} ${y}, ${x - 15} ${y}`, fill: 'none', 'stroke-width': 1.3 }));
     const label = s('text', { class: 'edge-label', x: x - 20, y: y - 6, 'text-anchor': 'end' });
-    label.textContent = l.label;
+    label.textContent = fitName(l.label, LABEL_ROOM).text;
     svg.append(label);
     const name = s('text', { class: 'nb-name', x: x + 19, y: y + 4 });
-    name.textContent = l.name;
-    // data-focus: a redraw of the card puts focus back on the same neighbour.
-    const g = s('g', { class: 'nb', role: 'button', tabindex: 0, 'aria-label': `Open ${l.name}, ${l.label}`, 'data-step': l.id, 'data-focus': `card:g:${l.id}` },
+    name.textContent = isolated(fitName(l.name, NAME_ROOM).text);
+    const whole = `${l.name}${l.note ? ` (${l.note})` : ''}`;
+    const title = s('title', {});
+    title.textContent = `${whole}, ${l.full}`;
+    // data-focus: a redraw of the card puts focus back on the same neighbour. A neighbour with no card is no press.
+    const g = s('g', { class: `nb${l.presses ? '' : ' plain'}${l.note ? ' marked' : ''}`, ...(l.presses ? { role: 'button', tabindex: 0, 'data-step': l.id, 'data-focus': `card:g:${l.key}` } : { role: 'img' }),
+      'aria-label': l.presses ? `Open ${whole}, ${l.full}` : `${whole}, ${l.full}` },
+      title,
       s('rect', { class: 'hit', x: x - 16, y: y - 15, width: W - x + 12, height: 30, rx: 8 }),
       kindBody(l.type, 24, { x: x - 12, y: y - 12 }),
       name);
-    g.addEventListener('click', () => onStep(l.id));
-    g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStep(l.id); } });
+    if (l.presses) {
+      g.addEventListener('click', () => onStep(l.id));
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStep(l.id); } });
+    }
     svg.append(g);
   });
   if (n) svg.append(kindBody(centreType, 36, { x: cx - 18, y: cy - 18 }));

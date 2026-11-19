@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { OwMember } from '@onlyworlds/sdk';
 import { readLines, readWork, readDesignParts, seatView, type El, type Sitting } from './shapes';
-import { crewOf, roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, SHOW_WORKING, workshopRuns, designFolds, bySize, cardOf, firstLine, seatsByKey } from './crew';
+import { crewOf, roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, SHOW_WORKING, workshopRuns, designFolds, bySize, parlorCard, parlorGraph, firstLine, seatsByKey } from './crew';
 import { buildTeam, newestNote, age } from './team';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
@@ -264,21 +264,29 @@ describe('the design folds', () => {
   });
 });
 
-describe('an element\'s card', () => {
+describe('an element\'s card, through the parlor\'s call site', () => {
   const els = new Map<string, El>([
     ['trainer', { id: 'trainer', type: 'construct', name: 'Exam trainer', subtype: 'in design', description: 'Buddy walks a student.\nMore.', abilities: [] } as El],
-    ['screen', { id: 'screen', type: 'object', name: 'First screen', subtype: 'in design', parent_object: 'big', materials: ['trainer', 'secret'], description: '' } as El],
+    ['screen', { id: 'screen', type: 'object', name: 'First screen', subtype: 'in design', parent_object: 'big', materials: ['trainer', 'secret', 'big'], description: '' } as El],
     ['big', { id: 'big', type: 'object', name: 'Big', subtype: 'in design' } as El],
     ['kid', { id: 'kid', type: 'object', name: 'Kid', parent_object: 'screen' } as El],
     ['hid', { id: 'hid', type: 'object', name: 'Hid', parent_object: 'screen', hidden: true } as El],
   ]);
   const work = readWork([workItem('q1', '2026-11-18T08:00:00Z', { objects: ['screen'] }), workItem('q2', '2026-11-18T08:00:00Z', { objects: ['screen'], subtype: 'done' })], WORLD);
-  it('names each link by its field, the parts under it, and its open questions; never one the reader is not served', () => {
-    const c = cardOf(els.get('screen')!, els, work);
+  const card = (id: string, keeper: boolean) => {
+    const view = seatView(els.values(), keeper);
+    return parlorCard({ els, graph: parlorGraph(view, keeper), keeper, hidden: new Set(), id, worldId: WORLD, work, walked: true, parts: readDesignParts(view) });
+  };
+  it('names each link by its field, both ways, the parts under it, and its open questions; never one the reader is not served', () => {
+    const c = card('screen', false)!;
     expect(c.kind).toBe('Object');
     expect(c.state).toBe('in design');
-    expect(c.links.map(l => `${l.label}:${l.name}`)).toEqual(['Parent object:Big', 'Materials:Exam trainer', 'Under it:Kid']);
-    expect(c.questions.map(q => q.id)).toEqual(['q1']);
+    expect(c.groups.map(g => `${g.label}:${g.links.map(l => l.title).join(',')}`)).toEqual(['Parent object:Big', 'Materials:Exam trainer', 'Under it:Kid']);
+    expect(c.questions.items.map(q => q.id)).toEqual(['q1']);
+  });
+  it('a keeper reads the hidden part under it, marked; a seat that is no keeper never sees it', () => {
+    expect(card('screen', true)!.groups.find(g => g.field === 'parent_object' && g.dir === 'in')!.links.map(l => [l.id, l.marks.hidden])).toEqual([['hid', true], ['kid', false]]);
+    expect(card('hid', false)).toBeNull();
   });
   it('reads a first line for a hover', () => {
     expect(firstLine(els.get('trainer'))).toBe('Buddy walks a student.');

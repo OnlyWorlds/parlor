@@ -246,17 +246,28 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .car{display:inline-block;width:11px;height:11px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 /* An element's card, over the room's right side */
 .elcard{position:absolute;right:16px;top:70px;width:min(366px,calc(100% - 32px));max-height:calc(100% - 90px);overflow:auto;background:#0d1116;border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px #000a;padding:12px 14px;z-index:3}
-.elcard .ttl{display:flex;gap:9px;align-items:center;flex-wrap:nowrap}
+.elcard .ttl{display:flex;gap:9px;align-items:center;flex-wrap:nowrap;padding-right:30px}
 .elcard .ttl-words{min-width:0;flex:1}
 .elcard h2{margin:0;font-size:15px;font-weight:650;overflow-wrap:anywhere}
 .elcard h2:focus{outline:none}
 .elcard .kind{color:var(--muted);font-size:12px}
-.elcard .x{margin-left:auto;flex:none;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:17px;cursor:pointer}
+.elcard .x{position:absolute;top:12px;right:12px;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:17px;cursor:pointer}
 .elcard .x:hover{background:var(--raise);color:var(--text)}
-.elcard .card-text{margin:8px 0 6px;color:#cfd5dd;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
-.elcard .card-text.whole{display:block;-webkit-line-clamp:unset}
+.elcard .card-marks{margin:8px 0 0;color:var(--warn);font-size:12px}
+.elcard .card-marks p{margin:0}
+.elcard .card-text{margin:8px 0 6px;color:#cfd5dd;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+.elcard .card-fold{display:block;font-size:12px;margin:0 0 6px;padding:0;border:0;background:transparent;color:var(--accent);cursor:pointer}
+.elcard .card-fold:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.elcard .nb-note{color:var(--dim);font-size:11.5px;margin-left:6px}
+.elcard .nb-line.plain{cursor:default;color:var(--muted)}
+.elcard .card-qs a.q{color:var(--text);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;overflow-wrap:anywhere}
+.elcard .card-qs a.q:hover,.elcard .card-qs a.q:focus-visible{color:var(--accent);text-decoration-color:var(--accent)}
 .elcard .graph{display:block;max-width:100%;height:auto}
 .elcard .graph .edge{stroke:#2c3743}
+.elcard .graph .edge.in{stroke-dasharray:4 3}
+.elcard .graph .nb-name{unicode-bidi:isolate}
+.elcard .graph .nb.marked .nb-name{fill:var(--muted)}
+.elcard .graph .nb.plain{cursor:default}
 .elcard .graph .edge-label{fill:var(--dim);font-size:10.5px}
 .elcard .graph .nb-name{fill:var(--text);font-size:11.5px}
 .elcard .graph .hit{fill:transparent;stroke:transparent}
@@ -286,7 +297,10 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 /* A short screen (a phone held sideways, a keyboard that resizes the page) leaves the lines too little room: the card
    becomes a sheet over the whole window, so the story stays readable and both Folds stay in it. */
 @media (max-height:520px){.repcard{position:fixed;left:8px;right:8px;top:8px;bottom:8px;z-index:9}}
-@media (max-width:820px){.elcard{position:fixed;left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:70vh;z-index:9}}
+@media (max-width:820px){.elcard{position:fixed;left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:70vh;z-index:9}
+  /* A card opened from the panel stays a sheet over it: the room's pane, put away, keeps only the card drawn. */
+  .room-col.off{display:block;position:absolute;width:0;height:0;padding:0;overflow:visible;border:0}
+  .room-col.off>:not(.elcard){display:none}}
 /* Designs as folds */
 .design{border-top:1px solid var(--line)}
 .design:first-of-type{border-top:0}

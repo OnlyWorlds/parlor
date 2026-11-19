@@ -1,6 +1,6 @@
 // The standard's fixtures for serials 135 and 136 (schema-dist v0.34.1-dist.136, copied whole into ./fixtures), run
 // through the parlor's own readers, never the SDK's alone: a work item's state, open work and elements through
-// readWork and an element card (cardOf), who asked through readWork, a line's and a report's talks through the line
+// readWork and an element card (its model, through parlorCard), who asked through readWork, a line's and a report's talks through the line
 // reader (Line.named), and the design parts through a Room (its designs() and charter(), for the seat each case names).
 import { describe, expect, it, vi } from 'vitest';
 
@@ -17,8 +17,8 @@ vi.hoisted(() => {
 import type { OwMe, OwV2Client } from '@onlyworlds/sdk';
 import { Room } from './room';
 import { roomRole } from './roster';
-import { cardOf } from './crew';
-import { readLinesAsGiven, readWork, ROOM_MARK, type El } from './shapes';
+import { parlorCard, parlorGraph } from './crew';
+import { readLinesAsGiven, readWork, seatView, ROOM_MARK, type El } from './shapes';
 import packet from './fixtures/packet.fixture.json';
 import roomFixture from './fixtures/room.fixture.json';
 import report from './fixtures/report.fixture.json';
@@ -46,10 +46,14 @@ describe('packet state_cases (rules 5 and 7): readWork and an element card', () 
       if (c.want.states) for (const [id, s] of Object.entries(c.want.states)) expect({ id, state: states[id] }).toEqual({ id, state: s });
       if (c.want.shown) expect(asSet(work.map(w => w.id))).toEqual(asSet(c.want.shown));
       if (c.want.open_work) {
-        const map = new Map(els.map(e => [e.id, e]));
         for (const [elId, ids] of Object.entries(c.want.open_work)) {
-          // The open work on an element is its card's open questions.
-          const on = cardOf(map.get(elId) ?? ({ id: elId, type: 'location' } as El), map, work).questions.map(q => q.id);
+          // The open work on an element is its card's open questions, through the parlor's call site (a seat served
+          // the whole world, as a member is: no keeper's flags).
+          const rows = els.some(e => e.id === elId) ? els : [...els, { id: elId, type: 'location' } as El];
+          const map = new Map(rows.map(e => [e.id, e]));
+          const view = seatView(rows, false);
+          const card = parlorCard({ els: map, graph: parlorGraph(view, false), keeper: false, hidden: new Set(), id: elId, worldId: W.id, work, walked: true, parts: [] });
+          const on = (card?.questions.items ?? []).map(q => q.id);
           expect({ elId, open: asSet(on) }).toEqual({ elId, open: asSet(ids) });
         }
       }

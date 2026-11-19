@@ -1,0 +1,2751 @@
+{
+  "about": "The element card's cases (the card model, src/parlor/element-card.ts). Each case: the element rows and the work item rows a reader was served (the graph is the SDK's worldGraph over both, for the reader with the flags, the room's hidden list as the world's hidden list), the reader as the lens profile reads it, the flags (a keeper's both on, anyone else's both off), the id, how the work items were read (with cap when capped), the room's hidden list and the World's x_names; want is the model's whole answer, or null for no card. The design parts are the SDK's designPartsOf for the same reader. Ids are keel's lowercase form. The parlor and the OnlyWorlds Dashboard each run every case through their own call site.",
+  "world": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+  "cases": [
+    {
+      "name": "a proposed link is left out for a seat that is no keeper",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "birthplace": "a0000000-0000-4000-8000-000000000001",
+          "location": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000002",
+          "type": "location",
+          "name": "Proposed place",
+          "x_review_proposed": {
+            "by": "agent"
+          }
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001",
+          "a0000000-0000-4000-8000-000000000001",
+          "a0000000-0000-4000-8000-000000000002"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "out:birthplace",
+            "field": "birthplace",
+            "dir": "out",
+            "label": "Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "a0000000-0000-4000-8000-000000000001",
+                "type": "location",
+                "name": "Home",
+                "title": "Home",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a keeper reads a proposed link, marked",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "birthplace": "a0000000-0000-4000-8000-000000000001",
+          "location": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000002",
+          "type": "location",
+          "name": "Proposed place",
+          "x_review_proposed": {
+            "by": "agent"
+          }
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "owner"
+      },
+      "flags": {
+        "hidden": true,
+        "proposed": true
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "out:birthplace",
+            "field": "birthplace",
+            "dir": "out",
+            "label": "Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "a0000000-0000-4000-8000-000000000001",
+                "type": "location",
+                "name": "Home",
+                "title": "Home",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          },
+          {
+            "key": "out:location",
+            "field": "location",
+            "dir": "out",
+            "label": "Location",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "a0000000-0000-4000-8000-000000000002",
+                "type": "location",
+                "name": "Proposed place",
+                "title": "Proposed place",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": true
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a keeper opens the proposed element itself: its card, marked proposed",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "location": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000002",
+          "type": "location",
+          "name": "Proposed place",
+          "x_review_proposed": {
+            "by": "agent"
+          }
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "owner"
+      },
+      "flags": {
+        "hidden": true,
+        "proposed": true
+      },
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "a0000000-0000-4000-8000-000000000002",
+        "type": "location",
+        "kind": "Location",
+        "name": "Proposed place",
+        "title": "Proposed place",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": true,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:location",
+            "field": "location",
+            "dir": "in",
+            "label": "Linked from · Location",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000001",
+                "type": "character",
+                "name": "Ada",
+                "title": "Ada",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a seat that is no keeper has no card for a proposed element",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "location": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000002",
+          "type": "location",
+          "name": "Proposed place",
+          "x_review_proposed": {
+            "by": "agent"
+          }
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001",
+          "a0000000-0000-4000-8000-000000000002"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": null
+    },
+    {
+      "name": "a hidden link: a keeper reads it marked, by the row's own mark and by the room's hidden list alike",
+      "rows": [
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "birthplace": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000002",
+          "type": "character",
+          "name": "Bo",
+          "birthplace": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000003",
+          "type": "character",
+          "name": "Hidden one",
+          "birthplace": "a0000000-0000-4000-8000-000000000001",
+          "hidden": true
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "owner"
+      },
+      "flags": {
+        "hidden": true,
+        "proposed": true
+      },
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [
+        "c0000000-0000-4000-8000-000000000002"
+      ],
+      "names": null,
+      "want": {
+        "id": "a0000000-0000-4000-8000-000000000001",
+        "type": "location",
+        "kind": "Location",
+        "name": "Home",
+        "title": "Home",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:birthplace",
+            "field": "birthplace",
+            "dir": "in",
+            "label": "Linked from · Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000001",
+                "type": "character",
+                "name": "Ada",
+                "title": "Ada",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              },
+              {
+                "id": "c0000000-0000-4000-8000-000000000002",
+                "type": "character",
+                "name": "Bo",
+                "title": "Bo",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": true,
+                  "proposed": false
+                }
+              },
+              {
+                "id": "c0000000-0000-4000-8000-000000000003",
+                "type": "character",
+                "name": "Hidden one",
+                "title": "Hidden one",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": true,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a keeper opens a hidden element: its card, marked hidden, by the row's mark or the room's list",
+      "rows": [
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000002",
+          "type": "character",
+          "name": "Bo",
+          "birthplace": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000003",
+          "type": "character",
+          "name": "Hidden one",
+          "birthplace": "a0000000-0000-4000-8000-000000000001",
+          "hidden": true
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "owner"
+      },
+      "flags": {
+        "hidden": true,
+        "proposed": true
+      },
+      "id": "c0000000-0000-4000-8000-000000000002",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [
+        "c0000000-0000-4000-8000-000000000002"
+      ],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000002",
+        "type": "character",
+        "kind": "Character",
+        "name": "Bo",
+        "title": "Bo",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": true,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "out:birthplace",
+            "field": "birthplace",
+            "dir": "out",
+            "label": "Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "a0000000-0000-4000-8000-000000000001",
+                "type": "location",
+                "name": "Home",
+                "title": "Home",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a hidden link: a seat that did not make it is not served it, so it is not there",
+      "rows": [
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "birthplace": "a0000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "a0000000-0000-4000-8000-000000000001",
+          "c0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "a0000000-0000-4000-8000-000000000001",
+        "type": "location",
+        "kind": "Location",
+        "name": "Home",
+        "title": "Home",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:birthplace",
+            "field": "birthplace",
+            "dir": "in",
+            "label": "Linked from · Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000001",
+                "type": "character",
+                "name": "Ada",
+                "title": "Ada",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a seat's own hidden creation, served to its maker marked hidden, is left out, and has no card",
+      "rows": [
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "birthplace": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000003",
+          "type": "character",
+          "name": "Hidden one",
+          "birthplace": "a0000000-0000-4000-8000-000000000001",
+          "hidden": true
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "a0000000-0000-4000-8000-000000000001",
+          "c0000000-0000-4000-8000-000000000001",
+          "c0000000-0000-4000-8000-000000000003"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000003",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": null
+    },
+    {
+      "name": "the same seat reads the element its hidden creation links to without it",
+      "rows": [
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "birthplace": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000003",
+          "type": "character",
+          "name": "Hidden one",
+          "birthplace": "a0000000-0000-4000-8000-000000000001",
+          "hidden": true
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "a0000000-0000-4000-8000-000000000001",
+          "c0000000-0000-4000-8000-000000000001",
+          "c0000000-0000-4000-8000-000000000003"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "a0000000-0000-4000-8000-000000000001",
+        "type": "location",
+        "kind": "Location",
+        "name": "Home",
+        "title": "Home",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:birthplace",
+            "field": "birthplace",
+            "dir": "in",
+            "label": "Linked from · Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000001",
+                "type": "character",
+                "name": "Ada",
+                "title": "Ada",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a known-of stub has a card, marked, with the words keel serves it",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000004",
+          "type": "character",
+          "name": "Stubby",
+          "known_of": true,
+          "description": "Only its base fields are served.",
+          "subtype": "watcher"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "friends": [
+            "c0000000-0000-4000-8000-000000000004"
+          ]
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": [
+          "c0000000-0000-4000-8000-000000000004"
+        ]
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000004",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000004",
+        "type": "character",
+        "kind": "Character",
+        "name": "Stubby",
+        "title": "Stubby",
+        "state": "watcher",
+        "lead": "Only its base fields are served.",
+        "rest": "",
+        "marks": {
+          "knownOf": true,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:friends",
+            "field": "friends",
+            "dir": "in",
+            "label": "Linked from · Friends",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000001",
+                "type": "character",
+                "name": "Ada",
+                "title": "Ada",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a link to a stub is marked known of",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000004",
+          "type": "character",
+          "name": "Stubby",
+          "known_of": true
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "friends": [
+            "c0000000-0000-4000-8000-000000000004"
+          ]
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": [
+          "c0000000-0000-4000-8000-000000000004"
+        ]
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "out:friends",
+            "field": "friends",
+            "dir": "out",
+            "label": "Friends",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000004",
+                "type": "character",
+                "name": "Stubby",
+                "title": "Stubby",
+                "marks": {
+                  "knownOf": true,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a wrong-typed id in a field is left out, and a repeated id counts once",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "species": [
+            "d0000000-0000-4000-8000-000000000001",
+            "d0000000-0000-4000-8000-000000000001",
+            "a0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "d0000000-0000-4000-8000-000000000001",
+          "type": "species",
+          "name": "Elf"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001",
+          "d0000000-0000-4000-8000-000000000001",
+          "a0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "out:species",
+            "field": "species",
+            "dir": "out",
+            "label": "Species",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "d0000000-0000-4000-8000-000000000001",
+                "type": "species",
+                "name": "Elf",
+                "title": "Elf",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "the Objects under an Object are its Under it group; a parent that is not an Object draws nothing",
+      "rows": [
+        {
+          "id": "b0000000-0000-4000-8000-000000000001",
+          "type": "object",
+          "name": "Top"
+        },
+        {
+          "id": "b0000000-0000-4000-8000-000000000002",
+          "type": "object",
+          "name": "Kid",
+          "parent_object": "b0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "b0000000-0000-4000-8000-000000000003",
+          "type": "object",
+          "name": "Bad parent",
+          "parent_object": "c0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        },
+        {
+          "id": "b0000000-0000-4000-8000-000000000004",
+          "type": "object",
+          "name": "  ",
+          "parent_object": "b0000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "b0000000-0000-4000-8000-000000000001",
+          "b0000000-0000-4000-8000-000000000002",
+          "b0000000-0000-4000-8000-000000000003",
+          "c0000000-0000-4000-8000-000000000001",
+          "b0000000-0000-4000-8000-000000000004"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "b0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "b0000000-0000-4000-8000-000000000001",
+        "type": "object",
+        "kind": "Object",
+        "name": "Top",
+        "title": "Top",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:parent_object",
+            "field": "parent_object",
+            "dir": "in",
+            "label": "Under it",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "b0000000-0000-4000-8000-000000000004",
+                "type": "object",
+                "name": null,
+                "title": "Object with no name",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              },
+              {
+                "id": "b0000000-0000-4000-8000-000000000002",
+                "type": "object",
+                "name": "Kid",
+                "title": "Kid",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a wrong-typed parent links nothing in",
+      "rows": [
+        {
+          "id": "b0000000-0000-4000-8000-000000000003",
+          "type": "object",
+          "name": "Bad parent",
+          "parent_object": "c0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "b0000000-0000-4000-8000-000000000003",
+          "c0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "links in, by field: out first, then Linked from; a link to itself and a lens's declared link are left out",
+      "rows": [
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home",
+          "partner": "a0000000-0000-4000-8000-000000000001",
+          "rival": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000002",
+          "type": "location",
+          "name": "Far shore"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "birthplace": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000002",
+          "type": "character",
+          "name": "Bo",
+          "birthplace": "a0000000-0000-4000-8000-000000000001",
+          "location": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e0000000-0000-4000-8000-000000000004",
+          "type": "event",
+          "name": "The flood",
+          "locations": [
+            "a0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "e0000000-0000-4000-8000-000000000002",
+          "type": "narrative",
+          "name": "A lens",
+          "x_lens_leads_to": [
+            "a0000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "a0000000-0000-4000-8000-000000000001",
+          "a0000000-0000-4000-8000-000000000002",
+          "c0000000-0000-4000-8000-000000000001",
+          "c0000000-0000-4000-8000-000000000002",
+          "e0000000-0000-4000-8000-000000000004",
+          "e0000000-0000-4000-8000-000000000002"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "a0000000-0000-4000-8000-000000000001",
+        "type": "location",
+        "kind": "Location",
+        "name": "Home",
+        "title": "Home",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "out:rival",
+            "field": "rival",
+            "dir": "out",
+            "label": "Rival",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "a0000000-0000-4000-8000-000000000002",
+                "type": "location",
+                "name": "Far shore",
+                "title": "Far shore",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          },
+          {
+            "key": "in:birthplace",
+            "field": "birthplace",
+            "dir": "in",
+            "label": "Linked from · Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000001",
+                "type": "character",
+                "name": "Ada",
+                "title": "Ada",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              },
+              {
+                "id": "c0000000-0000-4000-8000-000000000002",
+                "type": "character",
+                "name": "Bo",
+                "title": "Bo",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          },
+          {
+            "key": "in:location",
+            "field": "location",
+            "dir": "in",
+            "label": "Linked from · Location",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000002",
+                "type": "character",
+                "name": "Bo",
+                "title": "Bo",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          },
+          {
+            "key": "in:locations",
+            "field": "locations",
+            "dir": "in",
+            "label": "Linked from · Locations",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "e0000000-0000-4000-8000-000000000004",
+                "type": "event",
+                "name": "The flood",
+                "title": "The flood",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a room element and a reading aid have no card",
+      "rows": [
+        {
+          "id": "e0000000-0000-4000-8000-000000000001",
+          "type": "narrative",
+          "name": "A line",
+          "supertype": "Message",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1"
+        },
+        {
+          "id": "e0000000-0000-4000-8000-000000000003",
+          "type": "law",
+          "name": "House rules",
+          "supertype": "Charter",
+          "x_charter_of": "0f0f0f0f-0000-4000-8000-00000000a1a1"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "owner"
+      },
+      "flags": {
+        "hidden": true,
+        "proposed": true
+      },
+      "id": "e0000000-0000-4000-8000-000000000003",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": null
+    },
+    {
+      "name": "a line of the room has no card",
+      "rows": [
+        {
+          "id": "e0000000-0000-4000-8000-000000000001",
+          "type": "narrative",
+          "name": "A line",
+          "supertype": "Message",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "owner"
+      },
+      "flags": {
+        "hidden": true,
+        "proposed": true
+      },
+      "id": "e0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": null
+    },
+    {
+      "name": "open questions: a room's open work, settled, about this world; newest first",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        }
+      ],
+      "work": [
+        {
+          "id": "f0000000-0000-4000-8000-000000000001",
+          "type": "relation",
+          "name": "Question 1",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:01:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000002",
+          "type": "relation",
+          "name": "Question 2",
+          "supertype": "Work item",
+          "subtype": "Taken",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:02:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000003",
+          "type": "relation",
+          "name": "Question 3",
+          "supertype": "Work item",
+          "subtype": "standing",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:03:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000004",
+          "type": "relation",
+          "name": "Question 4",
+          "supertype": "Work item",
+          "subtype": "blocked",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:04:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000005",
+          "type": "relation",
+          "name": "Question 5",
+          "supertype": "Work item",
+          "subtype": "done",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:05:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000006",
+          "type": "relation",
+          "name": "No room mark",
+          "supertype": "Work item",
+          "subtype": "open",
+          "created_at": "2026-11-19T08:06:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000007",
+          "type": "relation",
+          "name": "Question 7",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:07:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ],
+          "x_review_proposed": {
+            "by": "agent"
+          }
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000008",
+          "type": "relation",
+          "name": "Question 8",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:08:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ],
+          "x_review_proposed": "maybe"
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000009",
+          "type": "relation",
+          "name": "Question 9",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:09:00Z",
+          "x_packet_source": {
+            "world": "0e0e0e0e-0000-4000-8000-00000000b2b2"
+          },
+          "x_packet_elements": [
+            {
+              "type": "character",
+              "id": "c0000000-0000-4000-8000-000000000001",
+              "reason": "named there"
+            }
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000010",
+          "type": "relation",
+          "name": "Question 10",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:10:00Z",
+          "x_packet_source": {
+            "world": "0e0e0e0e-0000-4000-8000-00000000b2b2"
+          },
+          "x_packet_elements": [],
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000011",
+          "type": "relation",
+          "name": "Question 11",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:11:00Z",
+          "x_packet_source": {
+            "world": "0e0e0e0e-0000-4000-8000-00000000b2b2"
+          },
+          "x_packet_elements": [
+            {
+              "type": "location",
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "reason": "there"
+            }
+          ],
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000012",
+          "type": "relation",
+          "name": "",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:12:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001",
+          "f0000000-0000-4000-8000-000000000001",
+          "f0000000-0000-4000-8000-000000000002",
+          "f0000000-0000-4000-8000-000000000003",
+          "f0000000-0000-4000-8000-000000000004",
+          "f0000000-0000-4000-8000-000000000005",
+          "f0000000-0000-4000-8000-000000000006",
+          "f0000000-0000-4000-8000-000000000007",
+          "f0000000-0000-4000-8000-000000000008",
+          "f0000000-0000-4000-8000-000000000009",
+          "f0000000-0000-4000-8000-000000000010",
+          "f0000000-0000-4000-8000-000000000011",
+          "f0000000-0000-4000-8000-000000000012"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:characters",
+            "field": "characters",
+            "dir": "in",
+            "label": "Linked from · Characters",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "f0000000-0000-4000-8000-000000000006",
+                "type": "relation",
+                "name": "No room mark",
+                "title": "No room mark",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": [
+            {
+              "id": "f0000000-0000-4000-8000-000000000012",
+              "name": null,
+              "title": "Work item with no name",
+              "state": "open",
+              "hidden": false
+            },
+            {
+              "id": "f0000000-0000-4000-8000-000000000011",
+              "name": "Question 11",
+              "title": "Question 11",
+              "state": "open",
+              "hidden": false
+            },
+            {
+              "id": "f0000000-0000-4000-8000-000000000010",
+              "name": "Question 10",
+              "title": "Question 10",
+              "state": "open",
+              "hidden": false
+            },
+            {
+              "id": "f0000000-0000-4000-8000-000000000002",
+              "name": "Question 2",
+              "title": "Question 2",
+              "state": "taken",
+              "hidden": false
+            },
+            {
+              "id": "f0000000-0000-4000-8000-000000000001",
+              "name": "Question 1",
+              "title": "Question 1",
+              "state": "open",
+              "hidden": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "open questions by a packet in this world: an entry counts only with its type, id and reason all strings",
+      "rows": [
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        }
+      ],
+      "work": [
+        {
+          "id": "f0000000-0000-4000-8000-000000000001",
+          "type": "relation",
+          "name": "Question 1",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:01:00Z",
+          "x_packet_source": {
+            "world": "0f0f0f0f-0000-4000-8000-00000000a1a1"
+          },
+          "x_packet_elements": [
+            {
+              "type": "location",
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "reason": "the gate"
+            }
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000002",
+          "type": "relation",
+          "name": "Question 2",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:02:00Z",
+          "x_packet_elements": [
+            {
+              "type": "location",
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "reason": "no source"
+            }
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000003",
+          "type": "relation",
+          "name": "Question 3",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:03:00Z",
+          "x_packet_elements": [
+            {
+              "type": "location",
+              "id": "a0000000-0000-4000-8000-000000000001"
+            }
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000004",
+          "type": "relation",
+          "name": "Question 4",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:04:00Z",
+          "x_packet_source": {
+            "world": "0f0f0f0f-0000-4000-8000-00000000a1a1"
+          },
+          "x_packet_elements": [
+            {
+              "type": "location",
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "reason": 7
+            }
+          ]
+        }
+      ],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "a0000000-0000-4000-8000-000000000001",
+          "f0000000-0000-4000-8000-000000000001",
+          "f0000000-0000-4000-8000-000000000002",
+          "f0000000-0000-4000-8000-000000000003",
+          "f0000000-0000-4000-8000-000000000004"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "a0000000-0000-4000-8000-000000000001",
+        "type": "location",
+        "kind": "Location",
+        "name": "Home",
+        "title": "Home",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": [
+            {
+              "id": "f0000000-0000-4000-8000-000000000002",
+              "name": "Question 2",
+              "title": "Question 2",
+              "state": "open",
+              "hidden": false
+            },
+            {
+              "id": "f0000000-0000-4000-8000-000000000001",
+              "name": "Question 1",
+              "title": "Question 1",
+              "state": "open",
+              "hidden": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a hidden work item: a keeper counts it marked, by the row's mark and the room's hidden list",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        }
+      ],
+      "work": [
+        {
+          "id": "f0000000-0000-4000-8000-000000000001",
+          "type": "relation",
+          "name": "Question 1",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:01:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000002",
+          "type": "relation",
+          "name": "Question 2",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:02:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ],
+          "hidden": true
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000003",
+          "type": "relation",
+          "name": "Question 3",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:03:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "reader": {
+        "rung": "owner"
+      },
+      "flags": {
+        "hidden": true,
+        "proposed": true
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [
+        "f0000000-0000-4000-8000-000000000003"
+      ],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": [
+            {
+              "id": "f0000000-0000-4000-8000-000000000003",
+              "name": "Question 3",
+              "title": "Question 3",
+              "state": "open",
+              "hidden": true
+            },
+            {
+              "id": "f0000000-0000-4000-8000-000000000002",
+              "name": "Question 2",
+              "title": "Question 2",
+              "state": "open",
+              "hidden": true
+            },
+            {
+              "id": "f0000000-0000-4000-8000-000000000001",
+              "name": "Question 1",
+              "title": "Question 1",
+              "state": "open",
+              "hidden": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a hidden work item served to its maker is not counted for a seat that is no keeper",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        }
+      ],
+      "work": [
+        {
+          "id": "f0000000-0000-4000-8000-000000000001",
+          "type": "relation",
+          "name": "Question 1",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:01:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        },
+        {
+          "id": "f0000000-0000-4000-8000-000000000002",
+          "type": "relation",
+          "name": "Question 2",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:02:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ],
+          "hidden": true
+        }
+      ],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001",
+          "f0000000-0000-4000-8000-000000000001",
+          "f0000000-0000-4000-8000-000000000002"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": [
+            {
+              "id": "f0000000-0000-4000-8000-000000000001",
+              "name": "Question 1",
+              "title": "Question 1",
+              "state": "open",
+              "hidden": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "questions not read yet never read as none",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "pending",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "pending",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "questions that could not be read never read as none",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "failed",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "failed",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a capped read says how many were read",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        }
+      ],
+      "work": [
+        {
+          "id": "f0000000-0000-4000-8000-000000000001",
+          "type": "relation",
+          "name": "Question 1",
+          "supertype": "Work item",
+          "subtype": "open",
+          "x_room_of": "0f0f0f0f-0000-4000-8000-00000000a1a1",
+          "created_at": "2026-11-19T08:01:00Z",
+          "characters": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001",
+          "f0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "capped",
+      "cap": 1000,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "capped",
+          "cap": 1000,
+          "items": [
+            {
+              "id": "f0000000-0000-4000-8000-000000000001",
+              "name": "Question 1",
+              "title": "Question 1",
+              "state": "open",
+              "hidden": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a trimmed row is marked, on the element and on the group of each field keel names",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000002",
+          "type": "character",
+          "name": "Bo",
+          "friends": [
+            "c0000000-0000-4000-8000-000000000001"
+          ],
+          "birthplace": "a0000000-0000-4000-8000-000000000001",
+          "x_served_trimmed": [
+            "friends"
+          ]
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000002",
+          "c0000000-0000-4000-8000-000000000001",
+          "a0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000002",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000002",
+        "type": "character",
+        "kind": "Character",
+        "name": "Bo",
+        "title": "Bo",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": true
+        },
+        "groups": [
+          {
+            "key": "out:birthplace",
+            "field": "birthplace",
+            "dir": "out",
+            "label": "Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "a0000000-0000-4000-8000-000000000001",
+                "type": "location",
+                "name": "Home",
+                "title": "Home",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          },
+          {
+            "key": "out:friends",
+            "field": "friends",
+            "dir": "out",
+            "label": "Friends",
+            "trimmed": true,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000001",
+                "type": "character",
+                "name": "Ada",
+                "title": "Ada",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a nameless element is its kind with no name",
+      "rows": [
+        {
+          "id": "b0000000-0000-4000-8000-000000000004",
+          "type": "object",
+          "name": "",
+          "parent_object": "b0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "b0000000-0000-4000-8000-000000000001",
+          "type": "object",
+          "name": "Top"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "b0000000-0000-4000-8000-000000000004",
+          "b0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "b0000000-0000-4000-8000-000000000004",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "b0000000-0000-4000-8000-000000000004",
+        "type": "object",
+        "kind": "Object",
+        "name": null,
+        "title": "Object with no name",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "out:parent_object",
+            "field": "parent_object",
+            "dir": "out",
+            "label": "Parent object",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "b0000000-0000-4000-8000-000000000001",
+                "type": "object",
+                "name": "Top",
+                "title": "Top",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "the world's own word for a kind, by the supertype first",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "birthplace": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "a0000000-0000-4000-8000-000000000001",
+          "type": "location",
+          "name": "Home",
+          "supertype": "Harbour"
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000005",
+          "type": "character",
+          "name": "",
+          "friends": [
+            "c0000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001",
+          "a0000000-0000-4000-8000-000000000001",
+          "c0000000-0000-4000-8000-000000000005"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": {
+        "version": 1,
+        "types": {
+          "character": {
+            "one": "Soul",
+            "many": "Souls"
+          }
+        },
+        "supertypes": {
+          "location": {
+            "harbour": {
+              "one": "Port"
+            }
+          }
+        }
+      },
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Soul",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "out:birthplace",
+            "field": "birthplace",
+            "dir": "out",
+            "label": "Birthplace",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "a0000000-0000-4000-8000-000000000001",
+                "type": "location",
+                "name": "Home",
+                "title": "Home",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          },
+          {
+            "key": "in:friends",
+            "field": "friends",
+            "dir": "in",
+            "label": "Linked from · Friends",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000005",
+                "type": "character",
+                "name": null,
+                "title": "Soul with no name",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "the state: a design part's design state; else the subtype; else the supertype",
+      "rows": [
+        {
+          "id": "e0000000-0000-4000-8000-000000000003",
+          "type": "law",
+          "name": "House rules",
+          "supertype": "Charter",
+          "x_charter_of": "0f0f0f0f-0000-4000-8000-00000000a1a1"
+        },
+        {
+          "id": "b0000000-0000-4000-8000-000000000001",
+          "type": "object",
+          "name": "Top",
+          "subtype": " In Design ",
+          "supertype": "Engine"
+        },
+        {
+          "id": "b0000000-0000-4000-8000-000000000002",
+          "type": "object",
+          "name": "Kid",
+          "subtype": " worn ",
+          "supertype": "Tool",
+          "parent_object": "b0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "d0000000-0000-4000-8000-000000000001",
+          "type": "species",
+          "name": "Elf",
+          "supertype": "Folk"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "e0000000-0000-4000-8000-000000000003",
+          "b0000000-0000-4000-8000-000000000001",
+          "b0000000-0000-4000-8000-000000000002",
+          "d0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "b0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "b0000000-0000-4000-8000-000000000001",
+        "type": "object",
+        "kind": "Object",
+        "name": "Top",
+        "title": "Top",
+        "state": "In design",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:parent_object",
+            "field": "parent_object",
+            "dir": "in",
+            "label": "Under it",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "b0000000-0000-4000-8000-000000000002",
+                "type": "object",
+                "name": "Kid",
+                "title": "Kid",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "the state from the subtype as written, trimmed",
+      "rows": [
+        {
+          "id": "b0000000-0000-4000-8000-000000000002",
+          "type": "object",
+          "name": "Kid",
+          "subtype": " worn ",
+          "supertype": "Tool"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "b0000000-0000-4000-8000-000000000002"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "b0000000-0000-4000-8000-000000000002",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "b0000000-0000-4000-8000-000000000002",
+        "type": "object",
+        "kind": "Object",
+        "name": "Kid",
+        "title": "Kid",
+        "state": "worn",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "the state from the supertype when there is no subtype",
+      "rows": [
+        {
+          "id": "d0000000-0000-4000-8000-000000000001",
+          "type": "species",
+          "name": "Elf",
+          "supertype": "Folk"
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "d0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "d0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "d0000000-0000-4000-8000-000000000001",
+        "type": "species",
+        "kind": "Species",
+        "name": "Elf",
+        "title": "Elf",
+        "state": "Folk",
+        "lead": "",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "the words: the description, its first line the lead and the rest to fold",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "description": "  Ada keeps the light.\n\nShe came from the north.\nShe stayed.  ",
+          "story": "Not this."
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "c0000000-0000-4000-8000-000000000001"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000001",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000001",
+        "type": "character",
+        "kind": "Character",
+        "name": "Ada",
+        "title": "Ada",
+        "state": "",
+        "lead": "Ada keeps the light.",
+        "rest": "She came from the north.\nShe stayed.",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "the words: the story when there is no description",
+      "rows": [
+        {
+          "id": "e0000000-0000-4000-8000-000000000004",
+          "type": "narrative",
+          "name": "A tale",
+          "description": "   ",
+          "story": "Once there was a harbour."
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "guest",
+        "whole": [
+          "e0000000-0000-4000-8000-000000000004"
+        ],
+        "known_of": []
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "e0000000-0000-4000-8000-000000000004",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "e0000000-0000-4000-8000-000000000004",
+        "type": "narrative",
+        "kind": "Narrative",
+        "name": "A tale",
+        "title": "A tale",
+        "state": "",
+        "lead": "Once there was a harbour.",
+        "rest": "",
+        "marks": {
+          "knownOf": false,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    }
+  ]
+}
