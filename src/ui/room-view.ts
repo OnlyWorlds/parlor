@@ -361,7 +361,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           : problemLine(failure, asReport ? 'handing in your report' : 'sending your line');
         notice(err instanceof Refused ? err.message
           : err instanceof KeeperOnly ? 'You no longer keep this world, so this report was not sent. Hand in again to send it as handed in.'
-          : err instanceof ItemMoved ? 'The work item changed meanwhile: it is gone, or no longer open or taken. Nothing was handed in; hand in again, and the report says only what is true now.'
+          : err instanceof ItemMoved ? 'The work item changed since you opened it, or it is gone. Nothing was handed in; hand in again, and the report says only what is true now.'
           : err instanceof DoneNoReport ? `The work item ${err.item.title.trim() || 'Untitled'} is set done, and your report is not in yet. ${lost}`
           : err instanceof DoneFailed ? `The work item could not be set done, so nothing was handed in. ${problemLine(err.failure, 'setting the work item done')} To hand the report in without setting the item done, untick the box.`
           : lost, true);

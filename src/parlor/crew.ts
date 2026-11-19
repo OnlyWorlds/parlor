@@ -273,7 +273,7 @@ export function isHiddenPart(p: DesignPart, hidden: ReadonlySet<string>): boolea
 export function hiddenAnswerNote(p: DesignPart, hidden: ReadonlySet<string>, isHost: boolean): string | null {
   if (!isHiddenPart(p, hidden)) return null;
   return isHost
-    ? `${p.title} is hidden from the room: everyone reads your answer, and only the hosts see the part it names.`
+    ? `${p.title} is hidden from the room: everyone reads your answer, and only the hosts and whoever made the part see it.`
     : `${p.title} is hidden from the room: everyone reads your answer, and only you and the hosts see the part it names.`;
 }
 

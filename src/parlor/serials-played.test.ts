@@ -245,7 +245,7 @@ describe('the Charter for each seat (the charter profile, serial 135; keel serve
     host.hidden = new Set(['o-hid']);
     const parts = new Map(host.designs().map(p => [p.id, p]));
     expect(hiddenAnswerNote(parts.get('o-hid')!, host.hidden, host.isHost))
-      .toBe('The secret hook is hidden from the room: everyone reads your answer, and only the hosts see the part it names.');
+      .toBe('The secret hook is hidden from the room: everyone reads your answer, and only the hosts and whoever made the part see it.');
     expect(hiddenAnswerNote(parts.get('o-part')!, host.hidden, host.isHost)).toBeNull();
     const maker = room('contributor', [law(), { id: 'o-mine', type: 'object', name: 'My hook', subtype: 'locked', hidden: true, created_by: 'm-1' } as El]);
     const mine = maker.designs().find(p => p.id === 'o-mine')!;
