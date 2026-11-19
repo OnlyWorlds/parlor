@@ -15,7 +15,7 @@ vi.hoisted(() => {
 import type { OwMe, OwV2Client } from '@onlyworlds/sdk';
 import { Room } from './room';
 import { roomRole } from './roster';
-import { designLink, newLineAt, newReport, readDesignParts, readLinesAsGiven, ROOM_MARK, type El } from './shapes';
+import { designLink, newLineAt, newReport, readDesignParts, readLinesAsGiven, ROOM_MARK, seatView, type El } from './shapes';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
 
@@ -23,7 +23,7 @@ const obj = (id: string, name: string, subtype: string | null, over: Partial<El>
 const con = (id: string, name: string, subtype: string | null, over: Partial<El> = {}): El => ({ id, type: 'construct', name, subtype, ...over } as El);
 const charter: El = { id: 'law-1', type: 'law', name: 'How we work', supertype: 'Charter', x_charter_of: WORLD } as El;
 
-describe('readDesignParts', () => {
+describe('readDesignParts (the SDK\'s designPartsOf, the charter profile serial 135)', () => {
   const els = [
     obj('o-b', 'beta screen', 'in design'),
     obj('o-a', 'Alpha screen', 'in design'),
@@ -32,27 +32,40 @@ describe('readDesignParts', () => {
     obj('o-sp', 'Spaced', 'in  design'),
     obj('o-none', 'No state', null),
     obj('o-other', 'Shipped', 'released'),
-    obj('o-hid', 'Hidden', 'in design', { hidden: true }),
-    obj('o-ko', 'Known of', 'in design', { known_of: true }),
     obj('o-prop', 'Proposed', 'in design', { x_review_proposed: { by: 'm-2', at: '2026-11-18T10:00:00Z' } }),
-    con('c-spec', 'A spec', 'in design', { supertype: 'Spec', [ROOM_MARK]: WORLD }),
-    con('c-aid', 'Domains', 'locked', { supertype: 'Domain', x_charter_of: WORLD }),
     { id: 'ch-1', type: 'character', name: 'Mara', subtype: 'in design' } as El,
+    charter,
   ];
+  const keeper = (list: El[], hidden: string[] = []) => readDesignParts(seatView(list, true, hidden)).map(p => p.id);
   it('in design first then locked, each by its folded name; the state trimmed and folded as the room profile folds', () => {
-    expect(readDesignParts(els).map(p => p.id)).toEqual(['o-a', 'o-b', 'o-door', 'c-l']);
-    expect(readDesignParts(els).find(p => p.id === 'o-door')?.state).toBe('locked');
+    expect(keeper(els)).toEqual(['o-a', 'o-b', 'o-door', 'c-l']);
+    expect(readDesignParts(seatView(els, true)).find(p => p.id === 'o-door')?.state).toBe('locked');
   });
   it("the state's trim is Unicode's White_Space set: a trailing U+0085 trims, a byte order mark stays", () => {
-    const parts = readDesignParts([obj('o-nel', 'Nel', 'locked\u0085'), obj('o-bom', 'Bom', '﻿locked'), obj('o-ls', 'Long s', 'in deſign')]);
+    const parts = readDesignParts(seatView([obj('o-nel', 'Nel', 'locked\u0085'), obj('o-bom', 'Bom', '\ufefflocked'), obj('o-ls', 'Long s', 'in de\u017fign'), charter], true));
     expect(parts.map(p => [p.id, p.state])).toEqual([['o-ls', 'in design'], ['o-nel', 'locked']]);
   });
-  it('never hidden (by the mark or the room\'s own list), known of, proposed, a room element or a reading aid', () => {
-    const ids = readDesignParts(els, new Set(['o-b'])).map(p => p.id);
-    expect(ids).toEqual(['o-a', 'o-door', 'c-l']);
+  it('none where the reader finds no Charter: none at all, or only one without the mark', () => {
+    expect(keeper(els.filter(e => e !== charter))).toEqual([]);
+    expect(keeper([...els.filter(e => e !== charter), { ...charter, x_charter_of: undefined } as El])).toEqual([]);
+  });
+  it('for a keeper the state alone makes a part, whatever the supertype: a hidden part, a room Spec and a reading aid in design; never a proposed one', () => {
+    const more = [...els,
+      obj('o-hid', 'Hidden', 'in design', { hidden: true }),
+      con('c-spec', 'A spec', 'in design', { supertype: 'Spec', [ROOM_MARK]: WORLD }),
+      con('c-aid', 'Domains', 'locked', { supertype: 'Domain', x_charter_of: WORLD }),
+    ];
+    expect(keeper(more, ['o-b'])).toEqual(['c-spec', 'o-a', 'o-b', 'o-hid', 'o-door', 'c-l', 'c-aid']);
+  });
+  it('a seat that is no keeper reads exactly what it was served: its whole rows, never a stub', () => {
+    const served = [obj('o-a', 'Alpha screen', 'in design'), obj('o-ko', 'Known of', 'in design', { known_of: true }), con('c-l', 'Billing rules', 'locked'), charter];
+    expect(readDesignParts(seatView(served, false)).map(p => p.id)).toEqual(['o-a', 'c-l']);
+    // A Charter served only as a stub (the base fields, no mark) is not this seat's: no parts at all.
+    const stub = { id: 'law-1', type: 'law', name: 'How we work', supertype: 'Charter', known_of: true } as El;
+    expect(readDesignParts(seatView([obj('o-a', 'Alpha screen', 'in design'), stub], false))).toEqual([]);
   });
   it('the link a line writes is the part\'s own type', () => {
-    const parts = readDesignParts(els);
+    const parts = readDesignParts(seatView(els, true));
     const a = parts.find(p => p.id === 'o-a')!, c = parts.find(p => p.id === 'c-l')!;
     expect(designLink(a)).toBe('objects');
     expect(designLink(c)).toBe('constructs');
@@ -108,9 +121,17 @@ describe('the room reads a talk on a design', () => {
     expect(r.answers('c-l').map(l => l.id)).toEqual(['l22']);
   });
 
-  it('a part hidden by the room\'s own list is no design, and no line is labelled for it', () => {
+  it('a part hidden by the room\'s own list is still a design for a keeper (the SDK decides; the tab marks it), and its line is labelled', () => {
     const r = room([...parts, charter, line('l1', { objects: ['o-a'] })]);
     r.hidden.add('o-a');
+    expect(r.designs().map(p => p.id)).toEqual(['o-a', 'c-l']);
+    expect(r.designsOf(readLinesAsGiven(r.els.values()).find(l => l.id === 'l1')!).map(p => p.id)).toEqual(['o-a']);
+  });
+
+  it('a member served a part only as a stub reads no design there, and no line is labelled for it', () => {
+    const r = room([obj('o-a', 'Alpha screen', 'in design', { known_of: true }), con('c-l', 'Billing rules', 'locked'), charter, line('l1', { objects: ['o-a'] })]);
+    r.me = { role: 'contributor', scope: 'write', membership: 'm-1' } as unknown as OwMe;
+    r.role = roomRole('contributor');
     expect(r.designs().map(p => p.id)).toEqual(['c-l']);
     expect(r.designsOf(readLinesAsGiven(r.els.values()).find(l => l.id === 'l1')!)).toEqual([]);
   });

@@ -6,7 +6,7 @@
  * only when what they show moved, their open state kept apart, so a tick never eats a fold, an open card or focus.
  */
 
-import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
+import { PHASES, KINDS, BOARD_COLOURS, OWNER, storyStart, saidIn, consequenceLine, maySetDone, readLines, WORK_STATE_WORD, workStateKey, workStateLine, workOffers, isWorkItemPair, isReport, lineName, type Switches, type Kind, type BoardColour, type Line, type ReportPart, type KeeperPart, type AnchorLink, type DesignPart, type El, designLink } from '../parlor/shapes';
 import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, designFolds, bySize, cardOf, firstLine, seatsByKey, isShowable, type Crew, type CrewSeat, type Threaded, type WorkLine } from '../parlor/crew';
 import { newestNote } from '../parlor/team';
 import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
@@ -16,7 +16,7 @@ import { doorLine } from '../parlor/roster';
 import { h, clear, notice, hhmm } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot, waymarkOpenIn } from './waymark';
 import { afterPress } from './press';
-import { OwNetworkError, fileKindOf, proposedMarkOf, type OwWorldFileRow } from '@onlyworlds/sdk';
+import { OwNetworkError, fileKindOf, isOpenWork, proposedMarkOf, workStateOf, type OwWorldFileRow } from '@onlyworlds/sdk';
 import { ACCEPT as FILES_ACCEPT, MAX_PICKS, adderOf, pickRefusal, progressWords, sizeWords, type Pending } from '../parlor/files';
 
 /** A press refused before anything was sent, in the person's words. */
@@ -498,9 +498,16 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     }
     // Every work item it answers, by its pair, room mark or not (the profile's reader reads one either way).
     const items = l.report.answers.map(x => room.els.get(x)).filter((el): el is NonNullable<typeof el> => !!el && isWorkItemPair(el));
-    const wordOf = (el: (typeof items)[number]) => String(el.subtype ?? '').trim().toLowerCase();
+    // Each item's state by the SDK's reader (the packet profile's rule 5): only open work, not proposed, is set done.
+    const said = (el: (typeof items)[number]): string => {
+      const state = workStateOf(el);
+      if (state === 'done') return 'done already';
+      if (maySetDone(el)) return state ?? 'open';
+      if (isOpenWork(el) && proposedMarkOf(el)) return 'proposed: left open';
+      return state === 'standing' ? 'standing: left as it is' : state === null ? 'no state: left as it is' : 'left as it is';
+    };
     const settable = items.filter(el => maySetDone(el));
-    const words = items.map(el => `${(el.name ?? '').toString().trim() || 'Untitled'} (${wordOf(el) === 'done' ? 'done already' : maySetDone(el) ? (wordOf(el) || 'open') : proposedMarkOf(el) ? 'proposed: left open' : 'left as it is'})`);
+    const words = items.map(el => `${(el.name ?? '').toString().trim() || 'Untitled'} (${said(el)})`);
     cSetShown = settable.length > 0;
     const setWords = settable.length === 1 ? ' The work is there: set it done' : ' The work is there: set them done';
     if (cSetDoneLabel.lastChild?.textContent !== setWords) cSetDoneLabel.replaceChildren(cSetDone, setWords);
@@ -958,7 +965,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   function drawHead(): void {
     const seat = space === 'team' ? null : seatsNow.get(space) ?? null;
     const wl = seat ? lineOf.get(seat.key) ?? null : null;
-    const asker = wl?.askedBy ? room.name(wl.askedBy) : null;
+    // Who asked is the work item's own `x_packet_from` (askerOf), a Character named as the room names one; never its maker.
+    const asker = wl?.askedBy ? room.characterName(wl.askedBy) : null;
     const chipIds = wl ? wl.links.map(id => [id, elName(room.els.get(id)!), firstLine(room.els.get(id))]) : [];
     const s = room.sitting();
     const runs = room.teamWorld && room.workshopRuns && s ? s.phase : null;
@@ -1600,8 +1608,9 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     // The biggest design first (the most parts under it at the top).
     const folds = bySize(designFolds(partsNow));
     // Rebuilt only when what it shows moved, so a feed tick never eats an Answer press or a fold (the gate's S8).
-    const key = JSON.stringify([folds.map(f => [f.design.id, f.parts.map(p => p.id)]), partsNow.map(p => [p.id, p.title, p.state, p.type, counts.get(p.id) ?? 0, firstLine(p.el)]),
-      room.canWrite, [...openDesigns], replyTo && isDesignReply(replyTo) ? replyTo.id : null]);
+    const key = JSON.stringify([folds.map(f => [f.design.id, f.parts.map(p => p.id)]),
+      partsNow.map(p => [p.id, p.title, p.state, p.type, counts.get(p.id) ?? 0, firstLine(p.el), room.hidden.has(p.id) || p.el.hidden === true]),
+      room.canWrite, room.isHost, [...openDesigns], replyTo && isDesignReply(replyTo) ? replyTo.id : null]);
     if (key === designKey) return;
     if (designMarks.held()) return;
     designKey = key;
@@ -1621,9 +1630,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     } }, answering(p) ? 'Answering' : 'Answer') : null;
     const answers = (p: DesignPart) => { const n = counts.get(p.id) ?? 0; return n ? h('span', { class: 'c' }, `${n} answer${n === 1 ? '' : 's'}`) : null; };
     // A part's name reads its first line under the pointer and on focus, and opens its card on a press.
-    const name = (p: DesignPart, cls: string) => tipped(h('button', { class: cls, type: 'button', 'data-focus': `design-name:${p.id}`, 'data-el': p.id, onclick: () => openCard(p.id) },
-      kindBody(p.type, cls === 'n' ? 20 : 18), p.title), p.el);
+    // A part with no card here (a room's Spec, a row served hidden) reads its name as text, never a press that opens nothing.
+    const name = (p: DesignPart, cls: string) => tipped(isShowable(p.el)
+      ? h('button', { class: cls, type: 'button', 'data-focus': `design-name:${p.id}`, 'data-el': p.id, onclick: () => openCard(p.id) }, kindBody(p.type, cls === 'n' ? 20 : 18), p.title)
+      : h('span', { class: cls, 'data-el': p.id }, kindBody(p.type, cls === 'n' ? 20 : 18), p.title), p.el);
     const state = (p: DesignPart) => h('span', { class: `pill ${p.state === 'locked' ? 's-done' : 's-open'}` }, DESIGN_WORD[p.state]);
+    // A hidden part (a keeper reads it; its maker too) is marked as the Work tab marks hidden work.
+    const hid = (p: DesignPart): boolean => room.hidden.has(p.id) || p.el.hidden === true;
+    const hidWords = (p: DesignPart) => hid(p)
+      ? h('span', { class: 'c', 'data-part': 'design-hidden' }, room.isHost ? 'Hidden from the room' : 'Hidden by the host: only you and the hosts see it') : null;
     clear(designList,
       h('p', { class: 'sys' }, 'The designs this world holds, in design and locked. Answer one to talk about it here: what you send names it, and its talk gathers under it.'),
       ...folds.map(({ design: d, parts }) => {
@@ -1631,18 +1646,18 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         const size = parts.length;
         // A design with parts reads as a parent: its fold drawn as a button, its count of parts a badge.
         return h('div', { class: `design${size ? ' parent' : ''}${open ? ' open' : ''}`, 'data-fold': d.id },
-          h('div', { class: 'des', 'data-design': d.id },
+          h('div', { class: `des${hid(d) ? ' hidden' : ''}`, 'data-design': d.id },
             size ? h('button', { class: 'fold2', type: 'button', 'aria-expanded': String(open), 'aria-label': `${open ? 'Fold' : 'Unfold'} ${d.title}`, 'data-focus': `design-fold:${d.id}`, onclick: () => {
               if (open) openDesigns.delete(d.id); else openDesigns.add(d.id);
               draw();
             } }, chevron(open)) : h('span', { class: 'fold2 none', 'aria-hidden': 'true' }),
             name(d, 'n'),
             h('span', { class: size ? 'pc' : 'c', 'data-part': 'part-count' }, size ? `${size} ${size === 1 ? 'part' : 'parts'}` : 'no parts'),
-            answers(d), state(d),
+            answers(d), hidWords(d), state(d),
             designMarks.mark(waymarkPlan(world, d.el as unknown as Record<string, unknown>, 'Untitled'), `design:${d.id}`),
             answer(d)),
-          open ? parts.map(p => h('div', { class: 'part', 'data-design': p.id },
-            name(p, 'pn'), answers(p), state(p),
+          open ? parts.map(p => h('div', { class: `part${hid(p) ? ' hidden' : ''}`, 'data-design': p.id },
+            name(p, 'pn'), answers(p), hidWords(p), state(p),
             designMarks.mark(waymarkPlan(world, p.el as unknown as Record<string, unknown>, 'Untitled'), `design:${p.id}`),
             answer(p))) : null);
       }));
@@ -1650,7 +1665,6 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     if (!focused) refocus(designList, focusedName);
   }
 
-  const STATE_WORD = { open: 'Open', taken: 'Taken', done: 'Done' } as const;
   function drawWorkItems(): void {
     // Whom it is for: its person and the Titles whose holders it is for (x_packet_for); neither is no one, never everyone.
     const whoOf = (w: { forWho: string | null; forTitles: string[] }) => [
@@ -1663,8 +1677,11 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       els: w.elements.map(x => ({ ...x, name: w.otherWorld ? null : room.elementName(x.id) })),
       // One name per taker: a double take from two tabs is one person (the Take gate's T2-G1).
       takers: [...new Set(w.takes.map(t => t.by))].map(by => room.name(by)), mine: room.hasTaken(w.id),
-      // For a keeper: a completed report answers an item still open (a lost answer, a closed tab, another tool's report).
-      reported: room.isKeeper && w.state !== 'done' && room.answers(w.id).some(l => l.report?.state === 'completed' && !l.report.proposed && l.report.answers.includes(w.id)),
+      // Who asked (x_packet_from, by askerOf), named as the room names a Character; nothing when it names none.
+      asker: w.askedBy ? room.characterName(w.askedBy) : null,
+      offers: workOffers(w),
+      // For a keeper: a completed report answers an item still open work (a lost answer, a closed tab, another tool's report).
+      reported: room.isKeeper && isOpenWork(w.el) && room.answers(w.id).some(l => l.report?.state === 'completed' && !l.report.proposed && l.report.answers.includes(w.id)),
     }));
     // For you first, then for others, then addressed to no one; a heading only when there is more than one group.
     const GROUP = { mine: 'For you', others: 'For others', none: 'Not addressed to anyone' } as const;
@@ -1672,7 +1689,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       const order = (['mine', 'others', 'none'] as const).filter(g => rows.some(r => r.addr === g));
       return order.flatMap(g => [...(order.length > 1 ? [h('h3', { class: 'wgroup' }, GROUP[g])] : []), ...rows.filter(r => r.addr === g).map(card)]);
     };
-    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.addr, v.by, v.answers, v.els, v.takers, v.mine, v.reported]),
+    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.addr, v.by, v.answers, v.els, v.takers, v.mine, v.asker, v.offers, v.reported]),
       room.canWrite, room.isHost, room.needsName(), workOpen, deleting]);
     if (key === workKey) return;
     // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.
@@ -1682,12 +1699,15 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const world = { id: room.world.id, name: room.world.name };
     clear(workList,
       h('p', { class: 'sys' }, 'Work on this world: each item says what it is about, and opens in the room when you answer it.'),
-      view.length ? grouped(view, ({ w, can, hidden, who, by, answers, els, takers, mine, reported }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}` },
-        h('div', { class: 'ttl' }, h('span', { class: `chip s-${w.state}` }, STATE_WORD[w.state]), w.proposed ? h('span', { class: 'chip prop' }, 'Proposed') : null,
+      view.length ? grouped(view, ({ w, can, hidden, who, by, answers, els, takers, mine, asker, offers, reported }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}`, 'data-state': workStateKey(w.state) },
+        h('div', { class: 'ttl' }, h('span', { class: `chip s-${workStateKey(w.state)}` }, WORK_STATE_WORD[workStateKey(w.state)]), w.proposed ? h('span', { class: 'chip prop' }, 'Proposed') : null,
           h('h3', null, w.title || 'Untitled')),
         h('div', { class: 'm', 'data-part': 'for' }, `${who ? `For ${who}` : 'Not addressed to anyone'} · made by ${by}`),
-        // Who took it, by the takes' makers (contract T2); Done wins over a take.
-        takers.length && w.state !== 'done' ? h('div', { class: 'm', 'data-part': 'taken-by' }, `Taken by ${takers.join(', ')}`) : null,
+        asker ? h('div', { class: 'm', 'data-part': 'asked-by' }, `Asked by ${asker}`) : null,
+        // A standing list, or no state: said, and nothing offered to take or set done.
+        workStateLine(w.state) ? h('div', { class: 'm', 'data-part': 'state-line' }, workStateLine(w.state)) : null,
+        // Who took it, by the takes' makers (contract T2): only open work keeps its takes (readWork).
+        takers.length ? h('div', { class: 'm', 'data-part': 'taken-by' }, `Taken by ${takers.join(', ')}`) : null,
         w.text ? h('p', null, w.text) : null,
         els.length ? h('ul', { class: 'about' }, els.map(x => h('li', null,
           // An element the room holds reads its first line under the pointer and on focus, and opens its card on a press.
@@ -1719,16 +1739,22 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
               if (mq.matches) phoneTab('room');
               text.focus();
             } }, 'Answer') : null,
-            room.canWrite && w.state !== 'done' && !room.needsName() ? h('button', { class: 'btn std', type: 'button', onclick: async (e: Event) => {
+            room.canWrite && offers.take && !room.needsName() ? h('button', { class: 'btn std', type: 'button', onclick: async (e: Event) => {
               (e.currentTarget as HTMLButtonElement).disabled = true;
-              try { await (mine ? room.release(w.id) : room.take(w.id)); } catch (err) { notice(problemLine(err, mine ? 'releasing the work item' : 'taking the work item'), true); }
+              try { await (mine ? room.release(w.id) : room.take(w.id)); } catch (err) {
+                notice(err instanceof ItemMoved ? 'That work item changed meanwhile: it is gone, or no longer open work. Nothing was taken.'
+                  : problemLine(err, mine ? 'releasing the work item' : 'taking the work item'), true);
+              }
               // Rebuilt even when nothing moved, so a failed press gives its button back (the Take gate's T4-G1).
               workKey = '';
               redraw();
             } }, mine ? 'Release' : 'Take') : null,
-            can ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
-              try { await room.setWorkState(w.id, w.state === 'done' ? 'open' : 'done'); } catch (err) { notice(problemLine(err, 'changing the work item'), true); }
-            } }, w.state === 'done' ? 'Reopen' : 'Mark done') : null,
+            can && (offers.markDone || offers.reopen) ? h('button', { class: 'btn quiet', type: 'button', onclick: async () => {
+              try { await room.setWorkState(w.id, offers.reopen ? 'open' : 'done'); } catch (err) {
+                notice(err instanceof ItemMoved ? 'That work item changed meanwhile: it is gone, or its state moved. Nothing was changed.'
+                  : problemLine(err, 'changing the work item'), true);
+              }
+            } }, offers.reopen ? 'Reopen' : 'Mark done') : null,
             can ? h('button', { class: 'btn quiet', type: 'button', onclick: () => { deleting = w.id; draw(); } }, 'Delete') : null,
             room.isHost ? h('button', { class: 'btn quiet', type: 'button', onclick: () => hide(w.id, !hidden, 'relation') }, hidden ? 'Unhide' : 'Hide') : null,
           )))

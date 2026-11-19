@@ -4,7 +4,7 @@
  * result is shown at once and the feed brings the server's copy after.
  */
 
-import { OwApiError, OwNetworkError, OwPreconditionFailedError, type OwMe, type OwMember, type OwV2Client } from '@onlyworlds/sdk';
+import { OwApiError, OwNetworkError, OwPreconditionFailedError, isOpenWork, workStateOf, type OwMe, type OwMember, type OwV2Client } from '@onlyworlds/sdk';
 import { RoomFeed, type Removal } from './feed';
 import { serialQueue } from './serial';
 import { newestFirst } from './when';
@@ -15,7 +15,7 @@ import {
   newVote, newSitting, newMember, phasePatch, switchPatch, starPatch, starOf, ofRoom, readBoard, newBoardEntry,
   readWork, newWorkItem, isPickable, readChanges, newTake, deletableTakes, ROOM_MARK, addressOf, type WorkItem,
   newReport, localDay, isReportPickable, maySetDone, unmarkedCharters, CHARTER_MARK, REPORT_COMPLETED, type KeeperPart,
-  isReport, isWorkItemPair, reportPartOf, completionPatch, newLineAt, readDesignParts, type Anchor, type DesignPart,
+  isReport, isWorkItemPair, reportPartOf, completionPatch, newLineAt, readDesignParts, seatView, type SeatView, type Anchor, type DesignPart,
 } from './shapes';
 import { simpleCaseFold } from '@onlyworlds/sdk';
 import { canHost, canWrite, isAiSeat, nameOf, roomRole, seats, type RoomRole } from './roster';
@@ -25,7 +25,10 @@ import { hostLine, isHostRefusal } from './host';
 
 /** A report born completed, pressed by a seat that no longer keeps the world: nothing was sent. */
 export class KeeperOnly extends Error {}
-/** The work item a keeper's report sets done is gone, or no longer open or taken: nothing was sent. */
+/**
+ * The work item a write read fresh is gone, is no longer in the state the write needs (open work to take or set done,
+ * done to reopen), or moved under the write: nothing was changed.
+ */
 export class ItemMoved extends Error {}
 /** Reading or setting the work item done failed: nothing was handed in (a lost answer may still have set it done). */
 export class DoneFailed extends Error {
@@ -43,6 +46,11 @@ export class CompletionFailed extends Error {
 /** The work item was set done (or was done already) and the report's create then failed: `failure` is that failure. */
 export class DoneNoReport extends Error {
   constructor(readonly item: { id: string; title: string }, readonly failure: unknown) { super("done, no report"); }
+}
+
+/** A write's precondition at the version a fresh read answered (keel's `change_seq`), when it answered one. */
+function atSeq(fresh: El): { ifMatch: number } | undefined {
+  return typeof fresh.change_seq === 'number' ? { ifMatch: fresh.change_seq } : undefined;
 }
 
 function newestOf<T extends { at: string }>(xs: T[]): T | null {
@@ -282,8 +290,17 @@ export class Room {
     return tally(readVotes(this.shown()));
   }
 
+  /**
+   * What this seat is served, as the lens profile reads it: a host or co-host as the owner, with the room's hidden
+   * list; every other seat as exactly what it was served, its full rows whole and its stubs known of.
+   */
+  view(): SeatView {
+    return seatView(this.els.values(), this.isHost, this.hidden);
+  }
+
+  /** The world's charter for this seat: a Charter the hidden mark keeps from a seat is not its own (the charter profile, serial 135). */
   charter() {
-    return readCharter(this.els.values());
+    return readCharter(this.els.values(), this.view());
   }
 
   /** Every room board entry, whatever sitting raised it: an entry waits across sittings. */
@@ -320,11 +337,12 @@ export class Room {
   }
 
   /**
-   * The design parts this reader sees, only where the world's Charter is marked: a world without one has no
-   * designs here, whatever its subtypes say (a locked Object is a door in a fantasy world).
+   * The design parts this seat reads, only in a team world, and only where the SDK finds a Charter for this seat as it
+   * was served: a world without one has no designs here, whatever its subtypes say (a locked Object is a door in a
+   * fantasy world).
    */
   designs(): DesignPart[] {
-    return this.teamWorld ? readDesignParts(this.els.values(), this.hidden) : [];
+    return this.teamWorld ? readDesignParts(this.view()) : [];
   }
 
   /**
@@ -575,10 +593,14 @@ export class Room {
           if (err instanceof OwApiError && (err.status === 404 || err.status === 410)) throw new ItemMoved();
           throw new DoneFailed(err);
         }) as El;
-        const done = simpleCaseFold(String(fresh.subtype ?? '').trim()) === 'done';
+        const done = workStateOf(fresh) === 'done';
         if (done ? !doneMine : !maySetDone(fresh)) throw new ItemMoved();
         if (!done) {
-          try { this.landed(await this.client.patch('relation', setsDone, { subtype: 'done' })); } catch (err) { throw new DoneFailed(err); }
+          // At the version just read: a state set meanwhile (standing, say) is never overwritten with done.
+          try { this.landed(await this.client.patch('relation', setsDone, { subtype: 'done' }, atSeq(fresh))); } catch (err) {
+            if (err instanceof OwPreconditionFailedError) throw new ItemMoved();
+            throw new DoneFailed(err);
+          }
         }
         doneHere = { id: setsDone, title: (fresh.name ?? '').toString() };
       }
@@ -597,13 +619,13 @@ export class Room {
   /** A keeper marks the Law they named as the world's charter (the charter profile's mark, the world's id). */
   markCharter(id: string): Promise<void> {
     return this.serial(async () => {
-      if (!this.isKeeper || !unmarkedCharters(this.els.values()).some(c => c.id === id)) return;
+      if (!this.isKeeper || !unmarkedCharters(this.els.values(), this.view()).some(c => c.id === id)) return;
       this.landed(await this.client.patch('law', id, { [CHARTER_MARK]: this.world.id }));
     });
   }
 
   unmarkedCharters() {
-    return unmarkedCharters(this.els.values());
+    return unmarkedCharters(this.els.values(), this.view());
   }
 
   /**
@@ -649,12 +671,15 @@ export class Room {
           // The id keel served; a body with none falls back to the answer itself, never `undefined`.
           const servedId = typeof item.id === 'string' && item.id ? item.id : id;
           const title = (item.name ?? '').toString();
-          if (simpleCaseFold(String(item.subtype ?? '').trim()) === 'done') {
+          if (workStateOf(item) === 'done') {
             if (doneBefore.has(id)) { done.push({ id, title }); said.push({ id: servedId, title }); }
             continue;
           }
           if (!setDone || !maySetDone(item)) continue;
-          try { this.landed(await this.client.patch('relation', id, { subtype: 'done' })); } catch (err) {
+          try { this.landed(await this.client.patch('relation', id, { subtype: 'done' }, atSeq(item))); } catch (err) {
+            // Moved under this write (its state set meanwhile, standing say): left as it now is, as an item read no
+            // longer open is, and the report never says it set it done.
+            if (err instanceof OwPreconditionFailedError) continue;
             // A lost answer may have set it: counted, so the next press says so (the item reads done then).
             throw new CompletionFailed(err instanceof OwNetworkError ? [...done, { id, title }] : done, err);
           }
@@ -672,27 +697,55 @@ export class Room {
     });
   }
 
-  /** A work item, marked like a line; its picks go in the Relation's typed link fields. */
+  /**
+   * A work item, marked like a line; its picks go in the Relation's typed link fields, and who asked is the filer's
+   * own Character when it plays one (`x_packet_from`).
+   */
   makeWork(title: string, text: string, forWho: string | null, picks: ReadonlyArray<{ type: string; id: string }>): Promise<void> {
     return this.serial(async () => {
-      this.landed(await this.client.create('relation', newWorkItem(title, text, forWho, picks, this.roomOfNow())));
+      this.landed(await this.client.create('relation', newWorkItem(title, text, forWho, picks, this.roomOfNow(), this.myCharacter())));
     });
   }
 
-  /** Close (done) or reopen a work item: its maker, the host or a co-host. The one write keel's draught reads. */
+  /** The work item read from the server at this write's turn (never a feed that may be behind); ItemMoved when gone. */
+  private async freshItem(id: string): Promise<El> {
+    try {
+      return await this.client.get('relation', id) as El;
+    } catch (err) {
+      if (err instanceof OwApiError && (err.status === 404 || err.status === 410)) throw new ItemMoved();
+      throw err;
+    }
+  }
+
+  /**
+   * Close (done) or reopen a work item: its maker, the host or a co-host. The one write keel's draught reads. The item
+   * is read fresh: done is set only on open work, reopen only on a done item (the packet profile's rule 5), and the
+   * write goes at the version read, so a state set meanwhile (standing, say) is never overwritten. ItemMoved otherwise.
+   */
   setWorkState(id: string, state: 'done' | 'open'): Promise<void> {
     return this.serial(async () => {
       const item = this.work().find(w => w.id === id);
       if (!item || !this.canRetire(item.by)) return;
-      this.landed(await this.client.patch('relation', item.id, { subtype: state }));
+      const fresh = await this.freshItem(item.id);
+      if (state === 'done' ? !isOpenWork(fresh) : workStateOf(fresh) !== 'done') throw new ItemMoved();
+      try {
+        this.landed(await this.client.patch('relation', item.id, { subtype: state }, atSeq(fresh)));
+      } catch (err) {
+        if (err instanceof OwPreconditionFailedError) throw new ItemMoved();
+        throw err;
+      }
     });
   }
 
-  /** Take a work item that is not done, once (contract T4: the queue reads the room when its turn comes). */
+  /**
+   * Take a work item that is open work, once (contract T4: the queue reads the room when its turn comes). The item is
+   * read fresh: a standing, done or stateless item is never taken (the packet profile's rule 5); ItemMoved then.
+   */
   take(id: string): Promise<void> {
     return this.serial(async () => {
       const item = this.work().find(w => w.id === id);
-      if (!item || item.state === 'done' || !this.canWrite || this.hasTaken(id)) return;
+      if (!item || !this.canWrite || this.hasTaken(id)) return;
+      if (!isOpenWork(await this.freshItem(item.id))) throw new ItemMoved();
       const roomOf = typeof item.el[ROOM_MARK] === 'string' ? item.el[ROOM_MARK] as string : this.world.id;
       this.landed(await this.client.create('relation', newTake({ id: item.id, title: item.title, roomOf }, this.myCharacter())));
     });

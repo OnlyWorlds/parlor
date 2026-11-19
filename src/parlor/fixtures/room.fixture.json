@@ -2,10 +2,11 @@
   "profile": "room",
   "profile_page": "profiles/room.md",
   "notes": [
-    "pairs: the nine type-and-supertype pairs a reader matches, each trimmed and compared without regard to case.",
+    "pairs: the ten type-and-supertype pairs a reader matches, each trimmed and compared without regard to case. The order is the table's and carries no meaning: a reader matches a pair and may keep them as a set. A serial never reorders the pairs that exist; a new pair goes where the page's table puts it, and the release notes name its place; so a suite that pins the order turns red only when a pair is added.",
     "mark: x_room_of, the id of the world or the sitting the room belongs to; a room element carries it, a lore element never does.",
     "item: x_room_item, written only on a Take, the id of the work item the take is on; it makes nothing a room element, the pair and the mark do.",
-    "cases: element gives type, supertype and x_room_of as a body might carry them; in_room is what isRoomElement must answer: the pair AND the mark."
+    "cases: element gives type, supertype and x_room_of as a body might carry them, or is a value that is not an object (null, a list, a string), which is no room element; in_room is what isRoomElement must answer: the pair AND the mark. A case's note, where one is given, is prose for the reader of the fixture, never an input.",
+    "talk_cases: each element is a Narrative as a body carries it, with its links; only a line in the room (the pair narrative + Message and the mark) is in a talk on an element, so any other element (a Message without the mark, a board entry) is in none; talks is every talk on an element the line is in, each {type, id}: an id in objects as object, an id in constructs as construct, read from the line alone, compared as a set; an entry that is not a string, or is empty once trimmed of White_Space (the room profile's set), names no element, a field that is not a list names none, and every other entry is an id read as written, a space left on it included, never folded to lowercase. No other field puts a line in a talk on an element: characters are its recipients, and a work item it hangs on (the report profile's anchor) is no talk on an element."
   ],
   "pairs": [
     {
@@ -15,6 +16,10 @@
     {
       "type": "narrative",
       "supertype": "Board"
+    },
+    {
+      "type": "narrative",
+      "supertype": "Report"
     },
     {
       "type": "relation",
@@ -60,6 +65,24 @@
       "element": {
         "type": "narrative",
         "supertype": "Board",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": true
+    },
+    {
+      "name": "report",
+      "element": {
+        "type": "narrative",
+        "supertype": "Report",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": true
+    },
+    {
+      "name": "report-padded-lower-case",
+      "element": {
+        "type": "narrative",
+        "supertype": " report ",
         "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
       },
       "in_room": true
@@ -147,6 +170,100 @@
       "in_room": true
     },
     {
+      "name": "trimmed-unicode-white-space",
+      "element": {
+        "type": "relation",
+        "supertype": "\tWork item\u3000",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": true
+    },
+    {
+      "name": "trimmed-every-white-space-at-both-ends",
+      "element": {
+        "type": "relation",
+        "supertype": "\t\n\u000b\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000Work item\t\n\u000b\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": true
+    },
+    {
+      "name": "byte-order-mark-not-trimmed",
+      "element": {
+        "type": "relation",
+        "supertype": "\ufeffWork item",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": false
+    },
+    {
+      "name": "file-separator-not-trimmed",
+      "element": {
+        "type": "relation",
+        "supertype": "Work item\u001c",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": false
+    },
+    {
+      "name": "long-s-folds",
+      "element": {
+        "type": "narrative",
+        "supertype": "ME\u017f\u017fAGE",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": true
+    },
+    {
+      "name": "sharp-s-does-not-fold",
+      "element": {
+        "type": "narrative",
+        "supertype": "Me\u00dfage",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": false
+    },
+    {
+      "name": "type-with-the-st-ligature-is-no-pair",
+      "element": {
+        "type": "con\ufb06ruct",
+        "supertype": "Spec",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": false,
+      "note": "The type's st is U+FB06, a ligature with no simple folding (only full folding takes it to st), so the type is not construct and the element is no room element."
+    },
+    {
+      "name": "kelvin-sign-folds-to-k",
+      "element": {
+        "type": "relation",
+        "supertype": "Ta\u212ae",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": true,
+      "note": "The Kelvin sign, U+212A, folds to k under simple case folding, so Ta\u212ae is the word take; a reader that upper-cases both sides leaves the Kelvin sign as it is and answers false."
+    },
+    {
+      "name": "dotless-i-does-not-fold",
+      "element": {
+        "type": "event",
+        "supertype": "S\u0131tting",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": false,
+      "note": "The dotless i, U+0131, has no C or S row, so S\u0131tting is not the word sitting; a reader that upper-cases and then lower-cases each letter takes it to i and answers true."
+    },
+    {
+      "name": "dotted-capital-i-does-not-fold",
+      "element": {
+        "type": "event",
+        "supertype": "S\u0130tting",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+      },
+      "in_room": false,
+      "note": "The capital I with a dot, U+0130, has no C or S row (only F and T), so S\u0130tting is not the word sitting; a reader that lower-cases each letter after upper-casing it takes it to i and answers true."
+    },
+    {
       "name": "charter-stays-lore",
       "element": {
         "type": "law",
@@ -219,6 +336,14 @@
       "in_room": false
     },
     {
+      "name": "lore-report-no-mark",
+      "element": {
+        "type": "narrative",
+        "supertype": "Report"
+      },
+      "in_room": false
+    },
+    {
       "name": "lore-take-no-mark",
       "element": {
         "type": "relation",
@@ -253,6 +378,24 @@
       "in_room": false
     },
     {
+      "name": "mark-empty-list",
+      "element": {
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": []
+      },
+      "in_room": false
+    },
+    {
+      "name": "mark-empty-object",
+      "element": {
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": {}
+      },
+      "in_room": false
+    },
+    {
       "name": "mark-null",
       "element": {
         "type": "narrative",
@@ -260,10 +403,319 @@
         "x_room_of": null
       },
       "in_room": false
+    },
+    {
+      "name": "mark-a-number",
+      "element": {
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": 7
+      },
+      "in_room": true
+    },
+    {
+      "name": "mark-false",
+      "element": {
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": false
+      },
+      "in_room": true
+    },
+    {
+      "name": "mark-spaces",
+      "element": {
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "  "
+      },
+      "in_room": false
+    },
+    {
+      "name": "mark-unit-separator",
+      "element": {
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "\u001f"
+      },
+      "in_room": true
+    },
+    {
+      "name": "mark-padded-id",
+      "element": {
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "  0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f  "
+      },
+      "in_room": true
+    },
+    {
+      "name": "a-body-that-is-null-is-no-room-element",
+      "element": null,
+      "in_room": false,
+      "note": "A body that is null is no object, so it is no element and no room element; a reader answers false and does not fail."
+    },
+    {
+      "name": "a-list-is-no-room-element",
+      "element": [
+        {
+          "type": "narrative",
+          "supertype": "Message",
+          "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f"
+        }
+      ],
+      "in_room": false,
+      "note": "A list is no object, even one that holds a marked room element, so it is no room element; a reader answers false, never the answer for the item in it, and does not fail."
+    },
+    {
+      "name": "a-string-is-no-room-element",
+      "element": "Message",
+      "in_room": false,
+      "note": "A string is no object, even the word Message, so it is no room element; a reader answers false and does not fail."
     }
   ],
   "mark": {
     "field": "x_room_of",
-    "value": "the world id (a world's parlor) or the sitting's id (a workshop)"
-  }
+    "value": "the world id (a world's parlor) or the sitting's id (a workshop); a sitting's own mark holds the world's id"
+  },
+  "talk_cases": [
+    {
+      "name": "a-line-naming-an-object-is-in-its-talk",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000101",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": [
+          "019a8b00-0000-7000-8000-000000000201"
+        ]
+      },
+      "talks": [
+        {
+          "type": "object",
+          "id": "019a8b00-0000-7000-8000-000000000201"
+        }
+      ]
+    },
+    {
+      "name": "a-line-naming-a-construct-is-in-its-talk",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000102",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "constructs": [
+          "019a8b00-0000-7000-8000-000000000211"
+        ]
+      },
+      "talks": [
+        {
+          "type": "construct",
+          "id": "019a8b00-0000-7000-8000-000000000211"
+        }
+      ]
+    },
+    {
+      "name": "a-line-naming-two-elements-is-in-both-talks",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000103",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": [
+          "019a8b00-0000-7000-8000-000000000202"
+        ],
+        "constructs": [
+          "019a8b00-0000-7000-8000-000000000211"
+        ]
+      },
+      "talks": [
+        {
+          "type": "object",
+          "id": "019a8b00-0000-7000-8000-000000000202"
+        },
+        {
+          "type": "construct",
+          "id": "019a8b00-0000-7000-8000-000000000211"
+        }
+      ]
+    },
+    {
+      "name": "a-line-beside-a-work-item-is-still-in-the-talk-on-the-object-it-names",
+      "note": "Its relations names a work item. Whatever field a tool reads as the work item a line hangs on, the line is in the talk on the Object as well, and the work item is no talk on an element.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000104",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": [
+          "019a8b00-0000-7000-8000-000000000201"
+        ],
+        "relations": [
+          "019a8b00-0000-7000-8000-000000000221"
+        ]
+      },
+      "talks": [
+        {
+          "type": "object",
+          "id": "019a8b00-0000-7000-8000-000000000201"
+        }
+      ]
+    },
+    {
+      "name": "a-line-whose-characters-name-a-character-is-in-no-talk-on-an-element",
+      "note": "A line's characters are its recipients (the message profile), never what it is about.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000105",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "characters": [
+          "019a8b00-0000-7000-8000-000000000231"
+        ]
+      },
+      "talks": []
+    },
+    {
+      "name": "a-message-without-the-mark-naming-an-object-is-in-no-talk",
+      "note": "A Message without the room's mark is lore, not a line in the room.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000106",
+        "type": "narrative",
+        "supertype": "Message",
+        "objects": [
+          "019a8b00-0000-7000-8000-000000000201"
+        ]
+      },
+      "talks": []
+    },
+    {
+      "name": "a-board-entry-naming-an-object-is-in-no-talk",
+      "note": "A board entry (the pair narrative + Board, with the mark) is a room element but no line.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000107",
+        "type": "narrative",
+        "supertype": "Board",
+        "subtype": "green",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": [
+          "019a8b00-0000-7000-8000-000000000201"
+        ]
+      },
+      "talks": []
+    },
+    {
+      "name": "a-line-naming-a-location-and-an-event-only-is-in-no-talk-on-an-element",
+      "note": "Only objects and constructs put a line in a talk on an element; no other link of a line does.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000108",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "locations": [
+          "019a8b00-0000-7000-8000-000000000241"
+        ],
+        "events": [
+          "019a8b00-0000-7000-8000-000000000251"
+        ]
+      },
+      "talks": []
+    },
+    {
+      "name": "entries-that-are-no-string-or-empty-name-no-element",
+      "note": "objects holds the empty string, null and a number beside one id: only the id names an element.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-000000000109",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": [
+          "",
+          null,
+          7,
+          "019a8b00-0000-7000-8000-000000000201"
+        ]
+      },
+      "talks": [
+        {
+          "type": "object",
+          "id": "019a8b00-0000-7000-8000-000000000201"
+        }
+      ]
+    },
+    {
+      "name": "a-field-that-is-no-list-names-no-element",
+      "note": "objects is a string holding an id, not a list, so it names none; constructs is an object.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-00000000010a",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": "019a8b00-0000-7000-8000-000000000201",
+        "constructs": {
+          "id": "019a8b00-0000-7000-8000-000000000211"
+        }
+      },
+      "talks": []
+    },
+    {
+      "name": "ids-are-read-as-written-so-two-spellings-are-two-talks",
+      "note": "The same id in lowercase and in upper case: read as written, they are two values, and the line is in a talk on each as written.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-00000000010b",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": [
+          "019a8b00-0000-7000-8000-00000000020a",
+          "019A8B00-0000-7000-8000-00000000020A"
+        ]
+      },
+      "talks": [
+        {
+          "type": "object",
+          "id": "019a8b00-0000-7000-8000-00000000020a"
+        },
+        {
+          "type": "object",
+          "id": "019A8B00-0000-7000-8000-00000000020A"
+        }
+      ]
+    },
+    {
+      "name": "white-space-alone-names-no-element-and-a-space-left-on-an-id-is-read-as-written",
+      "note": "objects holds three spaces and a tab, which are empty once trimmed and name nothing, and an id with a space after it, which is read as written: a different id from the same letters without the space.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-00000000010c",
+        "type": "narrative",
+        "supertype": "Message",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": [
+          "   \t",
+          "019a8b00-0000-7000-8000-000000000201 "
+        ]
+      },
+      "talks": [
+        {
+          "type": "object",
+          "id": "019a8b00-0000-7000-8000-000000000201 "
+        }
+      ]
+    },
+    {
+      "name": "a-marked-report-naming-an-object-is-no-line-and-in-no-talk",
+      "note": "A report (the pair narrative + Report, with the mark) is a room element but no line: only the pair narrative + Message is.",
+      "element": {
+        "id": "019a8b00-0000-7000-8000-00000000010d",
+        "type": "narrative",
+        "supertype": "Report",
+        "subtype": "completed",
+        "x_room_of": "0199c3a1-7b2e-7c3d-8e4f-5a6b7c8d9e0f",
+        "objects": [
+          "019a8b00-0000-7000-8000-000000000201"
+        ]
+      },
+      "talks": []
+    }
+  ]
 }

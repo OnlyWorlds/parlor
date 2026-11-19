@@ -129,6 +129,9 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .chip.s-open{color:var(--accent);border-color:var(--accent)}
 .chip.s-taken{color:var(--warn);border-color:var(--warn)}
 .chip.s-done{color:var(--ok);border-color:var(--ok)}
+.chip.s-standing{color:var(--text);border-color:var(--text)}
+.chip.s-none{color:var(--muted);border-style:dashed}
+.des.hidden .n,.part.hidden .pn{color:var(--muted)}
 .chip.prop{border-style:dashed;color:var(--text)}
 .card.witem.done h3,.card.witem.done p{color:var(--muted)}
 .card.witem.hidden h3,.card.witem.hidden p{color:var(--muted)}

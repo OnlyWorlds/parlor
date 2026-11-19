@@ -6,9 +6,9 @@ import {
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
   readWork, addressOf, newWorkItem, isPickable, readChanges, readTakes, newTake, deletableTakes, ROOM_ITEM,
   newReport, reportName, localDay, REPORT_ANSWERS, storyStart, saidIn, consequenceLine,
-  unmarkedCharters, writtenId, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED,
+  unmarkedCharters, writtenId, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED, foldName,
 } from './shapes';
-// schema-dist's room profile (v0.33.0-dist.66, profiles/room.fixture.json, copied whole).
+// schema-dist's room profile (v0.34.1-dist.136, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
 // schema-dist's report lines (v0.34.1-dist.129, profiles/report-lines.fixture.json): its world reads every line here.
 import reportLines from './fixtures/report-lines.fixture.json';
@@ -320,13 +320,17 @@ describe('the room mark (schema-dist profiles/room.md)', () => {
   });
 
   it("agrees with the profile's conformance fixture on every case a parlor reader can see", () => {
-    const read = new Set(['narrative/message', 'construct/spec', 'relation/heart', 'relation/vote', 'event/sitting', 'character/member']);
+    const read = new Set(['narrative/message', 'narrative/report', 'construct/spec', 'relation/heart', 'relation/vote', 'event/sitting', 'character/member']);
     expect(fixture.cases.length).toBeGreaterThan(20);
     for (const c of fixture.cases) {
-      const one = [{ id: 'f', created_at: '2026-10-22T10:00:00Z', constructs: ['x'], ...c.element } as unknown as El];
+      // A case whose element is no object (null, a string, a list) is read as an element with no pair.
+      const e = c.element as unknown;
+      const body = e && typeof e === 'object' && !Array.isArray(e) ? e as Record<string, unknown> : {};
+      const one = [{ id: 'f', created_at: '2026-10-22T10:00:00Z', constructs: ['x'], ...body } as unknown as El];
       const taken = readLines(one).length + readSpecs(one, []).length + readHearts(one).length + readVotes(one).length
         + readSittings(one).length + readMemberCharacters(one).size;
-      const pair = `${String(c.element.type ?? '').trim().toLowerCase()}/${String(c.element.supertype ?? '').trim().toLowerCase()}`;
+      // The pair folded as the profile folds it (a long s folds to s), as the readers fold it.
+      const pair = `${foldName(body.type)}/${foldName(body.supertype)}`;
       expect({ case: c.name, taken: taken > 0 }).toEqual({ case: c.name, taken: c.in_room && read.has(pair) });
     }
   });
@@ -693,14 +697,14 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     expect(['role', 'person', 'none'].map(id => addr(id, null))).toEqual(['others', 'others', 'none']);
   });
 
-  it('reads the state by the folded subtype, done last, and the typed links as its elements', () => {
+  it('reads the state by the folded subtype (a word that is none of the four is no state), done last, and the typed links as its elements', () => {
     const w = readWork([
       item({ id: 'd', subtype: 'Done', created_at: '2026-10-25T10:00:00Z' }),
       item({ id: 'o', subtype: 'open', characters: ['a'], locations: ['b'], created_at: '2026-10-25T09:00:00Z' }),
       item({ id: 't', subtype: ' taken ', created_at: '2026-10-25T08:00:00Z' }),
       item({ id: 'q', subtype: 'whatever', created_at: '2026-10-25T07:00:00Z' }),
     ], 'w1');
-    expect(w.map(x => [x.id, x.state])).toEqual([['o', 'open'], ['t', 'taken'], ['q', 'open'], ['d', 'done']]);
+    expect(w.map(x => [x.id, x.state])).toEqual([['o', 'open'], ['t', 'taken'], ['q', null], ['d', 'done']]);
     expect(w[0].elements).toEqual([{ type: 'character', id: 'a', reason: null }, { type: 'location', id: 'b', reason: null }]);
   });
 
@@ -713,6 +717,9 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     expect(w.elements).toEqual([{ type: 'character', id: 'a', reason: 'No links.' }]);
     expect(w.otherWorld).toBe(true);
     expect(readWork([item({ id: 'p', x_packet_elements: [{ type: 'character', id: 'a', reason: 'r' }], x_packet_source: { world: 'w1' } })], 'w1')[0].otherWorld).toBe(false);
+    // An entry whose id is blank names no element (the packet profile's rule 1, as the SDK's workOf reads it).
+    const [blank] = readWork([item({ id: 'p', x_packet_elements: [{ type: 'object', id: '', reason: 'r' }, { type: 'object', id: ' \t', reason: 'r' }, { type: 'object', id: 'o', reason: 'kept' }] })], 'w1');
+    expect(blank.elements).toEqual([{ type: 'object', id: 'o', reason: 'kept' }]);
   });
 
   it("an agent's proposed item says so; a lore Work item never shows", () => {
@@ -726,9 +733,9 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     }
   });
 
-  it('a keeper may set done only an open or taken item, never a proposed one or a third word', () => {
-    for (const w of ['open', ' Taken ', '', undefined]) expect(maySetDone(item({ id: 'p', subtype: w }))).toBe(true);
-    for (const w of ['done', 'blocked']) expect(maySetDone(item({ id: 'p', subtype: w }))).toBe(false);
+  it('a keeper may set done only open work (open or taken), never a proposed one, a standing one or one with no state', () => {
+    for (const w of ['open', ' Taken ']) expect(maySetDone(item({ id: 'p', subtype: w }))).toBe(true);
+    for (const w of ['done', 'blocked', 'standing', ' Standing ', '', '   ', null, undefined]) expect(maySetDone(item({ id: 'p', subtype: w }))).toBe(false);
     expect(maySetDone(item({ id: 'p', subtype: 'open', x_review_proposed: { by: 'm1' } }))).toBe(false);
     expect(maySetDone(item({ id: 'p', subtype: 'open', x_review_proposed: '' }))).toBe(true);
   });

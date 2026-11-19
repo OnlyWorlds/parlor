@@ -281,6 +281,8 @@ describe('Room.take', () => {
   const take = async (mark: unknown) => {
     const r = room();
     r.feed.els.set('i1', item('i1', { x_room_of: mark }));
+    // The take reads the item fresh (open work only): the server holds it too.
+    rows.set('i1', item('i1', { x_room_of: mark }));
     await r.take('i1');
     return calls.filter(c => c.op === 'create');
   };

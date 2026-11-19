@@ -1,0 +1,3566 @@
+{
+  "profile": "charter",
+  "profile_page": "profiles/charter.md",
+  "notes": [
+    "aids: an element is a reading aid when its type and supertype, each trimmed and folded as the room profile defines it, are one of pairs, and it carries mark.field, read by presence: any value but null, a string only when something is left after trimming White_Space, an empty list or an empty object never (serial 126). The pair without the mark is lore; the mark on no pair makes nothing. Wherever a type is compared to a kind (a pair, a hub's kind, a skill's being an Object), it is trimmed and folded as the room profile defines it.",
+    "element: isCharterElement(element), in the room profile's matcher-case shape: element gives type, supertype and the mark as a body might carry them; is_charter_element is what the reader must answer, the pair AND the mark. A mark counts when its value is not null: a string only when something is left after the White_Space trim, an empty list or an empty object as absent, any other value (a number, a list or an object with something in it) as present; the value is never compared.",
+    "worlds: each world's elements as its owner is served them, the ids its hidden mark keeps from every reader but the owner, and its readers, in the lens fixture's shape. A reader's rung is owner (the whole world), contributor (the world less the hidden), guest (exactly the whole and known_of ids it lists; known_of is a stub, served as the lens profile serves one: its id, type, name, description, supertype, subtype and image_url, the server's times and its type's public fields, no link and no extension field) or public (the world less the hidden and the room elements, and nothing at all unless the world carries open: true, a world open to anyone). A case's world is a name in worlds or, as a graph case's is, a world of its own.",
+    "a stub's standing: a stub serves no extension field, so whether an element the reader holds only as a stub is a reading aid is read from the element as the owner is served it; what the reading shows of it is what the stub serves.",
+    "charter: want is charterOf(world, reader). charter is {id, type, name, rules, skill} or null, type law: the newest marked Charter the reader sees, by created_at compared as instants (none sorts oldest), then the higher id by code point; rules the rules_field list as stored, [] when absent or null; skill the ids its description names (any id written as 8-4-4-4-12 hex, so every ow:// form, a site address and a bare id), in lowercase, each once in the order written, kept when it is an Object of this world the reader sees (served whole to every reader who reads the Charter; one the hidden mark keeps from the reader is not seen and not kept), the first skill_max of those kept. guide is {id, type, name} or null, type construct, chosen the same way among marked Guides. domains is every marked Domain the reader sees, each {id, type, name, sentence, hubs}, type construct: in the order of the Guide's constructs as the reader is served them first (an id named twice keeps its first place, an entry that is no marked Domain is skipped), then the rest by folded name and then id; with no Guide seen, by folded name and id alone.",
+    "sentence: the description as served, trimmed of White_Space at both ends, cut at its first line break (a line feed or a carriage return) and trimmed again, so its first line that holds something; an empty string when there is none. hubs: the distinct {type, id} the Domain's served link fields name, each an element of its field's kind in the reader's view (any other id names no hub), in hub_fields' order (the Construct's link fields, the schema's order) and each list's own order, the Domain itself excluded; a stub serves no links, so a stub Domain's hubs are [].",
+    "compare: objects are compared as values; the order of keys carries no meaning, so a reader that writes {type, id} or {id, type, name} in another order answers the same.",
+    "design_cases: each case is a world of its own, a reader and want, every design part the reader sees: an Object or a Construct the reader is served whole (a known-of stub has none, though it is served its subtype) whose subtype, trimmed and folded as the room profile defines it, is in design or locked, in a world where charterOf finds a Charter for that reader; each {type, id, state}, type object or construct and state the page's word (in design or locked), whatever the spelling stored. want compares as a set."
+  ],
+  "pairs": [
+    {
+      "type": "law",
+      "supertype": "Charter",
+      "aid": "charter"
+    },
+    {
+      "type": "construct",
+      "supertype": "Guide",
+      "aid": "guide"
+    },
+    {
+      "type": "construct",
+      "supertype": "Domain",
+      "aid": "domain"
+    }
+  ],
+  "mark": {
+    "field": "x_charter_of",
+    "value": "the id of the world the aid was written for; read by presence, never by its value"
+  },
+  "rules_field": "x_checks_rules",
+  "skill_max": 5,
+  "hub_fields": [
+    {
+      "field": "founder",
+      "type": "character"
+    },
+    {
+      "field": "custodian",
+      "type": "institution"
+    },
+    {
+      "field": "characters",
+      "type": "character"
+    },
+    {
+      "field": "objects",
+      "type": "object"
+    },
+    {
+      "field": "locations",
+      "type": "location"
+    },
+    {
+      "field": "species",
+      "type": "species"
+    },
+    {
+      "field": "creatures",
+      "type": "creature"
+    },
+    {
+      "field": "institutions",
+      "type": "institution"
+    },
+    {
+      "field": "traits",
+      "type": "trait"
+    },
+    {
+      "field": "collectives",
+      "type": "collective"
+    },
+    {
+      "field": "zones",
+      "type": "zone"
+    },
+    {
+      "field": "abilities",
+      "type": "ability"
+    },
+    {
+      "field": "phenomena",
+      "type": "phenomenon"
+    },
+    {
+      "field": "languages",
+      "type": "language"
+    },
+    {
+      "field": "families",
+      "type": "family"
+    },
+    {
+      "field": "relations",
+      "type": "relation"
+    },
+    {
+      "field": "titles",
+      "type": "title"
+    },
+    {
+      "field": "constructs",
+      "type": "construct"
+    },
+    {
+      "field": "events",
+      "type": "event"
+    },
+    {
+      "field": "narratives",
+      "type": "narrative"
+    }
+  ],
+  "worlds": {
+    "harbour": {
+      "id": "019a7f00-0000-7000-8000-00000000f101",
+      "name": "Grey Harbour",
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000200",
+          "type": "law",
+          "name": "House Rules",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-10T12:00:00Z",
+          "description": "These are the rules of the harbour.\nRead ow://object/019a7f00-0000-7000-8000-000000000210 and ow://object/019a7f00-0000-7000-8000-000000000211 before you write; never open ow://object/019a7f00-0000-7000-8000-000000000212.",
+          "x_checks_rules": [
+            {
+              "rule": "every Character carries a reputation",
+              "where": {
+                "type": "character"
+              },
+              "require": {
+                "field": "reputation",
+                "present": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000201",
+          "type": "law",
+          "name": "House Rules, first draft",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-01T12:00:00Z",
+          "description": "The first draft.",
+          "x_checks_rules": []
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000202",
+          "type": "law",
+          "name": "The Harbour Charter",
+          "supertype": "Charter",
+          "created_at": "2026-10-20T12:00:00Z",
+          "description": "Granted by the old king: lore, with no mark."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000203",
+          "type": "construct",
+          "name": "Start here",
+          "supertype": "Guide",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-05T12:00:00Z",
+          "description": "Begin with the Archive, then the Docks.",
+          "constructs": [
+            "019a7f00-0000-7000-8000-000000000205",
+            "019a7f00-0000-7000-8000-000000000204",
+            "019a7f00-0000-7000-8000-000000000205",
+            "019a7f00-0000-7000-8000-000000000208",
+            "019a7f00-0000-7000-8000-000000000207",
+            "019a7f00-0000-7000-8000-000000000209"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000204",
+          "type": "construct",
+          "name": "The Docks",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-06T12:00:00Z",
+          "description": "Where the ships come in.\rThe second line.",
+          "characters": [
+            "019a7f00-0000-7000-8000-000000000214"
+          ],
+          "locations": [
+            "019a7f00-0000-7000-8000-000000000215"
+          ],
+          "constructs": [
+            "019a7f00-0000-7000-8000-000000000204"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000205",
+          "type": "construct",
+          "name": "the Archive",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-06T13:00:00Z",
+          "description": "  Ledgers and letters.  \nKept by the Board.",
+          "objects": [
+            "019a7f00-0000-7000-8000-000000000210",
+            "019a7f00-0000-7000-8000-000000000212"
+          ],
+          "institutions": [
+            "019a7f00-0000-7000-8000-000000000216"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000206",
+          "type": "construct",
+          "name": "ash row",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-07T12:00:00Z",
+          "characters": [
+            "019a7f00-0000-7000-8000-000000000214"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000207",
+          "type": "construct",
+          "name": "The Vault",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-07T13:00:00Z",
+          "objects": [
+            "019a7f00-0000-7000-8000-000000000212"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000208",
+          "type": "construct",
+          "name": "Harbour Lore",
+          "supertype": "Myth",
+          "created_at": "2026-10-07T14:00:00Z",
+          "description": "Tales of the drowned bell."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000209",
+          "type": "construct",
+          "name": "The Lighthouse",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-08T12:00:00Z",
+          "description": "The light on the point.",
+          "locations": [
+            "019a7f00-0000-7000-8000-000000000215"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000210",
+          "type": "object",
+          "name": "Tide Tables",
+          "description": "When the water turns."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000211",
+          "type": "object",
+          "name": "Signal Codes",
+          "description": "Flags and lamps."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000212",
+          "type": "object",
+          "name": "Sealed Orders",
+          "description": "Opened only by the harbourmaster."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000213",
+          "type": "construct",
+          "name": "Zephyr Quay",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+          "created_at": "2026-10-08T13:00:00Z",
+          "description": "The far quay.",
+          "locations": [
+            "019a7f00-0000-7000-8000-000000000215"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000214",
+          "type": "character",
+          "name": "Ada Venn"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000215",
+          "type": "location",
+          "name": "The Quay"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000216",
+          "type": "institution",
+          "name": "Harbour Board"
+        }
+      ],
+      "hidden": [
+        "019a7f00-0000-7000-8000-000000000207",
+        "019a7f00-0000-7000-8000-000000000212"
+      ],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        },
+        "contributor": {
+          "rung": "contributor",
+          "character": null
+        },
+        "guest": {
+          "rung": "guest",
+          "character": "019a7f00-0000-7000-8000-000000000214",
+          "whole": [
+            "019a7f00-0000-7000-8000-000000000200",
+            "019a7f00-0000-7000-8000-000000000203",
+            "019a7f00-0000-7000-8000-000000000204",
+            "019a7f00-0000-7000-8000-000000000205",
+            "019a7f00-0000-7000-8000-000000000206",
+            "019a7f00-0000-7000-8000-000000000210",
+            "019a7f00-0000-7000-8000-000000000211",
+            "019a7f00-0000-7000-8000-000000000214"
+          ],
+          "known_of": [
+            "019a7f00-0000-7000-8000-000000000209"
+          ]
+        },
+        "public": {
+          "rung": "public",
+          "character": null
+        }
+      }
+    },
+    "ties": {
+      "id": "019a7f00-0000-7000-8000-00000000f102",
+      "name": "Ties",
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000221",
+          "type": "law",
+          "name": "Rules A",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f102",
+          "created_at": "2026-10-10T12:00:00Z",
+          "description": "The rules."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000220",
+          "type": "law",
+          "name": "Rules B",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f102",
+          "created_at": "2026-10-10T14:00:00+02:00",
+          "description": "The rules.",
+          "x_checks_rules": [
+            {
+              "rule": "every Character carries a reputation",
+              "where": {
+                "type": "character"
+              },
+              "require": {
+                "field": "reputation",
+                "present": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000223",
+          "type": "construct",
+          "name": "Guide, no date",
+          "supertype": "Guide",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f102",
+          "constructs": []
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000222",
+          "type": "construct",
+          "name": "Guide, dated",
+          "supertype": "Guide",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f102",
+          "created_at": "2020-01-01T00:00:00Z",
+          "constructs": []
+        }
+      ],
+      "hidden": [],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        }
+      }
+    },
+    "lore": {
+      "id": "019a7f00-0000-7000-8000-00000000f103",
+      "name": "The Old Kingdom",
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000230",
+          "type": "law",
+          "name": "The Kingdom's Charter",
+          "supertype": "Charter",
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000231",
+          "type": "construct",
+          "name": "A Guide to the Realm",
+          "supertype": "Guide",
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000232",
+          "type": "construct",
+          "name": "The North",
+          "supertype": "Domain",
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000233",
+          "type": "law",
+          "name": "Harbour Statute",
+          "supertype": "Statute",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f103",
+          "created_at": "2026-10-02T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000234",
+          "type": "construct",
+          "name": "Domain of Night",
+          "supertype": "Domains",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f103",
+          "created_at": "2026-10-02T12:00:00Z"
+        }
+      ],
+      "hidden": [],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        }
+      }
+    },
+    "copy": {
+      "id": "019a7f00-0000-7000-8000-00000000f104",
+      "name": "A Copy",
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000240",
+          "type": "law",
+          "name": "Copied Rules",
+          "supertype": " charter ",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f1ff",
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000241",
+          "type": "law",
+          "name": "Rules with a blank mark",
+          "supertype": "Charter",
+          "x_charter_of": "  ",
+          "created_at": "2026-10-05T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000242",
+          "type": "construct",
+          "name": "Start",
+          "supertype": "GUIDE",
+          "x_charter_of": "\u001f",
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000243",
+          "type": "construct",
+          "name": "A Domain with an empty mark",
+          "supertype": "Domain",
+          "x_charter_of": "",
+          "created_at": "2026-10-01T12:00:00Z"
+        }
+      ],
+      "hidden": [],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        }
+      }
+    },
+    "bare": {
+      "id": "019a7f00-0000-7000-8000-00000000f105",
+      "name": "Bare",
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000250",
+          "type": "construct",
+          "name": "Guide",
+          "supertype": "Guide",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f105",
+          "created_at": "2026-10-01T12:00:00Z",
+          "constructs": [
+            "019a7f00-0000-7000-8000-000000000253",
+            "019a7f00-0000-7000-8000-000000000252",
+            "019a7f00-0000-7000-8000-000000000251"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000251",
+          "type": "construct",
+          "name": "Zed",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f105",
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000253",
+          "type": "construct",
+          "name": " North ",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f105",
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000252",
+          "type": "construct",
+          "name": "north",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f105",
+          "created_at": "2026-10-01T12:00:00Z"
+        }
+      ],
+      "hidden": [
+        "019a7f00-0000-7000-8000-000000000250"
+      ],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        },
+        "contributor": {
+          "rung": "contributor",
+          "character": null
+        }
+      }
+    },
+    "open": {
+      "id": "019a7f00-0000-7000-8000-00000000f106",
+      "name": "The Open Square",
+      "open": true,
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000260",
+          "type": "law",
+          "name": "Open Rules",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f106",
+          "created_at": "2026-10-01T12:00:00Z",
+          "description": "Read ow://object/019a7f00-0000-7000-8000-000000000263; the box is ow://object/019a7f00-0000-7000-8000-000000000265."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000261",
+          "type": "construct",
+          "name": "Welcome",
+          "supertype": "Guide",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f106",
+          "created_at": "2026-10-01T12:00:00Z",
+          "constructs": [
+            "019a7f00-0000-7000-8000-000000000262"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000262",
+          "type": "construct",
+          "name": "The Square",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f106",
+          "created_at": "2026-10-01T12:00:00Z",
+          "description": "Where everyone meets.",
+          "objects": [
+            "019a7f00-0000-7000-8000-000000000265"
+          ],
+          "locations": [
+            "019a7f00-0000-7000-8000-000000000264"
+          ],
+          "narratives": [
+            "019a7f00-0000-7000-8000-000000000267"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000263",
+          "type": "object",
+          "name": "Map of the Square"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000264",
+          "type": "location",
+          "name": "Market Square"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000265",
+          "type": "object",
+          "name": "Locked Box"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000266",
+          "type": "construct",
+          "name": "Back Rooms",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f106",
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000267",
+          "type": "narrative",
+          "name": "A line in the room",
+          "supertype": "Message",
+          "characters": [],
+          "x_room_of": "019a7f00-0000-7000-8000-00000000f106",
+          "created_at": "2026-10-02T12:00:00Z"
+        }
+      ],
+      "hidden": [
+        "019a7f00-0000-7000-8000-000000000265",
+        "019a7f00-0000-7000-8000-000000000266"
+      ],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        },
+        "public": {
+          "rung": "public",
+          "character": null
+        }
+      }
+    },
+    "skills": {
+      "id": "019a7f00-0000-7000-8000-00000000f107",
+      "name": "The Workshop",
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000270",
+          "type": "law",
+          "name": "Workshop Rules",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f107",
+          "created_at": "2026-10-01T12:00:00Z",
+          "description": "Tools: ow://object/019a7f00-0000-7000-8000-000000000271, ow://019a7f00-0000-7000-8000-00000000f107/object/019a7f00-0000-7000-8000-000000000272, https://www.onlyworlds.com/w/019a7f00-0000-7000-8000-00000000f107/object/019a7f00-0000-7000-8000-000000000273, 019a7f00-0000-7000-8000-000000000274. The keeper is ow://character/019a7f00-0000-7000-8000-000000000278; a map from elsewhere is ow://019a7f00-0000-7000-8000-00000000f1ff/object/019a7f00-0000-7000-8000-000000000279. Again ow://object/019a7f00-0000-7000-8000-000000000271; then 019A7F00-0000-7000-8000-000000000275, 019a7f00-0000-7000-8000-000000000276, 019a7f00-0000-7000-8000-000000000277."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000271",
+          "type": "object",
+          "name": "Hammer"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000272",
+          "type": "object",
+          "name": "Tongs"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000273",
+          "type": "object",
+          "name": "Anvil"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000274",
+          "type": "object",
+          "name": "Bellows"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000275",
+          "type": "object",
+          "name": "Quench Tank"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000276",
+          "type": "object",
+          "name": "File"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000277",
+          "type": "object",
+          "name": "Rasp"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000278",
+          "type": "character",
+          "name": "The Smith"
+        }
+      ],
+      "hidden": [
+        "019a7f00-0000-7000-8000-000000000272"
+      ],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        },
+        "contributor": {
+          "rung": "contributor",
+          "character": null
+        }
+      }
+    },
+    "proposed": {
+      "id": "019a7f00-0000-7000-8000-00000000f114",
+      "name": "The Proposed House",
+      "hidden": [],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        }
+      },
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000300",
+          "type": "law",
+          "name": "House Rules",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f114",
+          "created_at": "2026-10-01T12:00:00Z",
+          "description": "The rules of the house.\nRead ow://object/019a7f00-0000-7000-8000-000000000304 and ow://object/019a7f00-0000-7000-8000-000000000305 before you write."
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000301",
+          "type": "law",
+          "name": "House Rules, proposed",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f114",
+          "created_at": "2026-10-10T12:00:00Z",
+          "description": "New rules, not yet settled.",
+          "x_review_proposed": {
+            "by": null,
+            "at": "2026-10-10T12:00:00Z"
+          }
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000302",
+          "type": "construct",
+          "name": "Start here",
+          "supertype": "Guide",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f114",
+          "created_at": "2026-10-01T12:00:00Z",
+          "constructs": [
+            "019a7f00-0000-7000-8000-000000000307",
+            "019a7f00-0000-7000-8000-000000000306"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000303",
+          "type": "construct",
+          "name": "Start here, proposed",
+          "supertype": "Guide",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f114",
+          "created_at": "2026-10-10T12:00:00Z",
+          "constructs": [
+            "019a7f00-0000-7000-8000-000000000306"
+          ],
+          "x_review_proposed": {
+            "by": null,
+            "at": "2026-10-10T12:00:00Z"
+          }
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000304",
+          "type": "object",
+          "name": "The Ledger"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000305",
+          "type": "object",
+          "name": "The Draft Ledger",
+          "x_review_proposed": {
+            "by": null,
+            "at": "2026-10-10T12:00:00Z"
+          }
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000306",
+          "type": "construct",
+          "name": "The Hall",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f114",
+          "created_at": "2026-10-01T12:00:00Z",
+          "description": "Where the house meets.",
+          "objects": [
+            "019a7f00-0000-7000-8000-000000000305",
+            "019a7f00-0000-7000-8000-000000000304"
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000307",
+          "type": "construct",
+          "name": "The Annex",
+          "supertype": "Domain",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f114",
+          "created_at": "2026-10-02T12:00:00Z",
+          "description": "A wing someone doubts.",
+          "x_review_proposed": "is this a place?"
+        }
+      ]
+    },
+    "stub": {
+      "id": "019a7f00-0000-7000-8000-00000000f115",
+      "name": "The Stub House",
+      "hidden": [],
+      "readers": {
+        "owner": {
+          "rung": "owner",
+          "character": null
+        },
+        "guest": {
+          "rung": "guest",
+          "character": "019a7f00-0000-7000-8000-000000000312",
+          "whole": [
+            "019a7f00-0000-7000-8000-000000000311",
+            "019a7f00-0000-7000-8000-000000000312"
+          ],
+          "known_of": [
+            "019a7f00-0000-7000-8000-000000000310"
+          ]
+        }
+      },
+      "elements": [
+        {
+          "id": "019a7f00-0000-7000-8000-000000000310",
+          "type": "law",
+          "name": "House Rules",
+          "supertype": "Charter",
+          "x_charter_of": "019a7f00-0000-7000-8000-00000000f115",
+          "created_at": "2026-10-01T12:00:00Z",
+          "description": "The rules of the house.\nRead ow://object/019a7f00-0000-7000-8000-000000000311 first.",
+          "x_checks_rules": [
+            {
+              "rule": "every Character carries a reputation",
+              "where": {
+                "type": "character"
+              },
+              "require": {
+                "field": "reputation",
+                "present": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000311",
+          "type": "object",
+          "name": "The Ledger"
+        },
+        {
+          "id": "019a7f00-0000-7000-8000-000000000312",
+          "type": "character",
+          "name": "Ada Venn"
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "mark-a-number",
+      "kind": "element",
+      "element": {
+        "type": "law",
+        "supertype": "Charter",
+        "x_charter_of": 7
+      },
+      "is_charter_element": true
+    },
+    {
+      "name": "mark-false",
+      "kind": "element",
+      "element": {
+        "type": "law",
+        "supertype": "Charter",
+        "x_charter_of": false
+      },
+      "is_charter_element": true
+    },
+    {
+      "name": "mark-empty",
+      "kind": "element",
+      "element": {
+        "type": "law",
+        "supertype": "Charter",
+        "x_charter_of": ""
+      },
+      "is_charter_element": false
+    },
+    {
+      "name": "mark-spaces",
+      "kind": "element",
+      "element": {
+        "type": "law",
+        "supertype": "Charter",
+        "x_charter_of": "  "
+      },
+      "is_charter_element": false
+    },
+    {
+      "name": "mark-unit-separator",
+      "kind": "element",
+      "element": {
+        "type": "law",
+        "supertype": "Charter",
+        "x_charter_of": "\u001f"
+      },
+      "is_charter_element": true
+    },
+    {
+      "name": "mark-padded-id",
+      "kind": "element",
+      "element": {
+        "type": "law",
+        "supertype": "Charter",
+        "x_charter_of": "  019a7f00-0000-7000-8000-00000000f101  "
+      },
+      "is_charter_element": true
+    },
+    {
+      "name": "harbour-owner-reads-the-whole-packet",
+      "kind": "charter",
+      "world": "harbour",
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000200",
+          "type": "law",
+          "name": "House Rules",
+          "rules": [
+            {
+              "rule": "every Character carries a reputation",
+              "where": {
+                "type": "character"
+              },
+              "require": {
+                "field": "reputation",
+                "present": true
+              }
+            }
+          ],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000210",
+            "019a7f00-0000-7000-8000-000000000211",
+            "019a7f00-0000-7000-8000-000000000212"
+          ]
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000203",
+          "type": "construct",
+          "name": "Start here"
+        },
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000205",
+            "type": "construct",
+            "name": "the Archive",
+            "sentence": "Ledgers and letters.",
+            "hubs": [
+              {
+                "type": "object",
+                "id": "019a7f00-0000-7000-8000-000000000210"
+              },
+              {
+                "type": "object",
+                "id": "019a7f00-0000-7000-8000-000000000212"
+              },
+              {
+                "type": "institution",
+                "id": "019a7f00-0000-7000-8000-000000000216"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000204",
+            "type": "construct",
+            "name": "The Docks",
+            "sentence": "Where the ships come in.",
+            "hubs": [
+              {
+                "type": "character",
+                "id": "019a7f00-0000-7000-8000-000000000214"
+              },
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000215"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000207",
+            "type": "construct",
+            "name": "The Vault",
+            "sentence": "",
+            "hubs": [
+              {
+                "type": "object",
+                "id": "019a7f00-0000-7000-8000-000000000212"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000209",
+            "type": "construct",
+            "name": "The Lighthouse",
+            "sentence": "The light on the point.",
+            "hubs": [
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000215"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000206",
+            "type": "construct",
+            "name": "ash row",
+            "sentence": "",
+            "hubs": [
+              {
+                "type": "character",
+                "id": "019a7f00-0000-7000-8000-000000000214"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000213",
+            "type": "construct",
+            "name": "Zephyr Quay",
+            "sentence": "The far quay.",
+            "hubs": [
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000215"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "The newest marked Charter (the unmarked, newer one is lore); its skill in text order, the hidden Object kept for the owner; the Guide's order with a doubled entry once and a lore Construct skipped; then the two Domains the Guide does not name, by folded name; each sentence cut at the first line break (a carriage return in the Docks) and trimmed; a Domain's link to itself is no hub."
+    },
+    {
+      "name": "harbour-contributor-a-hidden-domain-and-hub-are-not-there",
+      "kind": "charter",
+      "world": "harbour",
+      "reader": "contributor",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000200",
+          "type": "law",
+          "name": "House Rules",
+          "rules": [
+            {
+              "rule": "every Character carries a reputation",
+              "where": {
+                "type": "character"
+              },
+              "require": {
+                "field": "reputation",
+                "present": true
+              }
+            }
+          ],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000210",
+            "019a7f00-0000-7000-8000-000000000211"
+          ]
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000203",
+          "type": "construct",
+          "name": "Start here"
+        },
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000205",
+            "type": "construct",
+            "name": "the Archive",
+            "sentence": "Ledgers and letters.",
+            "hubs": [
+              {
+                "type": "object",
+                "id": "019a7f00-0000-7000-8000-000000000210"
+              },
+              {
+                "type": "institution",
+                "id": "019a7f00-0000-7000-8000-000000000216"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000204",
+            "type": "construct",
+            "name": "The Docks",
+            "sentence": "Where the ships come in.",
+            "hubs": [
+              {
+                "type": "character",
+                "id": "019a7f00-0000-7000-8000-000000000214"
+              },
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000215"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000209",
+            "type": "construct",
+            "name": "The Lighthouse",
+            "sentence": "The light on the point.",
+            "hubs": [
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000215"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000206",
+            "type": "construct",
+            "name": "ash row",
+            "sentence": "",
+            "hubs": [
+              {
+                "type": "character",
+                "id": "019a7f00-0000-7000-8000-000000000214"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000213",
+            "type": "construct",
+            "name": "Zephyr Quay",
+            "sentence": "The far quay.",
+            "hubs": [
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000215"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "The Vault and the Sealed Orders are hidden: the Vault is not listed and nothing marks the gap, the Orders are neither skill nor hub."
+    },
+    {
+      "name": "harbour-guest-the-charter-whole-its-skill-whole-a-stub-domain-a-name",
+      "kind": "charter",
+      "world": "harbour",
+      "reader": "guest",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000200",
+          "type": "law",
+          "name": "House Rules",
+          "rules": [
+            {
+              "rule": "every Character carries a reputation",
+              "where": {
+                "type": "character"
+              },
+              "require": {
+                "field": "reputation",
+                "present": true
+              }
+            }
+          ],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000210",
+            "019a7f00-0000-7000-8000-000000000211"
+          ]
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000203",
+          "type": "construct",
+          "name": "Start here"
+        },
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000205",
+            "type": "construct",
+            "name": "the Archive",
+            "sentence": "Ledgers and letters.",
+            "hubs": [
+              {
+                "type": "object",
+                "id": "019a7f00-0000-7000-8000-000000000210"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000204",
+            "type": "construct",
+            "name": "The Docks",
+            "sentence": "Where the ships come in.",
+            "hubs": [
+              {
+                "type": "character",
+                "id": "019a7f00-0000-7000-8000-000000000214"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000209",
+            "type": "construct",
+            "name": "The Lighthouse",
+            "sentence": "The light on the point.",
+            "hubs": []
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000206",
+            "type": "construct",
+            "name": "ash row",
+            "sentence": "",
+            "hubs": [
+              {
+                "type": "character",
+                "id": "019a7f00-0000-7000-8000-000000000214"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "The Charter whole to a guest (the keeper's house rules), its skill Objects served whole beside it, as to every reader who reads the Charter, and kept; the Lighthouse a stub: its name and served sentence, no hubs; a hub outside the guest's slice left out; ash row, which names the guest's own Character, is in its slice and listed after the Guide's order; Domains the guest does not see are not listed."
+    },
+    {
+      "name": "a-public-reader-on-a-closed-world-reads-nothing",
+      "kind": "charter",
+      "world": "harbour",
+      "reader": "public",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": []
+      },
+      "note": "The Charter is the public's only on a world open to anyone."
+    },
+    {
+      "name": "two-charters-at-one-instant-the-higher-id-a-guide-with-no-created-at-the-oldest",
+      "kind": "charter",
+      "world": "ties",
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000221",
+          "type": "law",
+          "name": "Rules A",
+          "rules": [],
+          "skill": []
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000222",
+          "type": "construct",
+          "name": "Guide, dated"
+        },
+        "domains": []
+      },
+      "note": "The two Charters were made at one instant, written in two offsets: the higher id by code point leads. The Guide with no created_at sorts oldest, under a higher id. Rules B's rules are not read, Rules A has none: []."
+    },
+    {
+      "name": "the-pairs-without-the-mark-are-lore",
+      "kind": "charter",
+      "world": "lore",
+      "reader": "owner",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": []
+      },
+      "note": "A Charter, a Guide and a Domain with no mark are lore; the mark on no pair, or on a word that only resembles one (Domains), makes no reading aid."
+    },
+    {
+      "name": "the-mark-by-presence-trimmed-as-the-room-profile-trims",
+      "kind": "charter",
+      "world": "copy",
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000240",
+          "type": "law",
+          "name": "Copied Rules",
+          "rules": [],
+          "skill": []
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000242",
+          "type": "construct",
+          "name": "Start"
+        },
+        "domains": []
+      },
+      "note": "A mark naming another world counts (presence, never its value) and the pair is trimmed and folded; a mark of a no-break space and a space is blank, so the newer Law is lore; a mark of U+001F is a mark (not White_Space); an empty mark is none."
+    },
+    {
+      "name": "a-guide-the-owner-sees-orders-the-domains",
+      "kind": "charter",
+      "world": "bare",
+      "reader": "owner",
+      "want": {
+        "charter": null,
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000250",
+          "type": "construct",
+          "name": "Guide"
+        },
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000253",
+            "type": "construct",
+            "name": " North ",
+            "sentence": "",
+            "hubs": []
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000252",
+            "type": "construct",
+            "name": "north",
+            "sentence": "",
+            "hubs": []
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000251",
+            "type": "construct",
+            "name": "Zed",
+            "sentence": "",
+            "hubs": []
+          }
+        ]
+      },
+      "note": "The Guide is hidden from every reader but the owner, who reads its order."
+    },
+    {
+      "name": "no-guide-seen-the-domains-by-folded-name-and-id",
+      "kind": "charter",
+      "world": "bare",
+      "reader": "contributor",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000252",
+            "type": "construct",
+            "name": "north",
+            "sentence": "",
+            "hubs": []
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000253",
+            "type": "construct",
+            "name": " North ",
+            "sentence": "",
+            "hubs": []
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000251",
+            "type": "construct",
+            "name": "Zed",
+            "sentence": "",
+            "hubs": []
+          }
+        ]
+      },
+      "note": "No Guide this reader sees: the Domains by folded name, then id (north and \" North \" fold alike, the lower id first); the guide is null."
+    },
+    {
+      "name": "a-public-reader-on-an-open-world",
+      "kind": "charter",
+      "world": "open",
+      "reader": "public",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000260",
+          "type": "law",
+          "name": "Open Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000263"
+          ]
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000261",
+          "type": "construct",
+          "name": "Welcome"
+        },
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000262",
+            "type": "construct",
+            "name": "The Square",
+            "sentence": "Where everyone meets.",
+            "hubs": [
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000264"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "Open to anyone: the public reads the Charter, the Guide and the Domains it sees, less the hidden and the room elements (no skill, no hub, no Domain from either)."
+    },
+    {
+      "name": "an-open-world-read-by-its-owner",
+      "kind": "charter",
+      "world": "open",
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000260",
+          "type": "law",
+          "name": "Open Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000263",
+            "019a7f00-0000-7000-8000-000000000265"
+          ]
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000261",
+          "type": "construct",
+          "name": "Welcome"
+        },
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000262",
+            "type": "construct",
+            "name": "The Square",
+            "sentence": "Where everyone meets.",
+            "hubs": [
+              {
+                "type": "object",
+                "id": "019a7f00-0000-7000-8000-000000000265"
+              },
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000264"
+              },
+              {
+                "type": "narrative",
+                "id": "019a7f00-0000-7000-8000-000000000267"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000266",
+            "type": "construct",
+            "name": "Back Rooms",
+            "sentence": "",
+            "hubs": []
+          }
+        ]
+      },
+      "note": "The owner's reading of the same world: the hidden Domain after the Guide's, the hidden Object and the room line as hubs in the schema's field order."
+    },
+    {
+      "name": "skill-each-id-once-in-order-objects-of-this-world-the-first-five",
+      "kind": "charter",
+      "world": "skills",
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000270",
+          "type": "law",
+          "name": "Workshop Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000271",
+            "019a7f00-0000-7000-8000-000000000272",
+            "019a7f00-0000-7000-8000-000000000273",
+            "019a7f00-0000-7000-8000-000000000274",
+            "019a7f00-0000-7000-8000-000000000275"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "Every form in one text: each id once in the order written (an uppercase id read in lowercase), kept only as an Object of this world (the world's own id, a Character and another world's Object dropped), the first five of those kept."
+    },
+    {
+      "name": "skill-the-five-are-counted-after-the-cut",
+      "kind": "charter",
+      "world": "skills",
+      "reader": "contributor",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000270",
+          "type": "law",
+          "name": "Workshop Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000271",
+            "019a7f00-0000-7000-8000-000000000273",
+            "019a7f00-0000-7000-8000-000000000274",
+            "019a7f00-0000-7000-8000-000000000275",
+            "019a7f00-0000-7000-8000-000000000276"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The Tongs are hidden from this reader: cut first, so the sixth Object written comes in."
+    },
+    {
+      "name": "skill-form-ow-object",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f110",
+        "name": "One form 110",
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000280",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f110",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read ow://object/019a7f00-0000-7000-8000-000000000281 first."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000281",
+            "type": "object",
+            "name": "The Skill"
+          }
+        ],
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        }
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000280",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000281"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "One form alone; a world carried by the case, as a graph case does."
+    },
+    {
+      "name": "skill-form-cross-world",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f111",
+        "name": "One form 111",
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000282",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f111",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read ow://019a7f00-0000-7000-8000-00000000f111/object/019a7f00-0000-7000-8000-000000000283 first."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000283",
+            "type": "object",
+            "name": "The Skill"
+          }
+        ],
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        }
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000282",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000283"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "One form alone; a world carried by the case, as a graph case does."
+    },
+    {
+      "name": "skill-form-site-address",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f112",
+        "name": "One form 112",
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000284",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f112",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read https://www.onlyworlds.com/w/019a7f00-0000-7000-8000-00000000f112/object/019a7f00-0000-7000-8000-000000000285 first."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000285",
+            "type": "object",
+            "name": "The Skill"
+          }
+        ],
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        }
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000284",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000285"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "One form alone; a world carried by the case, as a graph case does."
+    },
+    {
+      "name": "skill-form-bare-id",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f113",
+        "name": "One form 113",
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000286",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f113",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read 019a7f00-0000-7000-8000-000000000287 first."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000287",
+            "type": "object",
+            "name": "The Skill"
+          }
+        ],
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        }
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000286",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000287"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "One form alone; a world carried by the case, as a graph case does."
+    },
+    {
+      "name": "a-guide-held-only-as-a-stub-is-the-guide-its-name-and-id",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f101",
+        "name": "Grey Harbour",
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000200",
+            "type": "law",
+            "name": "House Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+            "created_at": "2026-10-10T12:00:00Z",
+            "description": "These are the rules of the harbour.\nRead ow://object/019a7f00-0000-7000-8000-000000000210 and ow://object/019a7f00-0000-7000-8000-000000000211 before you write; never open ow://object/019a7f00-0000-7000-8000-000000000212.",
+            "x_checks_rules": [
+              {
+                "rule": "every Character carries a reputation",
+                "where": {
+                  "type": "character"
+                },
+                "require": {
+                  "field": "reputation",
+                  "present": true
+                }
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000203",
+            "type": "construct",
+            "name": "Start here",
+            "supertype": "Guide",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+            "created_at": "2026-10-05T12:00:00Z",
+            "description": "Begin with the Archive, then the Docks.",
+            "constructs": [
+              "019a7f00-0000-7000-8000-000000000205",
+              "019a7f00-0000-7000-8000-000000000204",
+              "019a7f00-0000-7000-8000-000000000205",
+              "019a7f00-0000-7000-8000-000000000208",
+              "019a7f00-0000-7000-8000-000000000207",
+              "019a7f00-0000-7000-8000-000000000209"
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000204",
+            "type": "construct",
+            "name": "The Docks",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+            "created_at": "2026-10-06T12:00:00Z",
+            "description": "Where the ships come in.\rThe second line.",
+            "characters": [
+              "019a7f00-0000-7000-8000-000000000214"
+            ],
+            "locations": [
+              "019a7f00-0000-7000-8000-000000000215"
+            ],
+            "constructs": [
+              "019a7f00-0000-7000-8000-000000000204"
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000205",
+            "type": "construct",
+            "name": "the Archive",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+            "created_at": "2026-10-06T13:00:00Z",
+            "description": "  Ledgers and letters.  \nKept by the Board.",
+            "objects": [
+              "019a7f00-0000-7000-8000-000000000210",
+              "019a7f00-0000-7000-8000-000000000212"
+            ],
+            "institutions": [
+              "019a7f00-0000-7000-8000-000000000216"
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000206",
+            "type": "construct",
+            "name": "ash row",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f101",
+            "created_at": "2026-10-07T12:00:00Z",
+            "characters": [
+              "019a7f00-0000-7000-8000-000000000214"
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000210",
+            "type": "object",
+            "name": "Tide Tables",
+            "description": "When the water turns."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000211",
+            "type": "object",
+            "name": "Signal Codes",
+            "description": "Flags and lamps."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000214",
+            "type": "character",
+            "name": "Ada Venn"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000215",
+            "type": "location",
+            "name": "The Quay"
+          }
+        ],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          },
+          "guest": {
+            "rung": "guest",
+            "character": null,
+            "whole": [
+              "019a7f00-0000-7000-8000-000000000200",
+              "019a7f00-0000-7000-8000-000000000204",
+              "019a7f00-0000-7000-8000-000000000205",
+              "019a7f00-0000-7000-8000-000000000206",
+              "019a7f00-0000-7000-8000-000000000210",
+              "019a7f00-0000-7000-8000-000000000211",
+              "019a7f00-0000-7000-8000-000000000214",
+              "019a7f00-0000-7000-8000-000000000215"
+            ],
+            "known_of": [
+              "019a7f00-0000-7000-8000-000000000203"
+            ]
+          }
+        }
+      },
+      "reader": "guest",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000200",
+          "type": "law",
+          "name": "House Rules",
+          "rules": [
+            {
+              "rule": "every Character carries a reputation",
+              "where": {
+                "type": "character"
+              },
+              "require": {
+                "field": "reputation",
+                "present": true
+              }
+            }
+          ],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000210",
+            "019a7f00-0000-7000-8000-000000000211"
+          ]
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000203",
+          "type": "construct",
+          "name": "Start here"
+        },
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000206",
+            "type": "construct",
+            "name": "ash row",
+            "sentence": "",
+            "hubs": [
+              {
+                "type": "character",
+                "id": "019a7f00-0000-7000-8000-000000000214"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000205",
+            "type": "construct",
+            "name": "the Archive",
+            "sentence": "Ledgers and letters.",
+            "hubs": [
+              {
+                "type": "object",
+                "id": "019a7f00-0000-7000-8000-000000000210"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000204",
+            "type": "construct",
+            "name": "The Docks",
+            "sentence": "Where the ships come in.",
+            "hubs": [
+              {
+                "type": "character",
+                "id": "019a7f00-0000-7000-8000-000000000214"
+              },
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000215"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "The guest knows the Guide only as a stub, a name and an id: it is still the Guide, answered as {id, type, name}. A stub serves no links, so its constructs order nothing: the Domains the guest sees come by folded name and id alone, ash row first, where the Guide's stored order would put the Archive and the Docks first."
+    },
+    {
+      "name": "a-proposed-charter-is-no-readers-charter",
+      "kind": "charter",
+      "world": "proposed",
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000300",
+          "type": "law",
+          "name": "House Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000304"
+          ]
+        },
+        "guide": {
+          "id": "019a7f00-0000-7000-8000-000000000302",
+          "type": "construct",
+          "name": "Start here"
+        },
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000306",
+            "type": "construct",
+            "name": "The Hall",
+            "sentence": "Where the house meets.",
+            "hubs": [
+              {
+                "type": "object",
+                "id": "019a7f00-0000-7000-8000-000000000304"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "A proposed element is in no reader's view, the owner's included (one whose x_review_proposed counts as present by the review profile's rule 1, a seat's mark or a doubt; an empty mark is settled): the newer Charter and Guide are proposed, so the settled ones lead; the Annex carries a doubt and is no Domain; the Draft Ledger is proposed, so it is kept neither in the skill nor in the Hall's hubs."
+    },
+    {
+      "name": "a-member-reading-the-charter-as-a-stub-reads-it-whole",
+      "kind": "charter",
+      "world": "stub",
+      "reader": "guest",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000310",
+          "type": "law",
+          "name": "House Rules",
+          "rules": [
+            {
+              "rule": "every Character carries a reputation",
+              "where": {
+                "type": "character"
+              },
+              "require": {
+                "field": "reputation",
+                "present": true
+              }
+            }
+          ],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000311"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The guest's slice holds the Charter only as a known-of stub, which serves no extension field: the Charter is every member rung's to read whole, so its rules and its skill come from the Charter itself, not from the stub."
+    },
+    {
+      "name": "a-skill-id-compares-as-a-uuid-whatever-its-case",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f116",
+        "name": "One case 116",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000320",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f116",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read ow://object/019A7F00-0000-7000-8000-0000000003AB first; it is 019a7f00-0000-7000-8000-0000000003ab again."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000003ab",
+            "type": "object",
+            "name": "The Skill"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000320",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-0000000003ab"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "An id found in the text is taken in lowercase, in whichever case it is written: the Object written in uppercase hex and again in lowercase is one Object, kept once, in lowercase."
+    },
+    {
+      "name": "a-skill-id-named-only-in-uppercase-is-kept",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f117",
+        "name": "One case 117",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000321",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f117",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read ow://object/019A7F00-0000-7000-8000-0000000003AC first."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000003ac",
+            "type": "object",
+            "name": "The Skill"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000321",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-0000000003ac"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The only copy of the skill's id in the Charter's text is in uppercase hex: a reader that compares the text as written finds no such Object and drops it; read as a UUID it is the Object, kept, in lowercase."
+    },
+    {
+      "name": "a-charter-with-an-empty-object-mark-is-settled-and-leads",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f118",
+        "name": "One case 118",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000330",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f118",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "The first rules."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000331",
+            "type": "law",
+            "name": "Rules, newer",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f118",
+            "created_at": "2026-10-10T12:00:00Z",
+            "description": "The newer rules.",
+            "x_review_proposed": {}
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000331",
+          "type": "law",
+          "name": "Rules, newer",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The newer Charter's x_review_proposed is an empty object, {}: an empty mark, which counts as no proposal by the review profile's rule 1, so the newer Charter is settled and leads."
+    },
+    {
+      "name": "a-charter-with-an-empty-string-mark-is-settled-and-leads",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f119",
+        "name": "One case 119",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000332",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f119",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "The first rules."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000333",
+            "type": "law",
+            "name": "Rules, newer",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f119",
+            "created_at": "2026-10-10T12:00:00Z",
+            "description": "The newer rules.",
+            "x_review_proposed": ""
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000333",
+          "type": "law",
+          "name": "Rules, newer",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The newer Charter's x_review_proposed is an empty string, \"\": an empty mark, which counts as no proposal by the review profile's rule 1, so the newer Charter is settled and leads."
+    },
+    {
+      "name": "a-domains-sentence-trims-before-it-cuts-so-a-leading-line-break-is-passed-over",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f11a",
+        "name": "One case 11a",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000334",
+            "type": "construct",
+            "name": "The Docks",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f11a",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "\n\n  Where the ferries tie up.  \nAnd the tar sheds."
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000334",
+            "type": "construct",
+            "name": "The Docks",
+            "sentence": "Where the ferries tie up.",
+            "hubs": []
+          }
+        ]
+      },
+      "note": "The sentence is the description trimmed of White_Space, cut at its first line break and trimmed again: the two leading line feeds and the spaces go with the first trim, so the sentence is the first line that holds something, trimmed. A reader that cuts before it trims answers an empty sentence here and is red."
+    },
+    {
+      "name": "a-domains-sentence-of-white-space-and-line-breaks-alone-is-the-empty-string",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f11b",
+        "name": "One case 11b",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000335",
+            "type": "construct",
+            "name": "The Docks",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f11b",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": " \n\t\r\n "
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000335",
+            "type": "construct",
+            "name": "The Docks",
+            "sentence": "",
+            "hubs": []
+          }
+        ]
+      },
+      "note": "A description of White_Space and line breaks alone leaves nothing after the trim: the sentence is the empty string, never null and never a key left out."
+    },
+    {
+      "name": "a-skill-object-whose-own-id-is-in-upper-case-is-not-kept",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f122",
+        "name": "One case 122",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000340",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f122",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read ow://object/019a7f00-0000-7000-8000-000000000341 first, then ow://object/019a7f00-0000-7000-8000-000000000342."
+          },
+          {
+            "id": "019A7F00-0000-7000-8000-000000000341",
+            "type": "object",
+            "name": "The Ledger"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000342",
+            "type": "object",
+            "name": "The Map"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000340",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000342"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The Charter names both Objects in lowercase; the Ledger's own id is held in upper case. An id found in the text is taken in lowercase and matched as written against the world's Objects (the address profile's \"The same id\"), so the Ledger is not kept and the Map is. A reader that folds the case of the Objects' ids too keeps both."
+    },
+    {
+      "name": "a-skill-id-is-found-wherever-it-stands-in-the-text",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f123",
+        "name": "One case 123",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000350",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f123",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read f019a7f00-0000-7000-8000-000000000351 first, then 019a7f00-0000-7000-8000-000000000352f, then skill019a7f00-0000-7000-8000-000000000353s, then {019a7f00-0000-7000-8000-000000000354}, then urn:uuid:019a7f00-0000-7000-8000-000000000355."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000351",
+            "type": "object",
+            "name": "The Ledger"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000352",
+            "type": "object",
+            "name": "The Map"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000353",
+            "type": "object",
+            "name": "The Lantern"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000354",
+            "type": "object",
+            "name": "The Key"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000355",
+            "type": "object",
+            "name": "The Bell"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000350",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-000000000351",
+            "019a7f00-0000-7000-8000-000000000352",
+            "019a7f00-0000-7000-8000-000000000353",
+            "019a7f00-0000-7000-8000-000000000354",
+            "019a7f00-0000-7000-8000-000000000355"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "Five Objects, each named once in the form: with a hex digit before it, with one after it, inside a word, in braces, after urn:uuid:. An id found in a text is the form wherever it stands, whatever stands before it or after it (the address profile's \"The same id\"): all five are kept, in the order written. A reader that asks for a boundary around the id keeps fewer."
+    },
+    {
+      "name": "two-ids-that-share-characters-the-first-found-is-kept",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f127",
+        "name": "One case 127",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000003c0",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f127",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read 019a7f00-0000-7000-8000-0000019a7f00-0000-7000-8000-0000000003c2 first."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000019a7f00",
+            "type": "object",
+            "name": "The Ledger"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000003c2",
+            "type": "object",
+            "name": "The Map"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-0000000003c0",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-0000019a7f00"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The text holds 64 characters of id: the first form is its first 36, and a second form begins at the first's 29th character (the first's last eight digits, then the rest). A text is read from its start and the characters of one id found are part of no other (the address profile's \"The same id\"), so only the first is found. Both are Objects of the world: the Ledger is kept, the Map is not. A reader that tries every position in the text keeps both."
+    },
+    {
+      "name": "two-ids-that-share-characters-the-second-alone-is-not-found",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f128",
+        "name": "One case 128",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000003c0",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f128",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read 019a7f00-0000-7000-8000-0000019a7f00-0000-7000-8000-0000000003c2 first."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000003c2",
+            "type": "object",
+            "name": "The Map"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-0000000003c0",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The text holds 64 characters of id: the first form is its first 36, and a second form begins at the first's 29th character (the first's last eight digits, then the rest). A text is read from its start and the characters of one id found are part of no other (the address profile's \"The same id\"), so only the first is found. Only the second is an Object of the world: the first names nothing, and the second's characters still belong to it, so nothing is kept. A reader that looks for a second id where the first names nothing keeps the Map."
+    },
+    {
+      "name": "two-charters-at-one-instant-the-higher-id-as-written-leads",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f124",
+        "name": "One case 124",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019B7F00-0000-7000-8000-000000000360",
+            "type": "law",
+            "name": "Rules B",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f124",
+            "created_at": "2026-10-10T12:00:00Z",
+            "description": "The rules."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000361",
+            "type": "law",
+            "name": "Rules A",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f124",
+            "created_at": "2026-10-10T12:00:00Z",
+            "description": "The rules."
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000361",
+          "type": "law",
+          "name": "Rules A",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "Two Charters at one instant, their ids 019B7F00-... and 019a7f00-...: the higher id by code point leads, of the ids as written, and a lowercase a comes after an upper-case B, so Rules A leads. A reader that folds the case first reads 019b above 019a and puts Rules B first."
+    },
+    {
+      "name": "a-created-at-with-no-offset-is-read-as-utc",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f125",
+        "name": "One case 125",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000370",
+            "type": "law",
+            "name": "Rules A",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f125",
+            "created_at": "2026-11-12T10:00:00",
+            "description": "The rules."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000371",
+            "type": "law",
+            "name": "Rules B",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f125",
+            "created_at": "2026-11-12T11:30:00+02:00",
+            "description": "The rules."
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000370",
+          "type": "law",
+          "name": "Rules A",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "Rules A's created_at has no offset and is read as UTC, 10:00 UTC; Rules B's is 09:30 UTC. The instant puts A later, so A leads, where a comparison of the text puts B later, and so does a reader that reads a time with no offset as its own local time east of UTC. B has the higher id. The case cannot catch a reader whose own clock is UTC."
+    },
+    {
+      "name": "a-created-at-that-is-a-date-alone-is-read-as-absent",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f126",
+        "name": "One case 126",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000380",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f126",
+            "created_at": "2026-11-10T12:00:00Z",
+            "description": "The rules."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000381",
+            "type": "law",
+            "name": "Rules, dated by day",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f126",
+            "created_at": "2026-11-12",
+            "description": "The rules."
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000380",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "Rules, dated by day, carries the created_at 2026-11-12, a date with no time, which is not the one form a created_at is read in: it is read as absent and sorts as the oldest, so the older readable Rules leads. A reader that hands the text to its language's own parser may read it as that day's midnight and put it first."
+    },
+    {
+      "name": "charter-empty-list-mark-is-none",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f129",
+        "name": "One case 129",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000390",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f129",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "The first rules."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000391",
+            "type": "law",
+            "name": "Rules, newer",
+            "supertype": "Charter",
+            "x_charter_of": [],
+            "created_at": "2026-10-10T12:00:00Z",
+            "description": "The newer rules."
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000390",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The newer Law's x_charter_of is an empty list, []: no mark, as the review profile reads an empty mark (a compact reader leaves it out), so the newer Law is lore and the older Charter leads."
+    },
+    {
+      "name": "charter-empty-object-mark-is-none",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f12a",
+        "name": "One case 12a",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000392",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f12a",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "The first rules."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000393",
+            "type": "law",
+            "name": "Rules, newer",
+            "supertype": "Charter",
+            "x_charter_of": {},
+            "created_at": "2026-10-10T12:00:00Z",
+            "description": "The newer rules."
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-000000000392",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The newer Law's x_charter_of is an empty object, {}: no mark, as the review profile reads an empty mark (a compact reader leaves it out), so the newer Law is lore and the older Charter leads."
+    },
+    {
+      "name": "an-id-of-another-kind-or-of-no-element-in-a-link-field-names-no-hub",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f134",
+        "name": "One case 134a",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004a0",
+            "type": "construct",
+            "name": "The Quay",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f134",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Where the boats tie up.",
+            "characters": [
+              "019a7f00-0000-7000-8000-0000000004a1",
+              "019a7f00-0000-7000-8000-0000000004a2",
+              "019a7f00-0000-7000-8000-0000000004a3"
+            ],
+            "locations": [
+              "019a7f00-0000-7000-8000-0000000004a1"
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004a1",
+            "type": "location",
+            "name": "The Pier",
+            "created_at": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004a2",
+            "type": "location",
+            "name": "The Breakwater",
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004a0",
+            "type": "construct",
+            "name": "The Quay",
+            "sentence": "Where the boats tie up.",
+            "hubs": [
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-0000000004a1"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "A folder may hold this: the Domain's characters name the Pier and the Breakwater, two Locations, and an id of no element; its locations name the Pier. A hub is an element of the kind its link field links to, in the reader's view: the Pier is one hub, location, from locations; the Breakwater, a Location named only in characters, is no hub, and neither is the id that names nothing. Whether such a link should exist is not this reader's question."
+    },
+    {
+      "name": "a-charter-whose-type-is-stored-padded-and-capitalised-says-law",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f135",
+        "name": "One case 134b",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004b0",
+            "type": " Law ",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f135",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Keep the lamp lit."
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-0000000004b0",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": []
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The Law's type is stored as ' Law ', a space each side: trimmed and folded it is the pair, so it is the Charter, and the packet says the pair's own word, law, never the spelling stored."
+    },
+    {
+      "name": "a-domain-whose-type-is-stored-in-capitals-says-construct",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f136",
+        "name": "One case 134c",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004c0",
+            "type": "CONSTRUCT",
+            "name": "The Point",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f136",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "The light and the rocks."
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004c0",
+            "type": "construct",
+            "name": "The Point",
+            "sentence": "The light and the rocks.",
+            "hubs": []
+          }
+        ]
+      },
+      "note": "The Construct's type is stored as CONSTRUCT: folded it is the pair, so it is a Domain, and the packet says construct."
+    },
+    {
+      "name": "a-hub-location-whose-type-is-stored-padded-is-a-hub",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f137",
+        "name": "One case 134d",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004d0",
+            "type": "construct",
+            "name": "The Strand",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f137",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Where the nets dry.",
+            "locations": [
+              "019a7f00-0000-7000-8000-0000000004d1"
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004d1",
+            "type": " Location ",
+            "name": "The Net Loft",
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004d0",
+            "type": "construct",
+            "name": "The Strand",
+            "sentence": "Where the nets dry.",
+            "hubs": [
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-0000000004d1"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "The Net Loft's type is stored as ' Location ', a space each side: compared to the field's kind trimmed and folded, as the room profile defines it, it is a Location, so it is a hub, typed location, never the spelling stored."
+    },
+    {
+      "name": "a-skill-object-whose-type-is-stored-capitalised-is-kept",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f138",
+        "name": "One case 134e",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004e0",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f138",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Read ow://object/019a7f00-0000-7000-8000-0000000004e1 first."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000004e1",
+            "type": "Object",
+            "name": "The Runbook",
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": {
+          "id": "019a7f00-0000-7000-8000-0000000004e0",
+          "type": "law",
+          "name": "Rules",
+          "rules": [],
+          "skill": [
+            "019a7f00-0000-7000-8000-0000000004e1"
+          ]
+        },
+        "guide": null,
+        "domains": []
+      },
+      "note": "The Runbook's type is stored as Object: compared to object trimmed and folded, as the room profile defines it, it is an Object of this world, so the Charter keeps it in skill."
+    },
+    {
+      "name": "types-are-trimmed-and-folded-by-the-room-profile-not-by-a-language",
+      "kind": "charter",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f139",
+        "name": "One case 134f",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000501",
+            "type": "　construct　",
+            "name": "Alder Quay",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f139",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "Where the ferries land.",
+            "locations": [
+              "019a7f00-0000-7000-8000-000000000511",
+              "019a7f00-0000-7000-8000-000000000512",
+              "019a7f00-0000-7000-8000-000000000513"
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000502",
+            "type": "conﬆruct",
+            "name": "Birch Row",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f139",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "A row of sheds."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000503",
+            "type": "CONſTRUCT",
+            "name": "Cinder Point",
+            "supertype": "Domain",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f139",
+            "created_at": "2026-10-01T12:00:00Z",
+            "description": "The old furnace."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000511",
+            "type": "﻿Location",
+            "name": "The Customs House",
+            "created_at": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000512",
+            "type": "location\u001f",
+            "name": "The Ferry Slip",
+            "created_at": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000513",
+            "type": " LOCATION",
+            "name": "The Ticket Hall",
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": {
+        "charter": null,
+        "guide": null,
+        "domains": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000501",
+            "type": "construct",
+            "name": "Alder Quay",
+            "sentence": "Where the ferries land.",
+            "hubs": [
+              {
+                "type": "location",
+                "id": "019a7f00-0000-7000-8000-000000000513"
+              }
+            ]
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000503",
+            "type": "construct",
+            "name": "Cinder Point",
+            "sentence": "The old furnace.",
+            "hubs": []
+          }
+        ]
+      },
+      "note": "The answer is the room profile's (its trim, the White_Space set, and its fold, simple case folding by the C and S rows), never a language's own. Domains: an ideographic space each side of construct is trimmed (a Domain); con + U+FB06 + ruct is not construct, since the ligature has no simple folding (no Domain; a full fold would make one); CON + U+017F + TRUCT folds to construct, the long s to s (a Domain; lower-casing leaves it). Hubs: U+FEFF before Location is no White_Space, so the type is not location (no hub; a trim that takes a byte order mark would make one); location + U+001F likewise (no hub; a trim that takes the unit separator would make one); an em space, U+2003, before LOCATION is trimmed and the word folds (a hub). Birch Row is no Domain, so the order is Alder Quay, Cinder Point."
+    }
+  ],
+  "design_cases": [
+    {
+      "name": "a-locked-object-in-a-world-with-a-charter-is-a-design-part",
+      "note": "The world's Charter carries the mark: the Object's subtype locked is its design state.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f150",
+        "name": "Design 1",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000600",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f150"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000601",
+            "type": "object",
+            "name": "Control panel",
+            "subtype": "locked",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": [
+        {
+          "type": "object",
+          "id": "019a7f00-0000-7000-8000-000000000601",
+          "state": "locked"
+        }
+      ]
+    },
+    {
+      "name": "a-construct-in-design-is-a-design-part",
+      "note": "A Construct carries the state as an Object does; no list of kinds decides it.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f151",
+        "name": "Design 2",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000610",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f151"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000611",
+            "type": "construct",
+            "name": "Sign-in flow",
+            "subtype": "in design",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": [
+        {
+          "type": "construct",
+          "id": "019a7f00-0000-7000-8000-000000000611",
+          "state": "in design"
+        }
+      ]
+    },
+    {
+      "name": "a-subtype-with-a-capital-and-a-trailing-space-is-in-design",
+      "note": "The subtype is trimmed and folded as the room profile defines it; the state is the page's word, never the spelling stored.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f152",
+        "name": "Design 3",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000620",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f152"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000621",
+            "type": "object",
+            "name": "Settings screen",
+            "subtype": "In Design ",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": [
+        {
+          "type": "object",
+          "id": "019a7f00-0000-7000-8000-000000000621",
+          "state": "in design"
+        }
+      ]
+    },
+    {
+      "name": "a-deprecated-construct-is-no-design-part",
+      "note": "A world's own further subtype is an ordinary subtype: no design state.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f153",
+        "name": "Design 4",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000630",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f153"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000631",
+            "type": "construct",
+            "name": "Old export rule",
+            "subtype": "deprecated",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": []
+    },
+    {
+      "name": "a-law-with-a-subtype-is-no-design-part",
+      "note": "Only an Object or a Construct has a design state.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f154",
+        "name": "Design 5",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000640",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f154"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000641",
+            "type": "law",
+            "name": "Naming rule",
+            "subtype": "accepted",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": []
+    },
+    {
+      "name": "a-locked-object-in-a-world-whose-charter-has-no-mark-is-no-design-part",
+      "note": "The world's only Law with supertype Charter has no mark, so charterOf finds no Charter and no element has a design state: locked is a word any world may use.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f155",
+        "name": "Design 6",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000650",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop."
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000651",
+            "type": "object",
+            "name": "Control panel",
+            "subtype": "locked",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": []
+    },
+    {
+      "name": "a-workshops-spec-in-design-is-a-design-part",
+      "note": "The Construct is a room element (the room profile's pair construct + Spec, and the room's mark, which holds its sitting's id as a workshop's element does; the sitting's own mark holds the world's id): no kind is excluded, so its subtype in design is its design state in a world with a Charter.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f156",
+        "name": "Design 7",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000660",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f156"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000662",
+            "type": "event",
+            "name": "Settings workshop",
+            "supertype": "Sitting",
+            "created_at": "2026-11-02T11:00:00Z",
+            "x_room_of": "019a7f00-0000-7000-8000-00000000f156"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000661",
+            "type": "construct",
+            "name": "Settings screen",
+            "supertype": "Spec",
+            "subtype": "in design",
+            "created_at": "2026-11-02T12:00:00Z",
+            "x_room_of": "019a7f00-0000-7000-8000-000000000662"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": [
+        {
+          "type": "construct",
+          "id": "019a7f00-0000-7000-8000-000000000661",
+          "state": "in design"
+        }
+      ]
+    },
+    {
+      "name": "a-locked-law-is-no-design-part",
+      "note": "Only an Object or a Construct has a design state: a Law whose subtype is locked, in a world with a Charter, is no design part.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f157",
+        "name": "Design 8",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000670",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f157"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000671",
+            "type": "law",
+            "name": "Naming rule",
+            "subtype": "locked",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": []
+    },
+    {
+      "name": "a-locked-object-with-a-unit-separator-after-it-has-no-design-state",
+      "note": "The subtype is locked followed by U+001F, the unit separator, which has no White_Space property: the room profile's trim leaves it, so the trimmed subtype is no design state (a language's own trim may take it).",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f158",
+        "name": "Design 9",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000680",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f158"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000681",
+            "type": "object",
+            "name": "Control panel",
+            "subtype": "locked\u001f",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": []
+    },
+    {
+      "name": "a-locked-object-a-guest-holds-only-as-a-stub-has-no-design-state",
+      "note": "The guest reads the marked Charter whole and holds the Object only as a known-of stub, which is served its subtype locked (the lens profile): the state is read only from an element served whole, so the stub has none.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f159",
+        "name": "Design 10",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          },
+          "guest": {
+            "rung": "guest",
+            "character": null,
+            "whole": [
+              "019a7f00-0000-7000-8000-000000000690"
+            ],
+            "known_of": [
+              "019a7f00-0000-7000-8000-000000000691"
+            ]
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-000000000690",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f159"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-000000000691",
+            "type": "object",
+            "name": "Control panel",
+            "subtype": "locked",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "guest",
+      "want": []
+    },
+    {
+      "name": "a-hidden-charter-gives-its-owner-a-design-part",
+      "note": "The world's marked Charter carries the hidden mark. Its owner sees it, so the locked Object is a design part for the owner. The next case is the same world read by a contributor.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f15a",
+        "name": "Design 11",
+        "hidden": [
+          "019a7f00-0000-7000-8000-0000000006a0"
+        ],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          },
+          "contributor": {
+            "rung": "contributor",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000006a0",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f15a"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000006a1",
+            "type": "object",
+            "name": "Control panel",
+            "subtype": "locked",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": [
+        {
+          "type": "object",
+          "id": "019a7f00-0000-7000-8000-0000000006a1",
+          "state": "locked"
+        }
+      ]
+    },
+    {
+      "name": "a-hidden-charter-gives-a-contributor-no-design-part",
+      "note": "The same world as the case before, read by a contributor: the hidden mark keeps the Charter from it, and it wins over rule 5, so charterOf finds no Charter for this reader and the locked Object, which it reads whole, has no design state.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f15a",
+        "name": "Design 11",
+        "hidden": [
+          "019a7f00-0000-7000-8000-0000000006a0"
+        ],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          },
+          "contributor": {
+            "rung": "contributor",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000006a0",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f15a"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000006a1",
+            "type": "object",
+            "name": "Control panel",
+            "subtype": "locked",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "contributor",
+      "want": []
+    },
+    {
+      "name": "a-part-whose-type-is-stored-with-spaces-and-a-capital-is-written-object",
+      "note": "The Object's type is stored as \" Object \": trimmed and folded it is an Object, and its type in the answer is object, the kind's own word, as the packet writes a type.",
+      "world": {
+        "id": "019a7f00-0000-7000-8000-00000000f15b",
+        "name": "Design 12",
+        "hidden": [],
+        "readers": {
+          "owner": {
+            "rung": "owner",
+            "character": null
+          }
+        },
+        "elements": [
+          {
+            "id": "019a7f00-0000-7000-8000-0000000006b0",
+            "type": "law",
+            "name": "Rules",
+            "supertype": "Charter",
+            "created_at": "2026-11-01T12:00:00Z",
+            "description": "The rules of the workshop.",
+            "x_charter_of": "019a7f00-0000-7000-8000-00000000f15b"
+          },
+          {
+            "id": "019a7f00-0000-7000-8000-0000000006b1",
+            "type": " Object ",
+            "name": "Control panel",
+            "subtype": "locked",
+            "created_at": "2026-11-02T12:00:00Z"
+          }
+        ]
+      },
+      "reader": "owner",
+      "want": [
+        {
+          "type": "object",
+          "id": "019a7f00-0000-7000-8000-0000000006b1",
+          "state": "locked"
+        }
+      ]
+    }
+  ]
+}

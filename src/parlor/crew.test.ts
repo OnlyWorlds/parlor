@@ -3,7 +3,7 @@
 // folds and an element's card.
 import { describe, expect, it } from 'vitest';
 import type { OwMember } from '@onlyworlds/sdk';
-import { readLines, readWork, readDesignParts, type El, type Sitting } from './shapes';
+import { readLines, readWork, readDesignParts, seatView, type El, type Sitting } from './shapes';
 import { crewOf, roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, SHOW_WORKING, workshopRuns, designFolds, bySize, cardOf, firstLine, seatsByKey } from './crew';
 import { buildTeam, newestNote, age } from './team';
 
@@ -190,20 +190,20 @@ describe('who asked, and working', () => {
     expect(heldWork(work, { key: 'm-x', character: 'c-x' })).toBeNull();
   });
 
-  it('shows no seat as working while SHOW_WORKING is off: the Note stays, working, since and asked by go', () => {
+  it('shows no seat as working while SHOW_WORKING is off: the Note stays, working, since, made by and asked by go', () => {
     expect(SHOW_WORKING).toBe(false);
     const held = heldWork(work, { key: 'a-von', character: 'c-v' });
     const note = { id: 'n', type: 'narrative', supertype: 'Note', story: 'Building it', objects: ['o1'], created_at: '2026-11-18T11:00:00Z' } as El;
     const els = new Map<string, El>([['o1', { id: 'o1', type: 'object', name: 'Exam trainer' } as El]]);
     const wl = workLineOf(note, held, els, 'a-von');
-    expect(shownWorkLine(wl)).toEqual({ on: 'Building it', noteAt: '2026-11-18T11:00:00Z', links: ['o1'], working: false, since: null, askedBy: null });
+    expect(shownWorkLine(wl)).toEqual({ on: 'Building it', noteAt: '2026-11-18T11:00:00Z', links: ['o1'], working: false, since: null, madeBy: null, askedBy: null });
     // A held item with no Note shows nothing; turned on, the derivation is whole again.
     expect(shownWorkLine(workLineOf(null, held, els, 'a-von'))).toBeNull();
     expect(shownWorkLine(wl, true)).toEqual(wl);
-    expect(wl?.working && wl.askedBy === 'm-bb').toBe(true);
+    expect(wl?.working && wl.madeBy === 'm-bb').toBe(true);
   });
 
-  it('never counts an item the seat made about itself, unless its own take holds it; asked by never names the seat', () => {
+  it('never counts an item the seat made about itself, unless its own take holds it; made by never names the seat', () => {
     const own = readWork([
       workItem('w-self', '2026-11-18T11:00:00Z', { subtype: 'taken', characters: ['c-s'], created_by: 'm-self' }),
     ], WORLD);
@@ -214,15 +214,15 @@ describe('who asked, and working', () => {
     ], WORLD);
     const held = heldWork(took, { key: 'm-self', character: 'c-s' });
     expect(held?.id).toBe('w-self');
-    expect(workLineOf(null, held, new Map(), 'm-self')).toMatchObject({ working: true, askedBy: null });
+    expect(workLineOf(null, held, new Map(), 'm-self')).toMatchObject({ working: true, madeBy: null });
   });
 
-  it('says asked by from the work item and since from the Note, else the item', () => {
+  it('says made by from the work item and since from the Note, else the item; asked by only from x_packet_from', () => {
     const elsMap = new Map<string, El>([['o1', { id: 'o1', type: 'object', name: 'Exam trainer' } as El], ['room', { id: 'room', type: 'object', name: 'r', supertype: 'Message', x_room_of: WORLD } as El]]);
     const held = heldWork(work, { key: 'a-von', character: 'c-v' });
     const note = { id: 'n', type: 'narrative', supertype: 'Note', story: '\n  Building the first screen  \nmore', objects: ['o1', 'missing'], narrator: 'c-v', created_at: '2026-11-18T11:00:00Z' } as El;
     const wl = workLineOf(note, held, elsMap)!;
-    expect(wl).toEqual({ on: 'Building the first screen', noteAt: '2026-11-18T11:00:00Z', links: ['o1'], working: true, since: '2026-11-18T11:00:00Z', askedBy: 'm-bb' });
+    expect(wl).toEqual({ on: 'Building the first screen', noteAt: '2026-11-18T11:00:00Z', links: ['o1'], working: true, since: '2026-11-18T11:00:00Z', madeBy: 'm-bb', askedBy: null });
     const noNote = workLineOf(null, held, elsMap)!;
     expect(noNote.since).toBe('2026-11-18T09:30:00Z');
     expect(noNote.on).toBe('');
@@ -230,7 +230,7 @@ describe('who asked, and working', () => {
 
   it('is not working with a Note and nothing taken, and draws no line with neither', () => {
     const note = { id: 'n', type: 'narrative', supertype: 'Note', story: 'Reading', created_at: '2026-11-18T11:00:00Z' } as El;
-    expect(workLineOf(note, null, new Map())).toMatchObject({ working: false, since: null, askedBy: null, on: 'Reading' });
+    expect(workLineOf(note, null, new Map())).toMatchObject({ working: false, since: null, madeBy: null, askedBy: null, on: 'Reading' });
     expect(workLineOf(null, null, new Map())).toBeNull();
   });
 });
@@ -248,15 +248,18 @@ describe('a workshop runs', () => {
 
 describe('the design folds', () => {
   const obj = (id: string, parent?: string, subtype = 'in design'): El => ({ id, type: 'object', name: id, subtype, ...(parent ? { parent_object: parent } : {}) } as El);
+  // Design parts are read only where the SDK finds a Charter for the reader (the charter profile, serial 135).
+  const charter = { id: 'law-1', type: 'law', name: 'How we work', supertype: 'Charter', x_charter_of: WORLD } as El;
+  const readDesignPartsOf = (els: El[]) => readDesignParts(seatView([...els, charter], true));
   it('puts each part under its topmost design and keeps a loop standing on its own', () => {
-    const parts = readDesignParts([obj('trainer'), obj('screen', 'trainer'), obj('deep', 'screen'), obj('plain', 'lore'), obj('loop1', 'loop2'), obj('loop2', 'loop1'),
+    const parts = readDesignPartsOf([obj('trainer'), obj('screen', 'trainer'), obj('deep', 'screen'), obj('plain', 'lore'), obj('loop1', 'loop2'), obj('loop2', 'loop1'),
       { id: 'lore', type: 'object', name: 'lore' } as El]);
     const folds = designFolds(parts);
     const view = Object.fromEntries(folds.map(f => [f.design.id, f.parts.map(p => p.id)]));
     expect(view).toEqual({ trainer: ['deep', 'screen'], plain: [], loop1: [], loop2: [] });
   });
   it('shows the biggest design first; designs of one size keep their order (in design first, then by name)', () => {
-    const parts = readDesignParts([obj('a-small'), obj('b-big', undefined, 'locked'), obj('k1', 'b-big', 'locked'), obj('k2', 'b-big', 'locked'), obj('c-mid'), obj('m1', 'c-mid'), obj('d-none')]);
+    const parts = readDesignPartsOf([obj('a-small'), obj('b-big', undefined, 'locked'), obj('k1', 'b-big', 'locked'), obj('k2', 'b-big', 'locked'), obj('c-mid'), obj('m1', 'c-mid'), obj('d-none')]);
     expect(bySize(designFolds(parts)).map(f => `${f.design.id}:${f.parts.length}`)).toEqual(['b-big:2', 'c-mid:1', 'a-small:0', 'd-none:0']);
   });
 });

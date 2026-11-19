@@ -27,7 +27,10 @@
  * may write that mark, never the room's.
  */
 
-import { FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, ROOM_PAIRS, readReportLine, readReportLines, readingAidOf, simpleCaseFold } from '@onlyworlds/sdk';
+import {
+  FIELD_SCHEMA, charterOf, handsOnAsProposed, isCharterElement, isRoomElement, proposedMarkOf, ROOM_PAIRS, readReportLine, readReportLines, readingAidOf, simpleCaseFold,
+  askerOf, designPartsOf, isOpenWork, reportTalksOf, talksOf, workOf, workStateOf, type OwLensReader, type OwWorkState,
+} from '@onlyworlds/sdk';
 import { byCodePoint, earlierFirst, isAfter, newestFirst, sameMoment } from './when.ts';
 
 export interface El {
@@ -143,7 +146,11 @@ export interface Line {
   parent: string | null;
   /** The work item a line answers: a Narrative cannot point at a Relation by parent_narrative, so `relations`. */
   about: string | null;
-  /** The Objects then the Constructs the line names: a design part among them is a talk on it (`designsOf`). */
+  /**
+   * The ids of the Objects then the Constructs the line is a talk on (the room and report profiles, serial 135, read by
+   * the SDK's `talksOf` for a line and `reportTalksOf` for a report: an empty or White_Space-only entry names nothing).
+   * A design part among them is a talk on it (`designsOf`).
+   */
   named: string[];
   /**
    * The Characters a Message is addressed to (its `characters`): a line written in a seat's room names that seat's
@@ -181,7 +188,7 @@ export function readLinesAsGiven(els: Iterable<El>): Line[] {
       narrator: link(el, 'narrator'),
       parent: link(el, 'parent_narrative'),
       about: links(el, 'relations')[0] ?? null,
-      named: [...links(el, 'objects'), ...links(el, 'constructs')],
+      named: (report ? reportTalksOf(el) : talksOf(el)).map(t => t.id),
       to: report ? [] : links(el, 'characters'),
       at: el.created_at ?? '',
       report: report ? readReportPart(el) : null,
@@ -314,10 +321,12 @@ export interface KeeperPart {
   done?: { id: string; title: string } | null;
 }
 
-/** A work item's own word lets a keeper's report set it done: open or taken (or none, read as open), and not proposed. */
+/**
+ * A work item's own state lets a keeper's report set it done: open work (the packet profile's rule 5, serial 136: open
+ * or taken, read by the SDK's `isOpenWork`; a standing item and one with no state never), and not proposed.
+ */
 export function maySetDone(el: El): boolean {
-  const word = fold(el.subtype);
-  return (word === '' || word === 'open' || word === 'taken') && proposedMarkOf(el) === null;
+  return isOpenWork(el) && proposedMarkOf(el) === null;
 }
 
 /**
@@ -786,7 +795,11 @@ export const LINK_FIELDS: Readonly<Record<string, string>> = {
   narrative: 'narratives', event: 'events',
 };
 
-export type WorkState = 'open' | 'taken' | 'done';
+/**
+ * A work item's state (the packet profile's rule 5, serial 136), read by the SDK's `workStateOf`: open, taken, done or
+ * standing, or null for no state (any other word, an empty or absent subtype included).
+ */
+export type WorkState = OwWorkState | null;
 
 export interface WorkElement {
   type: string;
@@ -812,8 +825,13 @@ export interface WorkItem {
   otherWorld: boolean;
   /** An agent's write waiting for review (schema-dist profiles/review.md: x_review_proposed set). */
   proposed: boolean;
-  /** The live takes on it, first taken first (who by `created_by`, never `actor`). */
+  /** The live takes on it, first taken first (who by `created_by`, never `actor`); always empty when it is no open work. */
   takes: Take[];
+  /**
+   * The Character who asked for it (`x_packet_from`, the packet profile's rule 8, read by the SDK's `askerOf`): a
+   * Character this reader is served, written exactly so; null when it names none. Never the maker, never `actor`.
+   */
+  askedBy: string | null;
   el: El;
 }
 
@@ -867,19 +885,6 @@ export function newTake(item: { id: string; title: string; roomOf: string }, cha
   return body;
 }
 
-/** The packet's valid entries (each of type, id and reason a string), or null when it has none. */
-function packetElements(el: El): WorkElement[] | null {
-  const v = el.x_packet_elements;
-  if (!Array.isArray(v)) return null;
-  const out: WorkElement[] = [];
-  for (const e of v) {
-    if (!e || typeof e !== 'object') continue;
-    const { type, id, reason } = e as Record<string, unknown>;
-    if (typeof type === 'string' && typeof id === 'string' && typeof reason === 'string') out.push({ type: fold(type), id, reason });
-  }
-  return out.length ? out : null;
-}
-
 /**
  * The Titles a work item is for (the packet profile's `x_packet_for`, ruled 2026-11-10): ids of Titles in the world the
  * item sits in, never the packet's source world. An id that is no Title here, a non-string or an empty string is left
@@ -905,45 +910,97 @@ export function addressOf(w: Pick<WorkItem, 'forWho' | 'forTitles'>, me: string 
   return 'others';
 }
 
-/** Every room work item in the world, whatever sitting made it: open and taken first, done last, newest first within. */
+/**
+ * The world a work item's asker is read in (the packet profile's rule 8, the SDK's `workOf` and `askerOf`): the ids of
+ * the Characters this reader is served, and of every other element it is served, each as written.
+ */
+function workWorld(all: readonly El[]): { characters: string[]; others: string[] } {
+  const characters: string[] = [];
+  const others: string[] = [];
+  for (const el of all) (fold(el.type) === 'character' ? characters : others).push(el.id);
+  return { characters, others };
+}
+
+/** The Work tab's order by state (contract K5): open work first, then standing, then no state, then done. */
+const STATE_RANK = (s: WorkState): number => (s === 'open' || s === 'taken' ? 0 : s === 'standing' ? 1 : s === null ? 2 : 3);
+
+/**
+ * Every room work item in the world, whatever sitting made it, whatever its state (the packet profile's rule 5: every
+ * work item is shown): open work first, then standing, then no state, then done, newest first within.
+ *
+ * The state is the SDK's `workStateOf`. A live take is the room's own overlay, and only on open work (contract K2):
+ * an open item with a take reads taken; a take on a standing, done or stateless item changes nothing and is not kept.
+ * The elements are the packet's (`workOf`'s, in `x_packet_elements`' order with each reason) when it has any, else the
+ * Relation's typed links.
+ */
 export function readWork(els: Iterable<El>, worldId: string, live: (by: string) => boolean = () => true): WorkItem[] {
   const all = [...els];
   const takes = readTakes(all, live);
   const titles = new Set(all.filter(el => fold(el.type) === 'title').map(el => el.id));
+  const items = all.filter(el => isA(el, 'relation', SUPERTYPE.workItem));
+  const world = workWorld(all);
+  const packets = workOf(items, world);
   const out: WorkItem[] = [];
-  for (const el of all) {
-    if (!isA(el, 'relation', SUPERTYPE.workItem)) continue;
-    const word = fold(el.subtype);
-    const taken = takes.get(el.id) ?? [];
-    const packet = packetElements(el);
+  for (const el of items) {
+    const own = workStateOf(el);
+    const taken = isOpenWork(el) ? takes.get(el.id) ?? [] : [];
+    const packet: WorkElement[] = (Object.prototype.hasOwnProperty.call(packets.elements, el.id) ? packets.elements[el.id] : [])
+      .map(e => ({ type: fold(e.type), id: e.id, reason: e.reason }));
     const source = el.x_packet_source as { world?: unknown } | null | undefined;
-    const elements = packet ?? Object.entries(LINK_FIELDS).flatMap(([type, field]) => links(el, field).map(id => ({ type, id, reason: null })));
+    const elements = packet.length ? packet : Object.entries(LINK_FIELDS).flatMap(([type, field]) => links(el, field).map(id => ({ type, id, reason: null })));
     out.push({
       id: el.id,
       title: (el.name ?? '').toString(),
       text: (el.description ?? '').toString(),
-      // Done wins; then taken, by a live take or the item's own word (a packet's reader may set it).
-      state: word === 'done' ? 'done' : word === 'taken' || taken.length ? 'taken' : 'open',
+      state: own === 'open' && taken.length ? 'taken' : own,
       forWho: link(el, 'actor'),
       forTitles: forTitlesOf(el, titles),
       by: whoMade(el),
       at: el.created_at ?? '',
       elements,
-      otherWorld: !!packet && !!source && typeof source.world === 'string' && source.world !== worldId,
+      otherWorld: !!packet.length && !!source && typeof source.world === 'string' && source.world !== worldId,
       // The review profile's reading for a page people read (rule 1 and 4): an object mark is proposed; an empty
       // mark is settled, and any other value a doubt, shown settled (a lint's to report).
       proposed: proposedMarkOf(el) !== null,
       takes: taken,
+      askedBy: askerOf(el, world),
       el,
     });
   }
-  const rank = (s: WorkState) => (s === 'done' ? 1 : 0);
-  return out.sort((a, b) => rank(a.state) - rank(b.state) || newestFirst(a.at, b.at) || byCodePoint(a.id, b.id));
+  return out.sort((a, b) => STATE_RANK(a.state) - STATE_RANK(b.state) || newestFirst(a.at, b.at) || byCodePoint(a.id, b.id));
 }
 
-/** A new work item: the picked elements in their typed link fields (a type with no field is left out), subtype open. */
+/** A work item's chip, by its state: each of the four words, and no state its own. Its class is `s-<key>`. */
+export const WORK_STATE_WORD = { open: 'Open', taken: 'Taken', done: 'Done', standing: 'Standing', none: 'No state' } as const;
+export function workStateKey(s: WorkState): keyof typeof WORK_STATE_WORD {
+  return s ?? 'none';
+}
+
+/** The line a work item that is no open work and not done says under its title (contract K5 and R13); null for the rest. */
+export function workStateLine(s: WorkState): string | null {
+  if (s === 'standing') return 'A standing list: never done.';
+  if (s === null) return 'No state set, so this is not open work.';
+  return null;
+}
+
+/**
+ * What the Work tab offers on an item by its state (the packet profile's rule 5; contract K4 and R7): Take or Release
+ * and Mark done only on open work, Reopen only on a done item; a standing or stateless item carries none of them.
+ * Who may press each (a writer, the maker or a host) is the room's to add.
+ */
+export function workOffers(w: Pick<WorkItem, 'state' | 'el'>): { take: boolean; markDone: boolean; reopen: boolean } {
+  const open = isOpenWork(w.el);
+  return { take: open, markDone: open, reopen: w.state === 'done' };
+}
+
+/**
+ * A new work item: the picked elements in their typed link fields (a type with no field is left out), subtype open,
+ * and who asked (`x_packet_from`, the packet profile's rule 8): the filer's own Character when it plays one; with none,
+ * the key is left out, never an empty string.
+ */
 export function newWorkItem(
   title: string, text: string, forWho: string | null, picks: ReadonlyArray<{ type: string; id: string }>, roomOf: string,
+  askedBy: string | null = null,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     name: title.trim().slice(0, 200),
@@ -953,6 +1010,7 @@ export function newWorkItem(
     [ROOM_MARK]: roomOf,
   };
   if (forWho) body.actor = forWho;
+  if (typeof askedBy === 'string' && fold(askedBy) !== '') body.x_packet_from = askedBy;
   for (const p of picks) {
     const field = LINK_FIELDS[p.type];
     if (!field) continue;
@@ -977,19 +1035,41 @@ export interface DesignPart {
 }
 
 /**
- * The design parts a reader sees: Objects and Constructs whose `subtype` folds to `in design` or `locked`, the
- * world's own (never the room's), never hidden (by the mark or the room's own list), known of, proposed, or a reading
- * aid. In design first, then locked, each by its folded name in code point order, a tie by id.
+ * What one seat is served, as the lens profile's rungs read it (the charter profile's rule 5, serial 135: a Charter
+ * the hidden mark keeps from a reader is not that reader's). A keeper (the owner or a co-builder) is served the whole
+ * world, the hidden among it, so it reads as the owner, with the room's hidden list as the world's. Every other seat
+ * reads exactly what it was served: its full rows whole (its own hidden creations among them, which keel serves only to
+ * their maker and the keepers) and its known-of rows as stubs, so a stub is never a design part.
  */
-export function readDesignParts(els: Iterable<El>, hidden: ReadonlySet<string> = new Set()): DesignPart[] {
+export interface SeatView {
+  /** The SDK's charter world (`OwCharterWorld`): the elements as served, and for a keeper the room's hidden list. */
+  world: { elements: readonly El[]; hidden?: readonly string[] };
+  reader: OwLensReader;
+}
+
+export function seatView(els: Iterable<El>, keeper: boolean, hidden: Iterable<string> = []): SeatView {
+  const elements = [...els];
+  if (keeper) return { world: { elements, hidden: [...hidden] }, reader: { rung: 'owner' } };
+  const whole: string[] = [];
+  const knownOf: string[] = [];
+  for (const el of elements) (el.known_of === true ? knownOf : whole).push(el.id);
+  return { world: { elements }, reader: { rung: 'guest', whole, known_of: knownOf } };
+}
+
+/**
+ * The design parts this seat reads (the charter profile's design state, serial 135), as the SDK's `designPartsOf` reads
+ * them over what the seat was served: only where it finds a Charter for this seat, each Object or Construct served whole
+ * whose subtype is a design state, whatever its supertype (a room's Spec or a reading aid in design is a part too).
+ * For a keeper a hidden part is among them, shown marked. In design first, then locked, each by its folded name in
+ * code point order, a tie by id.
+ */
+export function readDesignParts(view: SeatView): DesignPart[] {
+  const by = new Map(view.world.elements.map(el => [el.id, el]));
   const out: DesignPart[] = [];
-  for (const el of els) {
-    const type = fold(el.type);
-    if (type !== 'object' && type !== 'construct') continue;
-    const word = fold(el.subtype);
-    const state = (DESIGN_STATES as readonly string[]).includes(word) ? (word as DesignState) : null;
-    if (!state || !isPickable(el) || hidden.has(el.id) || isCharterElement(el) || handsOnAsProposed(el)) continue;
-    out.push({ id: el.id, type, title: typeof el.name === 'string' && el.name.trim() ? el.name : 'Untitled', state, el });
+  for (const p of designPartsOf(view.world, view.reader)) {
+    const el = by.get(p.id);
+    if (!el) continue;
+    out.push({ id: p.id, type: p.type, title: typeof el.name === 'string' && el.name.trim() ? el.name : 'Untitled', state: p.state, el });
   }
   const rank = (s: DesignState) => (s === 'in design' ? 0 : 1);
   return out.sort((a, b) => rank(a.state) - rank(b.state) || byCodePoint(fold(a.title), fold(b.title)) || byCodePoint(a.id, b.id));
@@ -1069,13 +1149,12 @@ export interface Charter {
 
 /**
  * The room's house rules: the world's charter as the charter profile reads it, by the SDK's own `charterOf` (the
- * newest marked Charter, a proposed one out), over what this seat was served (Lantern's reading: the copy already is
- * what the seat sees). A Law with supertype Charter and no mark is lore, and is not the room's charter.
+ * newest marked Charter, a proposed one out), for this seat as it was served (`seatView`; without one, as a keeper
+ * reads the copy). A Law with supertype Charter and no mark is lore, and is not the room's charter.
  */
-export function readCharter(els: Iterable<El>): Charter | null {
-  const all = [...els];
-  const id = charterOf({ elements: all }, { rung: 'owner' }).charter?.id ?? null;
-  const el = id ? all.find(e => e.id === id) : undefined;
+export function readCharter(els: Iterable<El>, view: SeatView = seatView(els, true)): Charter | null {
+  const id = charterOf(view.world, view.reader).charter?.id ?? null;
+  const el = id ? view.world.elements.find(e => e.id === id) : undefined;
   return el ? { id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() } : null;
 }
 
@@ -1084,9 +1163,9 @@ export function readCharter(els: Iterable<El>): Charter | null {
  * Charter that carries no mark, is not proposed or a doubt, and is not hidden, by name. The keeper names one (the
  * charter profile: a tool never picks; "the keeper names"), so all of them are offered, none by default.
  */
-export function unmarkedCharters(els: Iterable<El>): Charter[] {
+export function unmarkedCharters(els: Iterable<El>, view?: SeatView): Charter[] {
   const all = [...els];
-  if (readCharter(all)) return [];
+  if (readCharter(all, view ?? seatView(all, true))) return [];
   return all.filter(el => readingAidOf(el) === 'charter' && !isCharterElement(el) && !handsOnAsProposed(el) && el.hidden !== true && el.known_of !== true)
     .map(el => ({ id: el.id, name: (el.name ?? '').toString(), text: (el.description ?? '').toString() }))
     // By folded name compared by code point (never a locale's collation), ties by id.

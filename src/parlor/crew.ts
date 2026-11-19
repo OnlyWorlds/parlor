@@ -5,7 +5,7 @@
  * filter over it and the parent chain, never a second parser.
  */
 
-import { FIELD_SCHEMA, isRoomElement, fieldLabel, type OwMember } from '@onlyworlds/sdk';
+import { FIELD_SCHEMA, isOpenWork, isRoomElement, fieldLabel, type OwMember } from '@onlyworlds/sdk';
 import { OWNER, type El, type Line, type Sitting, type WorkItem, type DesignPart } from './shapes';
 import { buildTeam, keyOf, type MemberKey } from './team';
 import { roomRole, type RoomRole } from './roster';
@@ -171,14 +171,14 @@ function links(el: El, field: string): string[] {
 }
 
 /**
- * The work item a seat holds taken: a work item in state taken that the seat's own live take holds, or whose
- * `characters` holds the seat's Character and that someone else made (a seat never asks itself); the newest by when it
- * was made. Null when it holds none.
+ * The work item a seat holds taken: open work (the SDK's `isOpenWork`) in state taken that the seat's own live take
+ * holds, or whose `characters` holds the seat's Character and that someone else made (a seat never asks itself); the
+ * newest by when it was made. Null when it holds none. A standing or stateless item is never held, take or no take.
  */
 export function heldWork(work: readonly WorkItem[], seat: { key: MemberKey; character: string | null }): WorkItem | null {
   let best: WorkItem | null = null;
   for (const w of work) {
-    if (w.state !== 'taken') continue;
+    if (!isOpenWork(w.el) || w.state !== 'taken') continue;
     const named = !!seat.character && links(w.el, 'characters').includes(seat.character) && w.by !== seat.key;
     const took = w.takes.some(t => t.by === seat.key);
     if (!named && !took) continue;
@@ -205,7 +205,12 @@ export interface WorkLine {
   working: boolean;
   /** While working: the Note's time, else the work item's. */
   since: string | null;
-  /** Who made the work item the seat holds taken, never the seat itself; null when it holds none. */
+  /** Who made the work item the seat holds taken, never the seat itself; null when it holds none. Never shown as who asked. */
+  madeBy: string | null;
+  /**
+   * The Character who asked for the work item the seat holds taken (its `x_packet_from`, read by the SDK's `askerOf`):
+   * null when it names none, never the maker or `actor`.
+   */
   askedBy: string | null;
 }
 
@@ -227,7 +232,7 @@ export const SHOW_WORKING = false;
 export function shownWorkLine(wl: WorkLine | null, show: boolean = SHOW_WORKING): WorkLine | null {
   if (!wl || show) return wl;
   if (!wl.noteAt) return null;
-  return { ...wl, working: false, since: null, askedBy: null };
+  return { ...wl, working: false, since: null, madeBy: null, askedBy: null };
 }
 
 /** A seat's work line, from its newest Note and the work item it holds taken. Null when it has neither. */
@@ -249,7 +254,8 @@ export function workLineOf(note: El | null, held: WorkItem | null, els: Readonly
     links: ids,
     working: !!held,
     since: held ? noteAt ?? held.at : null,
-    askedBy: held && held.by !== seat ? held.by : null,
+    madeBy: held && held.by !== seat ? held.by : null,
+    askedBy: held?.askedBy ?? null,
   };
 }
 
@@ -310,7 +316,7 @@ export interface CardView {
   text: string;
   /** What it links to one step away, and the Objects under it, that the reader may open. */
   links: CardLink[];
-  /** The work items still open on it (its open questions): the room's, not done, about it. */
+  /** The open work on it (its open questions): the room's work items about it whose state is open or taken. */
   questions: Array<{ id: string; title: string }>;
 }
 
@@ -349,7 +355,8 @@ export function cardOf(el: El, els: ReadonlyMap<string, El>, work: readonly Work
     state: str(el.subtype) || str(el.supertype),
     text: str(el.description) || str(el.story),
     links: out,
-    questions: work.filter(w => w.state !== 'done' && !w.otherWorld && w.elements.some(e => e.id === el.id)).map(w => ({ id: w.id, title: w.title.trim() || 'Untitled' })),
+    // Open work only (the packet profile's rule 7): a standing item, a done one and one with no state are counted on none.
+    questions: work.filter(w => isOpenWork(w.el) && !w.otherWorld && w.elements.some(e => e.id === el.id)).map(w => ({ id: w.id, title: w.title.trim() || 'Untitled' })),
   };
 }
 
