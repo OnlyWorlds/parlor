@@ -48,5 +48,25 @@ export function workArrival(item: string, served: ReadonlyArray<{ id: string }>,
   return canAnswer ? 'answer' : 'read';
 }
 
+/**
+ * Whether the composer's answer moves the person off the address's item: an answer to anything else (another work item,
+ * a line, a design), or the answer the address opened, let go or sent.
+ */
+export function releasesAddress(addressed: string | null, reply: { id: string; link: string } | null, answeredHere: boolean): boolean {
+  if (!addressed) return false;
+  return reply ? !(reply.link === 'relations' && reply.id === addressed) : answeredHere;
+}
+
+/**
+ * The bar a room writes when it lets its address go: the room's own address, only while the bar still names the item
+ * this room was opened at. A room that is gone writes nothing, and neither does a room whose bar has since moved on (a
+ * newer arrival in the same tab, whose address is its own).
+ */
+export function releasedHash(hash: string, world: string, was: string, roomGone: boolean): string | null {
+  if (roomGone) return null;
+  const at = readAddress(hash);
+  return at && at.world === world && at.work === was ? roomHash(world) : null;
+}
+
 export const WORK_NOT_HERE = 'This work item is not here: it may be gone or hidden, or the link may be wrong.';
 export const WORK_READ_ONLY = 'You can read this work item; this seat cannot answer it.';

@@ -1,6 +1,6 @@
 // A work item's address: `#/w/<world>/work/<item>` opens that world's room at the item; what a sign-in carries.
 import { describe, expect, it } from 'vitest';
-import { isRoomHash, readAddress, resumeHashOf, roomHash, workArrival, workHash } from './address';
+import { isRoomHash, readAddress, releasedHash, releasesAddress, resumeHashOf, roomHash, workArrival, workHash } from './address';
 
 const W = '0f0f0f0f-0000-4000-8000-00000000a1a1';
 const I = '1a1a1a1a-0000-4000-8000-00000000b2b2';
@@ -65,5 +65,45 @@ describe('how a room opened at a work item lands', () => {
   it('before the room\'s read is whole, nothing is said: it waits, whatever the list holds', () => {
     expect(workArrival('i-9', [], false, true)).toBe('wait');
     expect(workArrival('i-1', served, false, true)).toBe('wait');
+  });
+});
+
+describe('when the address gives way to the room\'s own', () => {
+  const answer = (id: string) => ({ id, link: 'relations' });
+  it('the answer the address opened, sent or let go (the composer answers nothing now): it gives way', () => {
+    expect(releasesAddress('i-1', null, true)).toBe(true);
+  });
+  it('an answer to another work item, a line or a design: it gives way', () => {
+    expect(releasesAddress('i-1', answer('i-2'), true)).toBe(true);
+    expect(releasesAddress('i-1', { id: 'l-1', link: 'parent_narrative' }, true)).toBe(true);
+    expect(releasesAddress('i-1', { id: 'o-1', link: 'objects' }, false)).toBe(true);
+    expect(releasesAddress('i-1', { id: 'i-1', link: 'objects' }, true)).toBe(true);
+  });
+  it('the address\'s own answer still open (a redraw, the report toggle): it stays', () => {
+    expect(releasesAddress('i-1', answer('i-1'), true)).toBe(false);
+  });
+  it('a seat that never had the answer open (read only, not here) and answers nothing: it stays', () => {
+    expect(releasesAddress('i-1', null, false)).toBe(false);
+  });
+  it('no address held: nothing to give', () => {
+    expect(releasesAddress(null, answer('i-2'), false)).toBe(false);
+    expect(releasesAddress(null, null, true)).toBe(false);
+  });
+});
+
+describe('what the bar becomes when a room lets its address go', () => {
+  it('the room\'s own address, while the bar still names this room\'s item', () => {
+    expect(releasedHash(workHash(W, I), W, I, false)).toBe(roomHash(W));
+  });
+  it('nothing from a room that is gone (a send that lands after the tab moved on)', () => {
+    expect(releasedHash(workHash(W, I), W, I, true)).toBeNull();
+  });
+  it('nothing over a newer arrival in the same tab: its address names another item', () => {
+    expect(releasedHash(workHash(W, 'i-5'), W, I, false)).toBeNull();
+  });
+  it('nothing when the bar already says the room, or names another world', () => {
+    expect(releasedHash(roomHash(W), W, I, false)).toBeNull();
+    expect(releasedHash(workHash('w-other', I), W, I, false)).toBeNull();
+    expect(releasedHash('#/', W, I, false)).toBeNull();
   });
 });

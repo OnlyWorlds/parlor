@@ -1,6 +1,6 @@
 // A work item's address, played: `#/w/<world>/work/<item>` on a built parlor with real presses. Playwright serves
 // https://parlor.onlyworlds.com from a build directory under its own _headers and _redirects, and plays these doors of
-// the OnlyWorlds server, and only these: GET /account/worlds, GET /me, GET /changes (the walk from zero, and the head);
+// the OnlyWorlds server, and only these: GET /account/worlds, GET /me, GET /changes (the walk from zero, and the head), POST /narrative (a line sent);
 // every other door answers 404 (the roster and the world's files: the room reads without them). The page starts signed
 // in with a world key, as after a reload. What it cannot see: real keel (a live walk).
 //   npm run build && node walk/work-address.mjs [chromium|firefox] [phone]        DIST=<dir> for a control
@@ -52,7 +52,7 @@ async function walk(engine, tag) {
   });
 
   // The played server: who the seat is, what it is served, and whether the walk of the changes fails.
-  const keel = { me: { role: 'contributor', scope: 'write', membership: 'm-1', character: ME, kind: 'person' }, els: world(), failChanges: false, calls: [] };
+  const keel = { me: { role: 'contributor', scope: 'write', membership: 'm-1', character: ME, kind: 'person' }, els: world(), failChanges: false, calls: [], posts: 0, postDelay: 0 };
   await ctx.route('https://www.onlyworlds.com/**', async r => {
     const u = new URL(r.request().url());
     const m = r.request().method();
@@ -70,6 +70,15 @@ async function walk(engine, tag) {
       const changes = keel.els.map((e, i) => ({ op: 'upsert', id: e.id, type: e.type, element: e, updated_at: '2026-11-19T09:00:00Z', change_seq: i + 1 })).slice(since);
       return json(200, { changes, cursor: head, has_more: false, head, epoch: null });
     }
+    // A line sent (POST /narrative/): made as asked, at once or after `postDelay` ms (a slow answer).
+    if (m === 'POST' && u.pathname === '/api/v2/narrative/') {
+      keel.posts++;
+      const body = JSON.parse(r.request().postData() || '{}');
+      const made = { ...body, id: `9e9e9e9e-0000-4000-8000-${String(keel.posts).padStart(12, '0')}`, type: 'Narrative', created_at: '2026-11-19T09:10:00Z', change_seq: 100 + keel.posts };
+      if (!keel.postDelay) return json(201, made);
+      setTimeout(() => json(201, made).catch(() => {}), keel.postDelay);
+      return;
+    }
     return json(404, { error: { code: 'not_found' } });
   });
   await ctx.route(`${PROD}/**`, async r => r.fulfill(serve(new URL(r.request().url()).pathname)));
@@ -86,6 +95,7 @@ async function walk(engine, tag) {
   const workTab = () => page.locator('.wtabs [data-tab="work"]');
   const here = () => page.locator('[data-here]');
   const replyBar = () => page.locator('[data-part="reply-bar"]');
+  const composer = () => page.locator('textarea[aria-label="Write a line"]');
   const composerFocused = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Write a line');
   // In view: the card's box inside the window and inside its pane's scrolled box.
   const inView = loc => loc.evaluate(el => {
@@ -123,14 +133,18 @@ async function walk(engine, tag) {
   await replyBar().waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
   check(tag, (await replyBar().textContent()).includes(`Answering: ${LAST_TITLE}`) && await composerFocused() && (await here().getAttribute('data-work')) === LAST, 'a reload reopens the card and its Answer');
 
-  // 4. Moving: another tab gives the bar back to the room's own address (replaced, so Back does not return to it).
+  // 4. Moving: another tab gives the bar back to the room's own address (replaced, so Back does not return to it). The
+  // room's head is tagged and a draft typed first: a room opened again would be a new head and an empty composer.
   const lenBefore = await page.evaluate(() => history.length);
+  await page.evaluate(() => { document.querySelector('.top[data-room-role]').__walkTag = 1; });
+  await composer().fill('a draft in progress');
   if (phone) await page.locator('nav.mtabs button', { hasText: 'Crew and work' }).click();
   await page.locator('.wtabs [data-tab="crew"]').click();
   await settle(300);
   check(tag, (await hash()) === `#/w/${WORLD}`, `another tab: the room's own address comes back (${await hash()})`);
   check(tag, (await page.evaluate(() => history.length)) === lenBefore, 'replaced, not pushed: no new entry for Back');
-  check(tag, await page.locator('.top[data-room-role]').count() === 1 && !(await replyBar().evaluate(e => e.hidden)), 'the room was not opened again: the answer is still open');
+  check(tag, await page.evaluate(() => document.querySelector('.top[data-room-role]')?.__walkTag === 1) && (await composer().inputValue()) === 'a draft in progress' && !(await replyBar().evaluate(e => e.hidden)),
+    'the room was not opened again: the same room, the draft kept, the answer still open');
   await page.locator('.wtabs [data-tab="work"]').click();
   await settle(300);
   check(tag, (await here().count()) === 0, 'back on Work, no card is marked: the address was let go');
@@ -150,6 +164,31 @@ async function walk(engine, tag) {
   await page.locator(`[data-work="${item(5)}"]`).getByRole('button', { name: 'Answer' }).click();
   await settle(300);
   check(tag, (await hash()) === `#/w/${WORLD}` && (await replyBar().textContent()).includes('Answering: Work number 5'), `Answer on another card: that card is answered, the room's own address back (${await hash()})`);
+
+  // 6b. Moving: the answer sent (the main way a person leaves the address).
+  await fresh(at(item(1)));
+  await replyBar().waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
+  const sentBefore = keel.posts;
+  await composer().fill('my answer');
+  await composer().press('Enter');
+  await page.waitForFunction(() => document.querySelector('[data-part="reply-bar"]')?.hidden !== false, null, { timeout: 8000 }).catch(() => {});
+  await settle(300);
+  check(tag, keel.posts === sentBefore + 1 && (await hash()) === `#/w/${WORLD}`, `the answer sent: the room's own address comes back (${keel.posts - sentBefore} sent; ${await hash()})`);
+
+  // 6c. A slow answer from one work address, the same tab moved to another before it lands: the old room, gone, leaves
+  // the new arrival's address as it is.
+  await fresh(at(item(1)));
+  await replyBar().waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
+  keel.postDelay = 2500;
+  await composer().fill('a slow answer');
+  await composer().press('Enter');
+  await settle(200);
+  await page.evaluate(u => { location.hash = u; }, `#/w/${WORLD}/work/${item(5)}`);
+  await page.waitForFunction(() => (document.querySelector('[data-part="reply-bar"]')?.textContent ?? '').includes('Work number 5'), null, { timeout: 8000 }).catch(() => {});
+  await settle(3500);
+  keel.postDelay = 0;
+  check(tag, (await hash()) === `#/w/${WORLD}/work/${item(5)}` && (await replyBar().textContent()).includes('Answering: Work number 5'),
+    `the old room's slow send lands after the move: the new arrival keeps its address (${await hash()})`);
 
   // 7. An id this seat is not served: one plain line on the Work tab, no answer opened.
   await fresh(at('5e5e5e5e-0000-4000-8000-00000000dead'));

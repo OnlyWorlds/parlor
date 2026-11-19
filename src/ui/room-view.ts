@@ -13,7 +13,7 @@ import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } 
 import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
-import { readAddress, roomHash, workArrival, WORK_NOT_HERE, WORK_READ_ONLY, type WorkArrival } from '../parlor/address';
+import { releasedHash, releasesAddress, workArrival, WORK_NOT_HERE, WORK_READ_ONLY, type WorkArrival } from '../parlor/address';
 import { h, clear, notice, hhmm } from './dom';
 import { WAYMARK_SETTLED, markSet, waymarkPlan, waymarkSlot, waymarkOpenIn } from './waymark';
 import { afterPress } from './press';
@@ -109,13 +109,17 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let addressed: string | null = arriveAt;
   let landed = false;
   let answeredHere = false;
+  // Set when the room is left: a late callback of this room (a send that lands after the tab moved on) changes nothing.
+  let gone = false;
   function leaveAddress(): void {
-    if (!addressed) return;
+    if (gone || !addressed) return;
+    const was = addressed;
     addressed = null;
     answeredHere = false;
-    // Replaced, never pushed, and replaceState fires no hashchange, so the room is not opened again (main.ts).
-    const at = readAddress(location.hash);
-    if (at?.work && at.world === room.world.id) history.replaceState(history.state, '', roomHash(room.world.id));
+    // Replaced, never pushed, and replaceState fires no hashchange, so the room is not opened again (main.ts). Only while
+    // the bar still names this room's item: a newer arrival in the same tab keeps its own address.
+    const next = releasedHash(location.hash, room.world.id, was, gone);
+    if (next) history.replaceState(history.state, '', next);
     // The card loses its mark on the next draw, after whatever press moved the person has drawn.
     queueMicrotask(redraw);
   }
@@ -407,7 +411,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let finishFor: string | null = null;
   function drawReply(): void {
     // An answer to anything but the address's item, or the answer the address opened let go or sent: the person moved on.
-    if (addressed && (replyTo ? !(replyTo.link === 'relations' && replyTo.id === addressed) : answeredHere)) leaveAddress();
+    if (releasesAddress(addressed, replyTo, answeredHere)) leaveAddress();
     const answeringId = replyTo?.id ?? null;
     const fresh = answeringId !== finishFor;
     if (fresh) { finishBox.checked = false; finishFor = answeringId; }
@@ -896,8 +900,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
 
   // -------------------------------------------------- what redraws
   // A redraw that is not a press's own (the feed's, a write's late answer, a fan-out settling) waits
-  // while a press is in flight: a rebuild under a finger loses the tap (src/ui/press.ts).
-  let gone = false;
+  // while a press is in flight: a rebuild under a finger loses the tap (src/ui/press.ts). `gone` is set with the address
+  // state above, when the room is left.
   function redraw(): void { afterPress(heldDraw); }
   function heldDraw(): void { if (!gone) draw(); }
   /** Each seat's work line, read once per draw. */

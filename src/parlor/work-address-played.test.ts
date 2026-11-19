@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { OwMe, OwV2Client } from '@onlyworlds/sdk';
 import { Room } from './room';
 import { roomRole } from './roster';
-import { ROOM_MARK, type El } from './shapes';
+import { ROOM_MARK, workOffers, type El } from './shapes';
 import { workArrival } from './address';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
@@ -55,6 +55,16 @@ describe('a work item\'s address, on a played server', () => {
     expect(r.feed.walked).toBe(true);
     expect(lands(r, 'i-1')).toBe('answer');
     expect(lands(r, 'i-2')).toBe('answer');
+  });
+
+  it('a standing item and an item with no state: the arrival opens Answer, and the card offers no Take and no Mark done', async () => {
+    served = [item('i-st', { subtype: 'standing' }), item('i-no', { subtype: null } as Partial<El>)];
+    const r = room('contributor');
+    await r.feed.sync();
+    for (const id of ['i-st', 'i-no']) {
+      expect(lands(r, id)).toBe('answer');
+      expect(workOffers(r.work().find(w => w.id === id)!)).toEqual({ take: false, markDone: false, reopen: false });
+    }
   });
 
   it('a guest, served the item with a read key: read only, no composer', async () => {
