@@ -7,7 +7,7 @@
 
 import { elementColor, groupOf, type ElementType } from '@onlyworlds/sdk';
 import { TYPE_ICON_PATHS } from './type-icons';
-import { fitName, isolated, LABEL_ROOM, NAME_ROOM } from './card-rules';
+import { fitName, fitToWidth, isolated, LABEL_PX, LABEL_ROOM, NAME_PX, NAME_ROOM } from './card-rules';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -102,7 +102,8 @@ export interface GraphLink {
 /**
  * An element's card's small graph: the element at the left, each neighbour to the right with its link's label, a link
  * into the element dashed. A name or a label longer than its room ends in an ellipsis, the whole of it the node's
- * accessible name and its title; a name is isolated for bidi (SVG text takes no <bdi>).
+ * accessible name and its title; a name is isolated for bidi (SVG text takes no <bdi>). The names and labels are cut
+ * by a count of characters here, and by their drawn width once the picture is on the page (`fitPicture`).
  */
 export function linkGraph(centreType: string, links: ReadonlyArray<GraphLink>, onStep: (id: string) => void): SVGSVGElement {
   const n = links.length;
@@ -113,9 +114,11 @@ export function linkGraph(centreType: string, links: ReadonlyArray<GraphLink>, o
     svg.append(s('path', { class: l.incoming ? 'edge in' : 'edge', d: `M${cx + 19} ${cy} C ${cx + 60} ${cy}, ${x - 56} ${y}, ${x - 15} ${y}`, fill: 'none', 'stroke-width': 1.3 }));
     const label = s('text', { class: 'edge-label', x: x - 20, y: y - 6, 'text-anchor': 'end' });
     label.textContent = fitName(l.label, LABEL_ROOM).text;
+    toFit.set(label, { whole: l.label, room: LABEL_PX, iso: false });
     svg.append(label);
     const name = s('text', { class: 'nb-name', x: x + 19, y: y + 4 });
     name.textContent = isolated(fitName(l.name, NAME_ROOM).text);
+    toFit.set(name, { whole: l.name, room: NAME_PX, iso: true });
     const whole = `${l.name}${l.note ? ` (${l.note})` : ''}`;
     const title = s('title', {});
     title.textContent = `${whole}, ${l.full}`;
@@ -134,6 +137,26 @@ export function linkGraph(centreType: string, links: ReadonlyArray<GraphLink>, o
   });
   if (n) svg.append(kindBody(centreType, 36, { x: cx - 18, y: cy - 18 }));
   return svg;
+}
+
+/** Each text of a picture with what it says whole and the room it has, for the fit by drawn width. */
+const toFit = new WeakMap<SVGTextElement, { whole: string; room: number; iso: boolean }>();
+
+/**
+ * Fit a picture's names and labels by their drawn width, once it is on the page and drawn (the length of a text is the
+ * browser's own, in the picture's units). A picture not drawn yet (a pane put away) keeps the count's first guess.
+ */
+export function fitPicture(svg: SVGSVGElement): void {
+  for (const t of svg.querySelectorAll('text')) {
+    const fit = toFit.get(t);
+    if (!fit) continue;
+    const put = (text: string): string => (fit.iso ? isolated(text) : text);
+    const was = t.textContent;
+    t.textContent = put(fit.whole);
+    if (!t.getComputedTextLength()) { t.textContent = was; continue; }
+    const measure = (candidate: string): number => { t.textContent = put(candidate); return t.getComputedTextLength(); };
+    t.textContent = put(fitToWidth(fit.whole, measure, fit.room).text);
+  }
 }
 
 /** A type's colour group (blue, green, pink, amber), for a word drawn in its colour; none for a type the SDK does not know. */

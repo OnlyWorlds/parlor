@@ -11,16 +11,18 @@
  *   deduped already; a link to itself is left out, and so are the declared links of the lens and spine profiles
  *   (`x_lens_leads_to`, `x_spine_depends_on`), which are a reading's machinery, not the element's. Within a group,
  *   by name in code point order, a tie by id.
- * - **Marks.** On the element and on each link: known of (a stub), hidden (keel's one hidden mark: the row's own, or the
+ * - **Marks.** On the element and on each link: known of (a stub, by the graph's word or the row's own `known_of`, so a
+ *   reader whose graph keeps a stub as a plain node still marks it), hidden (keel's one hidden mark: the row's own, or the
  *   room's hidden list, which a keeper hands in as the world's), proposed (the review profile's mark, under the keeper's
  *   flag). Trimmed (`x_served_trimmed`: keel left some of a field out for this reader) on the element and on the group
  *   of each field it names. The view words them.
  * - **Open questions.** A work item counts on this element when it is a room work item (the room mark and the pair),
  *   not proposed (the review mark, a doubt counted with the proposed, as a reader that hands a world on reads it), open
  *   work (`isOpenWork`), served to the reader and not hidden from it (a hidden item counts only under the hidden flag,
- *   marked), and names the element: by `x_packet_elements` when its `x_packet_source` names this world or none (an
- *   entry counts with its type, id and reason all strings), and by its typed links always (a typed link can only point
- *   inside this world). The state of the read is said as it is: pending, failed and capped never read as "none".
+ *   marked), and names the element in this world by `questionTargets`, the one rule a tool's list of work reads too:
+ *   its `x_packet_elements` when its `x_packet_source` names this world or none (an entry counts with its type, id and
+ *   reason all strings), and its typed links always (a typed link can only point inside this world). The state of the
+ *   read is said as it is: pending, failed and capped never read as "none".
  * - **Words.** The kind is the world's own word (`x_names`, by the supertype, then the type), else the type's own. A
  *   nameless element is "<Kind> with no name". The text is the description, else the story, as plain text, split at its
  *   first line break into the lead and the rest, so a view can fold the rest. The state is a design part's design
@@ -168,8 +170,12 @@ export interface CardModel {
 const DECLARED = new Set(['x_lens_leads_to', 'x_spine_depends_on']);
 
 /** A work item's typed links: the Relation's link field for each type it can be about (`actor` is whom it is for). */
-const ITEM_LINKS = ['characters', 'objects', 'locations', 'species', 'creatures', 'institutions', 'traits', 'collectives', 'zones',
-  'abilities', 'phenomena', 'languages', 'families', 'titles', 'constructs', 'narratives', 'events'] as const;
+const ITEM_LINKS: ReadonlyArray<readonly [string, string]> = [
+  ['characters', 'character'], ['objects', 'object'], ['locations', 'location'], ['species', 'species'], ['creatures', 'creature'],
+  ['institutions', 'institution'], ['traits', 'trait'], ['collectives', 'collective'], ['zones', 'zone'], ['abilities', 'ability'],
+  ['phenomena', 'phenomenon'], ['languages', 'language'], ['families', 'family'], ['titles', 'title'], ['constructs', 'construct'],
+  ['narratives', 'narrative'], ['events', 'event'],
+];
 
 const DESIGN_WORD: Readonly<Record<string, string>> = { 'in design': 'In design', locked: 'Locked' };
 
@@ -209,9 +215,10 @@ export function kindWord(names: unknown, type: string, supertype?: unknown): str
   return own || (type.charAt(0).toUpperCase() + type.slice(1));
 }
 
-function marksOf(node: CardGraphNode): CardMarks {
+/** The marks a node carries; a stub by the graph's own word or by the row keel served (a reader whose graph says none). */
+function marksOf(node: CardGraphNode, row: CardRow | undefined): CardMarks {
   const m = node.marks ?? [];
-  return { knownOf: node.known_of === true, hidden: m.includes('hidden'), proposed: m.includes('proposed') };
+  return { knownOf: node.known_of === true || row?.known_of === true, hidden: m.includes('hidden'), proposed: m.includes('proposed') };
 }
 
 function trimmedFields(row: CardRow | undefined): Set<string> {
@@ -219,21 +226,45 @@ function trimmedFields(row: CardRow | undefined): Set<string> {
   return new Set(Array.isArray(v) ? v.filter((f): f is string => typeof f === 'string' && !!f) : []);
 }
 
-/** The ids a work item names: its packet's (when it is about this world) and its typed links, each once. */
-function namedBy(item: CardRow, worldId: string): Set<string> {
-  const out = new Set<string>();
+/** One element a work item is about. */
+export interface QuestionTarget {
+  /** The type as the packet writes it, or the type its typed link field holds. */
+  type: string;
+  id: string;
+  /** The packet's one sentence on why; null for a typed link. */
+  reason: string | null;
+  /** In this world: a packet's entry when the packet is about this world (or names none), a typed link always. */
+  here: boolean;
+}
+
+/**
+ * The elements a work item is about, the one rule for a card's questions and a tool's list of work: first its packet's
+ * entries (`x_packet_elements`, each with its type, id and reason all strings and the id not blank), in their order,
+ * in this world unless `x_packet_source` names another; then its typed links (each a Relation link field, an id each
+ * once) that the packet does not name, always in this world (keel checks a typed link against it).
+ */
+export function questionTargets(item: CardRow, worldId: string): QuestionTarget[] {
+  const out: QuestionTarget[] = [];
   const src = item.x_packet_source as { world?: unknown } | null | undefined;
-  const elsewhere = !!src && typeof src === 'object' && typeof src.world === 'string' && src.world !== worldId;
+  const here = !(!!src && typeof src === 'object' && typeof src.world === 'string' && src.world !== worldId);
   const packet = item.x_packet_elements;
-  if (!elsewhere && Array.isArray(packet)) {
+  const named = new Set<string>();
+  if (Array.isArray(packet)) {
     for (const e of packet) {
       const r = e && typeof e === 'object' ? e as Record<string, unknown> : null;
-      if (r && typeof r.type === 'string' && typeof r.id === 'string' && typeof r.reason === 'string' && r.id) out.add(r.id);
+      if (!r || typeof r.type !== 'string' || typeof r.id !== 'string' || typeof r.reason !== 'string' || r.id.trim() === '') continue;
+      out.push({ type: r.type, id: r.id, reason: r.reason, here });
+      named.add(r.id);
     }
   }
-  for (const f of ITEM_LINKS) {
-    const v = item[f];
-    if (Array.isArray(v)) for (const id of v) if (typeof id === 'string' && id) out.add(id);
+  for (const [field, type] of ITEM_LINKS) {
+    const v = item[field];
+    if (!Array.isArray(v)) continue;
+    for (const id of v) {
+      if (typeof id !== 'string' || id === '' || named.has(id)) continue;
+      named.add(id);
+      out.push({ type, id, reason: null, here: true });
+    }
   }
   return out;
 }
@@ -256,7 +287,8 @@ export function cardModel(input: CardInput): CardModel | null {
   const linkOf = (id: string): CardLink => {
     const n = ix.nodes.get(id)!;
     const nm = nameOf(n.name);
-    return { id, type: n.type, name: nm, title: titleOf(nm, n.type, input.rows.get(id)?.supertype), marks: marksOf(n) };
+    const r = input.rows.get(id);
+    return { id, type: n.type, name: nm, title: titleOf(nm, n.type, r?.supertype), marks: marksOf(n, r) };
   };
   const order = (a: CardLink, b: CardLink): number => byCodePoint(a.name ?? '', b.name ?? '') || byCodePoint(a.id, b.id);
 
@@ -286,7 +318,7 @@ export function cardModel(input: CardInput): CardModel | null {
     if (!isRoomElement(w as Parameters<typeof isRoomElement>[0]) || !isOpenWork(w) || handsOnAsProposed(w)) continue;
     const hidden = w.hidden === true || hiddenList.has(w.id);
     if (hidden && !input.flags.hidden) continue;
-    if (!namedBy(w, input.worldId).has(input.id)) continue;
+    if (!questionTargets(w, input.worldId).some(t => t.here && t.id === input.id)) continue;
     const nm = nameOf(w.name);
     items.push({ id: w.id, name: nm, title: nm ?? 'Work item with no name', state: workStateOf(w) === 'taken' ? 'taken' : 'open', hidden, at: time(w.created_at) });
   }
@@ -306,7 +338,7 @@ export function cardModel(input: CardInput): CardModel | null {
     state: design ?? (text(row?.subtype) || text(row?.supertype)),
     lead: cut < 0 ? words : words.slice(0, cut).trim(),
     rest: cut < 0 ? '' : words.slice(cut).trim(),
-    marks: { ...marksOf(node), trimmed: trimmed.size > 0 },
+    marks: { ...marksOf(node, row), trimmed: trimmed.size > 0 },
     groups: [...outGroups, ...inGroups],
     questions: {
       state: input.workRead,

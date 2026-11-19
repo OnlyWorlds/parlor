@@ -1,5 +1,5 @@
 {
-  "about": "The element card's cases (the card model, src/parlor/element-card.ts). Each case: the element rows and the work item rows a reader was served (the graph is the SDK's worldGraph over both, for the reader with the flags, the room's hidden list as the world's hidden list), the reader as the lens profile reads it, the flags (a keeper's both on, anyone else's both off), the id, how the work items were read (with cap when capped), the room's hidden list and the World's x_names; want is the model's whole answer, or null for no card. The design parts are the SDK's designPartsOf for the same reader. Ids are keel's lowercase form. The parlor and the OnlyWorlds Dashboard each run every case through their own call site.",
+  "about": "The element card's cases (the card model, src/parlor/element-card.ts). Each case: the element rows and the work item rows a reader was served (the graph is the SDK's worldGraph over both, for the reader with the flags, the room's hidden list as the world's hidden list), the reader as the lens profile reads it, the flags (a keeper's both on, anyone else's both off), the id, how the work items were read (with cap when capped), the room's hidden list and the World's x_names; want is the model's whole answer, or null for no card. The design parts are the SDK's designPartsOf for the same reader. Ids are keel's lowercase form. The parlor and the OnlyWorlds Dashboard each run every case through their own call site. A case with only \"raw\" is a reader the parlor never builds (a contributor, as the dashboard's picture reads one): it runs through the model on its own graph alone.",
   "world": "0f0f0f0f-0000-4000-8000-00000000a1a1",
   "cases": [
     {
@@ -2740,6 +2740,83 @@
           "trimmed": false
         },
         "groups": [],
+        "questions": {
+          "state": "ok",
+          "cap": null,
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "a stub is marked by the row keel served, under a reader whose graph keeps it as a plain node (the dashboard picture's contributor)",
+      "only": "raw",
+      "rows": [
+        {
+          "id": "c0000000-0000-4000-8000-000000000004",
+          "type": "character",
+          "name": "Stubby",
+          "known_of": true,
+          "description": "Only its base fields are served."
+        },
+        {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "type": "character",
+          "name": "Ada",
+          "friends": [
+            "c0000000-0000-4000-8000-000000000004"
+          ]
+        }
+      ],
+      "work": [],
+      "reader": {
+        "rung": "contributor"
+      },
+      "flags": {
+        "hidden": false,
+        "proposed": false
+      },
+      "id": "c0000000-0000-4000-8000-000000000004",
+      "workRead": "ok",
+      "cap": null,
+      "roomHidden": [],
+      "names": null,
+      "want": {
+        "id": "c0000000-0000-4000-8000-000000000004",
+        "type": "character",
+        "kind": "Character",
+        "name": "Stubby",
+        "title": "Stubby",
+        "state": "",
+        "lead": "Only its base fields are served.",
+        "rest": "",
+        "marks": {
+          "knownOf": true,
+          "hidden": false,
+          "proposed": false,
+          "trimmed": false
+        },
+        "groups": [
+          {
+            "key": "in:friends",
+            "field": "friends",
+            "dir": "in",
+            "label": "Linked from · Friends",
+            "trimmed": false,
+            "links": [
+              {
+                "id": "c0000000-0000-4000-8000-000000000001",
+                "type": "character",
+                "name": "Ada",
+                "title": "Ada",
+                "marks": {
+                  "knownOf": false,
+                  "hidden": false,
+                  "proposed": false
+                }
+              }
+            ]
+          }
+        ],
         "questions": {
           "state": "ok",
           "cap": null,

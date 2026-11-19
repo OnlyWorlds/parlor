@@ -2,7 +2,7 @@
 // (R6) and after a redraw (S1), the fold (S6, N7), long names in the link picture and bidi (S5), the marks' words (S3,
 // R3, R7), the questions' words and where a question goes (M3, R8), and a press only where there is a card (R4).
 import { describe, expect, it } from 'vitest';
-import { closeMovesFocus, escapeClosesCard, fitName, focusAfterRedraw, foldStays, isolated, linkNote, linkPresses, markLines, moreQuestions, questionHref, questionWords, LABEL_ROOM, NAME_ROOM } from './card-rules';
+import { closeMovesFocus, escapeClosesCard, fitName, fitToWidth, focusAfterRedraw, foldStays, isolated, linkNote, linkPresses, markLines, moreQuestions, questionHref, questionWords, LABEL_ROOM, NAME_PX, NAME_ROOM } from './card-rules';
 import { readAddress } from '../parlor/address';
 
 const esc = (over: Partial<{ key: string; isComposing: boolean; keyCode: number; defaultPrevented: boolean }> = {}) => ({ key: 'Escape', isComposing: false, keyCode: 27, defaultPrevented: false, ...over });
@@ -82,6 +82,18 @@ describe('a long name in the link picture (S5) and bidi', () => {
     const emoji = '🌊'.repeat(30);
     const e = fitName(emoji, LABEL_ROOM).text.slice(0, -1);
     expect(Array.from(e).every(ch => ch === '🌊')).toBe(true);
+  });
+  it('fits by the drawn width: a row of wide capitals is cut though its count fits, and the cut fits its room', () => {
+    // A measure as a browser's: a capital W wider than a lower-case letter, an ellipsis its own width.
+    const measure = (t: string) => Array.from(t).reduce((n, ch) => n + (ch === 'W' ? 11.2 : ch === '…' ? 9 : 6), 0);
+    const caps = 'W'.repeat(25);
+    expect(fitName(caps, NAME_ROOM).cut).toBe(false);
+    const f = fitToWidth(caps, measure, NAME_PX);
+    expect(f.cut).toBe(true);
+    expect(f.text.endsWith('…')).toBe(true);
+    expect(measure(f.text)).toBeLessThanOrEqual(NAME_PX);
+    expect(measure(`${'W'.repeat(Array.from(f.text).length)}…`)).toBeGreaterThan(NAME_PX);
+    expect(fitToWidth('Ada', measure, NAME_PX)).toEqual({ text: 'Ada', cut: false });
   });
   it('isolates a name for bidi inside SVG text (FIRST STRONG ISOLATE, POP DIRECTIONAL ISOLATE)', () => {
     expect(isolated('שלום')).toBe('\u2068שלום\u2069');

@@ -89,9 +89,30 @@ export function fitName(name: string, room: number): { text: string; cut: boolea
   return { text: `${out.trimEnd()}…`, cut: true };
 }
 
-/** The room a neighbour's name has in the picture, and a link's label, in width units. */
+/** The room a neighbour's name has in the picture, and a link's label, in width units: a first guess before the drawn width. */
 export const NAME_ROOM = 26;
 export const LABEL_ROOM = 21;
+/** The same rooms in the picture's own units (its 338-wide box): a name from x 165 to 334, a label from x 126 back to 2. */
+export const NAME_PX = 169;
+export const LABEL_PX = 124;
+
+/**
+ * A text fitted to `room` by its drawn width (`measure`, the browser's own length of a candidate as drawn): whole when it
+ * fits, else the longest start, cut at a character, that fits with an ellipsis after it. Letters differ in width (a row
+ * of capitals is wider than its count says), so the count is only ever a first guess.
+ */
+export function fitToWidth(text: string, measure: (candidate: string) => number, room: number): { text: string; cut: boolean } {
+  if (measure(text) <= room) return { text, cut: false };
+  const chars = Array.from(text);
+  const at = (k: number): string => `${chars.slice(0, k).join('').trimEnd()}…`;
+  let lo = 0;
+  let hi = chars.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (measure(at(mid)) <= room) lo = mid; else hi = mid - 1;
+  }
+  return { text: at(lo), cut: true };
+}
 
 // ---------------------------------------------------------------- words
 

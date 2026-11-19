@@ -16,12 +16,18 @@ import { roomRole } from './roster';
 type Case = {
   name: string; rows: El[]; work: El[]; reader: unknown; flags: { hidden: boolean; proposed: boolean }; id: string;
   workRead: CardWorkRead; cap: number | null; roomHidden: string[]; names: unknown; want: unknown;
+  /** "raw": a reader the parlor never builds (the dashboard picture's contributor), run through the model alone. */
+  only?: 'raw';
 };
 const W = fixture.world;
 const cases = fixture.cases as unknown as Case[];
 
 describe('the element card fixture, through the parlor\'s call site', () => {
-  for (const c of cases) {
+  it('runs every case but those for a reader the parlor never builds', () => {
+    expect(cases.filter(c => c.only === 'raw').every(c => (c.reader as { rung: string }).rung === 'contributor')).toBe(true);
+    expect(cases.filter(c => !c.only).length).toBeGreaterThanOrEqual(32);
+  });
+  for (const c of cases.filter(x => !x.only)) {
     it(c.name, () => {
       const all = [...c.rows, ...c.work];
       const keeper = c.flags.hidden;

@@ -11,7 +11,7 @@ import { roomSeat, seatRoom, thread, heldWork, workLineOf, shownWorkLine, design
 import type { CardGroup, CardModel } from '../parlor/element-card';
 import { closeMovesFocus, escapeClosesCard, focusAfterRedraw, foldStays, linkNote, linkPresses, markLines, moreQuestions, questionHref, questionWords, GROUP_TRIMMED, MARK_WORDS, QUESTIONS_SHOWN, SHOW_ALL, SHOW_LESS } from './card-rules';
 import { newestNote } from '../parlor/team';
-import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup } from './bodies';
+import { seatBody, kindBody, chatBody, tabIcon, chevron, linkGraph, kindGroup, fitPicture } from './bodies';
 import { isAfter } from '../parlor/when';
 import { CompletionFailed, DoneFailed, DoneNoReport, ItemMoved, KeeperOnly, ReportMoved, problemLine, type Room } from '../parlor/room';
 import { doorLine } from '../parlor/roster';
@@ -74,6 +74,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // The `data-focus` of what opened the card, and whether it sat in the panel: a close gives focus back there.
   let cardOpener: string | null = null;
   let cardOpenerInPanel = false;
+  // A close that took focus from the card or its opener: focus is given back once the draw is done.
+  let focusOwed = false;
   const cardFields = new Set<string>();
   // The crew as this draw read it, once per draw.
   let crewNow: Crew = { beasts: [], people: [] };
@@ -880,7 +882,12 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
    */
   function focusBackFromCard(): void {
     for (const el of root.querySelectorAll<HTMLElement>('[data-focus]')) {
-      if (cardOpener && el.getAttribute('data-focus') === cardOpener && el.isConnected && el.getClientRects().length) { el.focus({ preventScroll: true }); return; }
+      if (!cardOpener || el.getAttribute('data-focus') !== cardOpener || !el.isConnected || !el.getClientRects().length) continue;
+      // An opener that names an element this seat no longer has a card for (it went) is being redrawn as text.
+      const of = el.getAttribute('data-el');
+      if (of && !room.cardable(of)) break;
+      el.focus({ preventScroll: true });
+      return;
     }
     const tab = cardOpenerInPanel ? workTabs.querySelector<HTMLElement>('[aria-selected="true"]') : null;
     if (tab && tab.getClientRects().length) { tab.focus({ preventScroll: true }); return; }
@@ -890,6 +897,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   /** Step to a neighbour in the open card: the card shows it, its words folded, and focus goes to its name. */
   function stepCard(id: string): void {
     cardId = id;
+    cardRules = false;
     cardMore = false;
     cardFields.clear();
     draw();
@@ -975,6 +983,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     drawDesigns();
     drawTabs();
     rereadDesignReply(partsNow);
+    if (focusOwed) { focusOwed = false; focusBackFromCard(); }
     if (landing) settle(landing);
   }
 
@@ -1216,8 +1225,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   let cardShown: string | null = null;
   /** The card's own door: its mark, which the card owns and disposes, and which holds a redraw while its fan-out is open. */
   let cardDoor: { el: HTMLElement; dispose(): void; held(): boolean } | null = null;
-  function doorOf(el: El): { el: HTMLElement; dispose(): void; held(): boolean } {
-    const slot = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, el as unknown as Record<string, unknown>, 'Untitled'), `card:${el.id}`);
+  function doorOf(el: El, unnamed: string): { el: HTMLElement; dispose(): void; held(): boolean } {
+    const slot = waymarkSlot(waymarkPlan({ id: room.world.id, name: room.world.name }, el as unknown as Record<string, unknown>, unnamed), `card:${el.id}`);
     return { el: slot.el, dispose: () => slot.dispose(), held: () => waymarkOpenIn(slot.el) };
   }
   /** The link picture's short label: a field's name out, "from" a field in, "Under it" for the Objects under it. */
@@ -1234,7 +1243,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       cardRules = false;
       cardShown = null;
       if (!elCard.hidden || cardKey) { elCard.hidden = true; cardKey = ''; cardDoor?.dispose(); cardDoor = null; clear(elCard); }
-      if (had) focusBackFromCard();
+      // Given at the end of the draw, after the lists the opener sits in are drawn again (it may be gone from them).
+      if (had) focusOwed = true;
       return;
     }
     cardMore = foldStays(cardMore, cardShown, model.id);
@@ -1252,7 +1262,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const focused = focusIn(elCard);
     const onMark = waymarkFocusIn(elCard);
     cardDoor?.dispose();
-    cardDoor = doorOf(el);
+    cardDoor = doorOf(el, model.title);
     const step = (id: string) => stepCard(id);
     // Past five links, one line per group with a count; a press lists that group's elements.
     const many = links.length > 5;
@@ -1306,6 +1316,8 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
         h('span', { class: 'open-in' }, 'Open it', cardDoor.el)),
       h('button', { class: 'x', type: 'button', 'aria-label': 'Close', 'data-focus': 'card:x', onclick: () => closeCard() }, '×'));
     elCard.hidden = false;
+    const picture = elCard.querySelector<SVGSVGElement>('svg.graph');
+    if (picture) fitPicture(picture);
     // Focus back by key, else on the heading (a control that went), never to the page; the mark by its own key.
     if (onMark) { focusWaymark(elCard, onMark); return; }
     const keys = new Set([...elCard.querySelectorAll('[data-focus]')].map(n => n.getAttribute('data-focus') ?? ''));
@@ -1840,7 +1852,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
     const view = room.work().map(w => ({
       w, can: room.canRetire(w.by), hidden: room.hidden.has(w.id) || (!room.isHost && w.el.hidden === true),
       who: whoOf(w), addr: room.addressOf(w), by: room.name(w.by), answers: room.answers(w.id).length,
-      els: w.elements.map(x => ({ ...x, name: w.otherWorld ? null : room.elementName(x.id), opens: !w.otherWorld && room.cardable(x.id) })),
+      els: w.elements.map(x => ({ ...x, name: x.here ? room.elementName(x.id) : null, opens: x.here && room.cardable(x.id) })),
       // One name per taker: a double take from two tabs is one person (the Take gate's T2-G1).
       takers: [...new Set(w.takes.map(t => t.by))].map(by => room.name(by)), mine: room.hasTaken(w.id),
       // Who asked (x_packet_from, by askerOf), named as the room names a Character; nothing when it names none.
@@ -1855,7 +1867,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       const order = (['mine', 'others', 'none'] as const).filter(g => rows.some(r => r.addr === g));
       return order.flatMap(g => [...(order.length > 1 ? [h('h3', { class: 'wgroup' }, GROUP[g])] : []), ...rows.filter(r => r.addr === g).map(card)]);
     };
-    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.otherWorld, v.can, v.hidden, v.who, v.addr, v.by, v.answers, v.els, v.takers, v.mine, v.asker, v.offers, v.reported]),
+    const key = JSON.stringify([view.map(v => [v.w.id, v.w.title, v.w.text, v.w.state, v.w.proposed, v.w.doubt, v.can, v.hidden, v.who, v.addr, v.by, v.answers, v.els, v.takers, v.mine, v.asker, v.offers, v.reported]),
       room.canWrite, room.isHost, room.needsName(), workOpen, deleting, addressed, landed]);
     if (key === workKey) return;
     // An open fan-out (or its toast) holds the rebuild; the key stays old, so it runs once the fan-out settles.
@@ -1872,6 +1884,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
       view.length ? grouped(view, ({ w, can, hidden, who, by, answers, els, takers, mine, asker, offers, reported }) => h('div', { class: `card witem${w.state === 'done' ? ' done' : ''}${hidden ? ' hidden' : ''}${w.id === addressed ? ' here' : ''}`, 'data-state': workStateKey(w.state), 'data-work': w.id,
         ...(w.id === addressed ? { 'data-here': 'true', 'data-focus': `work:${w.id}`, tabindex: '-1' } : {}) },
         h('div', { class: 'ttl' }, h('span', { class: `chip s-${workStateKey(w.state)}` }, WORK_STATE_WORD[workStateKey(w.state)]), w.proposed ? h('span', { class: 'chip prop' }, 'Proposed') : null,
+          w.doubt ? h('span', { class: 'chip prop', 'data-part': 'work-doubt' }, 'Review mark unreadable') : null,
           h('h3', null, w.title || 'Untitled')),
         h('div', { class: 'm', 'data-part': 'for' }, `${who ? `For ${who}` : 'Not addressed to anyone'} · made by ${by}`),
         asker ? h('div', { class: 'm', 'data-part': 'asked-by' }, `Asked by ${asker}`) : null,
@@ -1885,10 +1898,10 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
           // where this seat has a card for it.
           x.name !== null && x.opens
             ? tipped(h('button', { class: 'chip el', type: 'button', 'data-el': x.id, 'data-focus': `work-el:${w.id}:${x.id}`, onclick: () => openCard(x.id) }, `${x.name} · ${typeWord(x.type)}`), room.els.get(x.id))
-            : h('span', { class: 'chip el' }, w.otherWorld ? `In another world · ${typeWord(x.type)}` : x.name === null ? `Missing · ${typeWord(x.type)}` : `${x.name} · ${typeWord(x.type)}`),
+            : h('span', { class: 'chip el' }, !x.here ? `In another world · ${typeWord(x.type)}` : x.name === null ? `Missing · ${typeWord(x.type)}` : `${x.name} · ${typeWord(x.type)}`),
           // A Missing element or one in another world has no page here to open. The mark takes the element
           // the room holds, its own type and body, never the type a packet claims for it.
-          !w.otherWorld && x.name !== null && room.els.get(x.id)
+          x.here && x.name !== null && room.els.get(x.id)
             ? workMarks.mark(waymarkPlan(world, room.els.get(x.id) as unknown as Record<string, unknown>, 'Untitled'), `work:${w.id}:${x.id}`) : null,
           x.reason ? h('span', { class: 'why' }, x.reason) : null))) : null,
         answers || hidden ? h('div', { class: 'm' }, [answers ? `${answers} answer${answers === 1 ? '' : 's'} in the room` : '',

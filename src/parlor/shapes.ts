@@ -32,6 +32,7 @@ import {
   designPartsOf, isOpenWork, reportTalksOf, talksOf, workOf, workStateOf, type OwLensReader, type OwWorkState,
 } from '@onlyworlds/sdk';
 import { byCodePoint, earlierFirst, isAfter, newestFirst, sameMoment } from './when.ts';
+import { questionTargets } from './element-card.ts';
 
 export interface El {
   id: string;
@@ -806,6 +807,8 @@ export interface WorkElement {
   id: string;
   /** A packet's one sentence on why (x_packet_elements); null for a typed link. */
   reason: string | null;
+  /** In this world: false for a packet's entry when the packet is about another world (read there, never here). */
+  here: boolean;
 }
 
 export interface WorkItem {
@@ -820,11 +823,15 @@ export interface WorkItem {
   forTitles: string[];
   by: string;
   at: string;
+  /** What it is about, by the element card's one rule (`questionTargets`): the packet's entries, then its other typed links. */
   elements: WorkElement[];
-  /** The packet's ids belong to another world (x_packet_source): read there, never here. */
-  otherWorld: boolean;
-  /** An agent's write waiting for review (schema-dist profiles/review.md: x_review_proposed set). */
+  /**
+   * An agent's write waiting for review (schema-dist profiles/review.md: x_review_proposed set), read as the element
+   * card reads it (the SDK's `handsOnAsProposed`): a mark that cannot be read (a doubt) counts as proposed too.
+   */
   proposed: boolean;
+  /** The proposed mark is there and cannot be read (a doubt): said beside its Proposed chip. */
+  doubt: boolean;
   /** The live takes on it, first taken first (who by `created_by`, never `actor`); always empty when it is no open work. */
   takes: Take[];
   /**
@@ -942,8 +949,8 @@ const STATE_RANK = (s: WorkState): number => (s === 'open' || s === 'taken' ? 0 
  *
  * The state is the SDK's `workStateOf`. A live take is the room's own overlay, and only on open work (contract K2):
  * an open item with a take reads taken; a take on a standing, done or stateless item changes nothing and is not kept.
- * The elements are the packet's (`workOf`'s, in `x_packet_elements`' order with each reason) when it has any, else the
- * Relation's typed links.
+ * The elements are the element card's rule (`questionTargets`): the packet's entries in `x_packet_elements`' order with
+ * each reason (another world's, when its source names one, marked so), then the Relation's typed links it does not name.
  */
 export function readWork(els: Iterable<El>, worldId: string, live: (by: string) => boolean = () => true): WorkItem[] {
   const all = [...els];
@@ -955,10 +962,9 @@ export function readWork(els: Iterable<El>, worldId: string, live: (by: string) 
   for (const el of items) {
     const own = workStateOf(el);
     const taken = isOpenWork(el) ? takes.get(el.id) ?? [] : [];
-    const packet: WorkElement[] = (has(packets.elements, el.id) ? packets.elements[el.id] : [])
-      .map(e => ({ type: fold(e.type), id: e.id, reason: e.reason }));
-    const source = el.x_packet_source as { world?: unknown } | null | undefined;
-    const elements = packet.length ? packet : Object.entries(LINK_FIELDS).flatMap(([type, field]) => links(el, field).map(id => ({ type, id, reason: null })));
+    // The element card's rule, so a card's questions and this list say one thing about what an item is about.
+    const elements: WorkElement[] = questionTargets(el, worldId).map(e => ({ type: fold(e.type), id: e.id, reason: e.reason, here: e.here }));
+    const proposed = handsOnAsProposed(el);
     out.push({
       id: el.id,
       title: (el.name ?? '').toString(),
@@ -969,10 +975,10 @@ export function readWork(els: Iterable<El>, worldId: string, live: (by: string) 
       by: whoMade(el),
       at: el.created_at ?? '',
       elements,
-      otherWorld: !!packet.length && !!source && typeof source.world === 'string' && source.world !== worldId,
-      // The review profile's reading for a page people read (rule 1 and 4): an object mark is proposed; an empty
-      // mark is settled, and any other value a doubt, shown settled (a lint's to report).
-      proposed: proposedMarkOf(el) !== null,
+      // The review profile's marks (rules 1 and 4): an object mark is proposed; an empty mark is settled; any other
+      // value is a doubt, read as proposed here as the element card and the SDK's graph read it, and said as a doubt.
+      proposed,
+      doubt: proposed && proposedMarkOf(el) === null,
       takes: taken,
       // workOf's own asker per item (askerOf's reading, read once for every item: askerOf alone builds the world's set
       // of Characters on each call, which made this read cost items times Characters).

@@ -8,6 +8,7 @@ import {
   newReport, reportName, localDay, REPORT_ANSWERS, storyStart, saidIn, consequenceLine,
   unmarkedCharters, writtenId, completionPatch, maySetDone, isReportPickable, NARRATIVE_LINKS, NOTHING_CHANGED, foldName,
 } from './shapes';
+import { questionTargets } from './element-card';
 // schema-dist's room profile (v0.34.1-dist.136, profiles/room.fixture.json, copied whole).
 import fixture from './fixtures/room.fixture.json';
 // schema-dist's report lines (v0.34.1-dist.129, profiles/report-lines.fixture.json): its world reads every line here.
@@ -705,21 +706,30 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
       item({ id: 'q', subtype: 'whatever', created_at: '2026-10-25T07:00:00Z' }),
     ], 'w1');
     expect(w.map(x => [x.id, x.state])).toEqual([['o', 'open'], ['t', 'taken'], ['q', null], ['d', 'done']]);
-    expect(w[0].elements).toEqual([{ type: 'character', id: 'a', reason: null }, { type: 'location', id: 'b', reason: null }]);
+    expect(w[0].elements).toEqual([{ type: 'character', id: 'a', reason: null, here: true }, { type: 'location', id: 'b', reason: null, here: true }]);
   });
 
-  it("a landed packet's entries win, with their reasons; entries missing a key are ignored; another world's say so", () => {
+  it("a landed packet's entries come first, with their reasons; entries missing a key are ignored; another world's say so", () => {
     const [w] = readWork([item({
       id: 'p', characters: ['a'],
       x_packet_elements: [{ type: 'Character', id: 'a', reason: 'No links.' }, { type: 'location', id: 'b' }],
       x_packet_source: { server: 'https://www.onlyworlds.com', world: 'w2' },
     })], 'w1');
-    expect(w.elements).toEqual([{ type: 'character', id: 'a', reason: 'No links.' }]);
-    expect(w.otherWorld).toBe(true);
-    expect(readWork([item({ id: 'p', x_packet_elements: [{ type: 'character', id: 'a', reason: 'r' }], x_packet_source: { world: 'w1' } })], 'w1')[0].otherWorld).toBe(false);
+    expect(w.elements).toEqual([{ type: 'character', id: 'a', reason: 'No links.', here: false }]);
+    expect(readWork([item({ id: 'p', x_packet_elements: [{ type: 'character', id: 'a', reason: 'r' }], x_packet_source: { world: 'w1' } })], 'w1')[0].elements.map(e => e.here)).toEqual([true]);
     // An entry whose id is blank names no element (the packet profile's rule 1, as the SDK's workOf reads it).
     const [blank] = readWork([item({ id: 'p', x_packet_elements: [{ type: 'object', id: '', reason: 'r' }, { type: 'object', id: ' \t', reason: 'r' }, { type: 'object', id: 'o', reason: 'kept' }] })], 'w1');
-    expect(blank.elements).toEqual([{ type: 'object', id: 'o', reason: 'kept' }]);
+    expect(blank.elements).toEqual([{ type: 'object', id: 'o', reason: 'kept', here: true }]);
+  });
+
+  it('what an item is about is the element card\'s rule: the packet\'s entries, then the typed links it does not name', () => {
+    // The element card's fixture case "Question 11": a packet from another world and a typed link to this world's Ada.
+    const [w] = readWork([item({ id: 'q11', characters: ['ada'], x_packet_source: { world: 'w2' }, x_packet_elements: [{ type: 'location', id: 'home', reason: 'there' }] })], 'w1');
+    expect(w.elements).toEqual([{ type: 'location', id: 'home', reason: 'there', here: false }, { type: 'character', id: 'ada', reason: null, here: true }]);
+    expect(w.elements.map(e => [e.id, e.here])).toEqual(questionTargets(w.el, 'w1').map(t => [t.id, t.here]));
+    // A packet in this world and a typed link it does not name: both, the packet's first.
+    const [both] = readWork([item({ id: 'b', characters: ['bo'], x_packet_elements: [{ type: 'character', id: 'ada', reason: 'asked' }] })], 'w1');
+    expect(both.elements.map(e => e.id)).toEqual(['ada', 'bo']);
   });
 
   it("an agent's proposed item says so; a lore Work item never shows", () => {
@@ -727,10 +737,17 @@ describe('work items (sheet §1, profiles/packet.md)', () => {
     expect(w.map(x => [x.id, x.proposed])).toEqual([['p', true]]);
   });
 
-  it('an empty mark is settled, and a doubt shows settled on a page people read (review rules 1 and 4)', () => {
-    for (const v of ['', '   ', [], {}, null, undefined, 'agent', 0, false, ['m1']]) {
-      expect(readWork([item({ id: 'p', x_review_proposed: v })], 'w1')[0].proposed).toBe(false);
+  it('an empty mark is settled; a doubt is read as the element card reads it, proposed, and said as a doubt (review rules 1 and 4)', () => {
+    for (const v of ['', '   ', [], {}, null, undefined]) {
+      const [w] = readWork([item({ id: 'p', x_review_proposed: v })], 'w1');
+      expect([w.proposed, w.doubt]).toEqual([false, false]);
     }
+    for (const v of ['agent', 0, false, ['m1']]) {
+      const [w] = readWork([item({ id: 'p', x_review_proposed: v })], 'w1');
+      expect([w.proposed, w.doubt]).toEqual([true, true]);
+    }
+    const [mark] = readWork([item({ id: 'p', x_review_proposed: { by: 'm1' } })], 'w1');
+    expect([mark.proposed, mark.doubt]).toEqual([true, false]);
   });
 
   it('a keeper may set done only open work (open or taken), never a proposed one, a standing one or one with no state', () => {

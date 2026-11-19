@@ -53,7 +53,8 @@ describe('packet state_cases (rules 5 and 7): readWork and an element card', () 
           const map = new Map(rows.map(e => [e.id, e]));
           const view = seatView(rows, false);
           const card = parlorCard({ els: map, graph: parlorGraph(view, false), keeper: false, hidden: new Set(), id: elId, worldId: W.id, work, walked: true, parts: [] });
-          const on = (card?.questions.items ?? []).map(q => q.id);
+          expect(card, `${elId} has a card`).not.toBeNull();
+          const on = card!.questions.items.map(q => q.id);
           expect({ elId, open: asSet(on) }).toEqual({ elId, open: asSet(ids) });
         }
       }

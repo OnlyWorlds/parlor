@@ -18,9 +18,12 @@ const WORLD = '0f0f0f0f-0000-4000-8000-00000000a1a1';
 const ME = 'c0c0c0c0-0000-4000-8000-0000000000c1';
 const id = (p, n) => `${p}-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const ADA = id('c0000000', 1), BO = id('c0000000', 2), LONG = id('c0000000', 3), STUB = id('c0000000', 4), HID = id('c0000000', 5);
+const WIDE = id('c0000000', 6), GONE1 = id('c0000000', 7), GONE2 = id('c0000000', 8);
 const HOME = id('a0000000', 1), PROP = id('a0000000', 2);
 const Q1 = id('1a1a1a1a', 1), Q2 = id('1a1a1a1a', 2);
 const LONG_NAME = 'Wilhelmina Theodora Lanternkeeper of the Northern Harbour';
+// Wide letters: under the count's room of 26, wider than the picture's room as drawn.
+const WIDE_NAME = 'WWWWWWWWWWWWWWWWWWWWWWWWW';
 const KNOWN_OF = 'Known of: some of it is not shown to you';
 const HIDDEN = 'Hidden from others';
 const PROPOSED = 'Proposed, waits for review';
@@ -34,15 +37,18 @@ const check = (tag, ok, what) => {
 const { serve } = hostFor(DIST);
 const at = n => `2026-11-19T08:${String(n).padStart(2, '0')}:00Z`;
 
-/** The world as served: Ada and her neighbours, a stub, a long name, one open work item about her. */
+/** The world as served: Ada and her neighbours, a stub, a long name and a wide one, one open work item about her, two to delete. */
 function world(o = {}) {
   const els = [
     { id: ME, type: 'Character', name: 'Wren', created_by: 'm-1', created_at: at(1), updated_at: at(1) },
-    { id: ADA, type: 'Character', name: 'Ada', birthplace: HOME, friends: [LONG, STUB], description: 'Ada keeps the harbour light.\nShe came from the north, years ago, and stayed when the light needed a keeper.', created_at: at(2), updated_at: at(30) },
+    { id: ADA, type: 'Character', name: 'Ada', birthplace: HOME, friends: [LONG, STUB, WIDE], description: 'Ada keeps the harbour light.\nShe came from the north, years ago, and stayed when the light needed a keeper.', created_at: at(2), updated_at: at(30) },
     { id: HOME, type: 'Location', name: 'Home', created_at: at(3), updated_at: at(20) },
     { id: BO, type: 'Character', name: 'Bo', birthplace: HOME, created_at: at(4), updated_at: at(10) },
     { id: LONG, type: 'Character', name: LONG_NAME, friends: [ADA], created_at: at(5), updated_at: at(9) },
     { id: STUB, type: 'Character', name: 'Stubby', known_of: true, description: 'Only its words are served.', created_at: at(6) },
+    { id: WIDE, type: 'Character', name: WIDE_NAME, created_at: at(12), updated_at: at(12) },
+    ...(o.gone1 ? [] : [{ id: GONE1, type: 'Character', name: 'Soon gone', created_at: at(13), updated_at: at(13) }]),
+    ...(o.gone2 ? [] : [{ id: GONE2, type: 'Character', name: 'Gone too', created_at: at(14), updated_at: at(14) }]),
     { id: PROP, type: 'Location', name: 'Proposed place', x_review_proposed: { by: 'an agent' }, created_at: at(7), updated_at: at(25) },
     { id: Q1, type: 'Relation', name: 'Who lights the lamp on Sundays?', supertype: 'Work item', subtype: 'open', x_room_of: WORLD, characters: [ADA], created_by: 'owner', created_at: at(8) },
   ];
@@ -61,7 +67,16 @@ async function walk(engine, tag) {
     if (m.type() === 'error' && !/Failed to load resource|status of 40\d|CORS request did not succeed/.test(m.text())) errors.push(m.text());
   });
 
-  const keel = { me: { role: 'contributor', scope: 'write', membership: 'm-1', character: ME, kind: 'person' }, els: world() };
+  // The played server keeps a changes log: setting the world logs an upsert for each element new or changed and a
+  // delete for each one gone, so a feed tick can delete an element.
+  const keel = { me: { role: 'contributor', scope: 'write', membership: 'm-1', character: ME, kind: 'person' }, log: [], held: new Map() };
+  const setWorld = els => {
+    const next = new Map(els.map(e => [e.id, e]));
+    for (const [i, e] of keel.held) if (!next.has(i)) keel.log.push({ op: 'delete', id: i, type: e.type, reason: 'deleted', deleted_at: '2026-11-19T09:30:00Z', deleted_by: 'owner' });
+    for (const e of els) if (JSON.stringify(keel.held.get(e.id)) !== JSON.stringify(e)) keel.log.push({ op: 'upsert', id: e.id, type: e.type, element: e, updated_at: '2026-11-19T09:00:00Z' });
+    keel.held = next;
+  };
+  setWorld(world());
   await ctx.route('https://www.onlyworlds.com/**', async r => {
     const u = new URL(r.request().url());
     const m = r.request().method();
@@ -70,10 +85,10 @@ async function walk(engine, tag) {
     if (u.pathname === '/api/v2/account/worlds') return json(200, { data: [{ id: WORLD, name: 'The Reach', role: 'collaborator', member_role: keel.me.role }] });
     if (u.pathname === '/api/v2/me/') return json(200, keel.me);
     if (u.pathname === '/api/v2/changes/') {
-      const head = keel.els.length;
+      const head = keel.log.length;
       if (u.searchParams.get('head') === 'true') return json(200, { head, cursor: head, epoch: null });
       const since = Number(u.searchParams.get('since') ?? 0);
-      const changes = keel.els.map((e, i) => ({ op: 'upsert', id: e.id, type: e.type, element: e, updated_at: '2026-11-19T09:00:00Z', change_seq: i + 1 })).slice(since);
+      const changes = keel.log.slice(since).map((c, i) => ({ ...c, change_seq: since + i + 1 }));
       return json(200, { changes, cursor: head, has_more: false, head, epoch: null });
     }
     return json(404, { error: { code: 'not_found' } });
@@ -133,12 +148,14 @@ async function walk(engine, tag) {
     const longText = (await longG.locator('text.nb-name').textContent().catch(() => '')) ?? '';
     check(tag, longText.includes('…') && !longText.includes('Harbour'), `a long name ends in an ellipsis (${JSON.stringify(longText)})`);
     check(tag, ((await longG.getAttribute('aria-label').catch(() => '')) ?? '').includes(LONG_NAME) && ((await longG.locator('title').textContent().catch(() => '')) ?? '').includes(LONG_NAME), 'its whole name is its accessible name and its title');
+    const wide = await card.locator(`[data-focus="card:g:out:friends:${WIDE}"] text.nb-name`).evaluate(t => { const b = t.getBBox(); return { t: t.textContent, r: b.x + b.width }; }).catch(() => null);
+    check(tag, !!wide && wide.t.includes('…') && wide.r <= 339, `a name of wide capitals ends in an ellipsis inside the picture (${wide ? `${JSON.stringify(wide.t)}, right edge ${wide.r.toFixed(1)} of 338` : 'not drawn'})`);
     check(tag, await card.locator('svg.graph').evaluate(svg => [...svg.querySelectorAll('text')].every(t => { const b = t.getBBox(); return b.x >= -1 && b.x + b.width <= 339; })).catch(() => false), 'every name and label stays inside the picture');
 
     // 3. A feed tick while focus is on a neighbour: the card is rebuilt (a new question), focus and the fold stay.
     await focus(heading);
     check(tag, await tabTo(`card:g:out:birthplace:${HOME}`), 'Tab reaches the neighbour Home');
-    keel.els = world({ extra: [{ id: Q2, type: 'Relation', name: 'Who mends the nets?', supertype: 'Work item', subtype: 'open', x_room_of: WORLD, characters: [ADA], created_by: 'owner', created_at: at(40) }] });
+    setWorld(world({ extra: [{ id: Q2, type: 'Relation', name: 'Who mends the nets?', supertype: 'Work item', subtype: 'open', x_room_of: WORLD, characters: [ADA], created_by: 'owner', created_at: at(40) }] }));
     await page.waitForFunction(() => document.querySelectorAll('[data-part="card-questions"] a.q').length === 2, null, { timeout: 10000 }).catch(() => {});
     check(tag, (await card.locator('[data-part="card-questions"] a.q').count()) === 2, 'a feed tick brought a question to the card (it was rebuilt)');
     check(tag, (await focusKey()) === `card:g:out:birthplace:${HOME}`, `across that rebuild the neighbour keeps the focus (${await focusKey()})`);
@@ -171,6 +188,13 @@ async function walk(engine, tag) {
     check(tag, !(await cardOpen()), 'Escape on the card closes it');
     check(tag, (await focusKey()) === `change-name:${ADA}`, `focus goes back to the opener (${await focusKey()})`);
 
+    // 6b. Escape with focus still on the name that opened the card: it closes, the opener keeps the focus.
+    await openFromChanges(ADA);
+    check(tag, await headingIs('Ada') && (await focusKey()) === `change-name:${ADA}`, 'a press opens the card again, focus on the name pressed');
+    await page.keyboard.press('Escape');
+    await settle(150);
+    check(tag, !(await cardOpen()) && (await focusKey()) === `change-name:${ADA}`, `Escape from the opener closes the card, the opener keeps the focus (${await focusKey()})`);
+
     // 7. A stub: its card, marked, with the words keel serves it.
     await openFromChanges(ADA);
     // A press on the neighbour's name (Firefox measures a <g> with its icon's own box, so its middle is not the node).
@@ -198,9 +222,36 @@ async function walk(engine, tag) {
     check(tag, (await page.locator(`[data-change="${PROP}"] button.nm`).count()) === 0 && (await page.locator(`[data-change="${PROP}"] .nm`).count()) === 1,
       'for a seat that is no keeper, a proposed row in Changes is no press');
 
+    // 9b. The card's element deleted while the person types in the composer: the card closes, the composer keeps
+    // the focus and the text.
+    await openFromChanges(GONE1);
+    await toRoom();
+    const box = page.locator('textarea[aria-label="Write a line"]');
+    await focus(box);
+    await page.keyboard.type(' still typing');
+    check(tag, await headingIs('Soon gone'), 'the card of an element about to be deleted is open');
+    setWorld(world({ gone1: true }));
+    await page.waitForFunction(() => document.querySelector('aside[data-part="element-card"]')?.hidden !== false, null, { timeout: 10000 }).catch(() => {});
+    await settle(200);
+    check(tag, !(await cardOpen()) && await page.evaluate(() => document.activeElement?.getAttribute('aria-label')) === 'Write a line' && (await box.inputValue()).includes('half a thought') && (await box.inputValue()).includes(' still typing'),
+      `deleted while the person types: the card closes, the composer keeps the focus and the text (${await focusKey()})`);
+
+    // 9c. The card's element deleted while focus is inside the card: focus lands on the panel's tab, never the page.
+    await toPanel();
+    await press(page.locator('.wtabs [data-tab="changes"]'));
+    await openFromChanges(GONE2);
+    await focus(card.locator('[data-focus="card:x"]'));
+    check(tag, await headingIs('Gone too') && (await focusKey()) === 'card:x', 'focus on the × of a card whose element is about to be deleted');
+    setWorld(world({ gone1: true, gone2: true }));
+    await page.waitForFunction(() => document.querySelector('aside[data-part="element-card"]')?.hidden !== false, null, { timeout: 10000 }).catch(() => {});
+    await settle(200);
+    const g = await page.evaluate(() => { const a = document.activeElement; return { tag: a?.tagName, tab: a?.getAttribute('data-tab') ?? null, selected: a?.getAttribute('aria-selected') ?? null }; });
+    check(tag, !(await cardOpen()) && g.tag !== 'BODY' && g.tab === 'changes' && g.selected === 'true',
+      `deleted while focus is in its card: the card closes, focus on the panel's Changes tab (${JSON.stringify(g)})`);
+
     // 10. A keeper: the proposed row opens its card, marked; a hidden neighbour is listed marked, and opens marked.
     keel.me = { role: 'owner', scope: 'write', membership: null, character: ME, kind: 'person' };
-    keel.els = world({ keeper: true });
+    setWorld(world({ keeper: true }));
     await fresh();
     await changes();
     await openFromChanges(PROP);
