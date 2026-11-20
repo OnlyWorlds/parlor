@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { byCodePoint, earlierFirst, isAfter, newestFirst } from './when';
 import { OLD_STAR, ROOM_MARK, linesOfSitting, linesOfUnseenSitting, readLines, readMemberCharacters, readSittings, readTakes, readChanges, starOf, tally, type El, type Vote } from './shapes';
-// schema-dist's message profile (v0.34.0-dist.121, profiles/message.fixture.json, copied whole).
+// schema-dist's message profile (v0.34.1-dist.141, profiles/message.fixture.json, copied whole).
 import fixture from './fixtures/message.fixture.json';
 
 type Msg = { id: string; created_at?: unknown; [k: string]: unknown };

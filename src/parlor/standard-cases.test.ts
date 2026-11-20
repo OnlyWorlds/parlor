@@ -1,4 +1,4 @@
-// The standard's fixtures for serials 135 and 136 (schema-dist v0.34.1-dist.136, copied whole into ./fixtures), run
+// The standard's fixtures for serials 135 to 141 (schema-dist v0.34.1-dist.141: charter, packet and report copied whole into ./fixtures, the room fixture as of dist.136), run
 // through the parlor's own readers, never the SDK's alone: a work item's state, open work and elements through
 // readWork and an element card (its model, through parlorCard), who asked through readWork, a line's and a report's talks through the line
 // reader (Line.named), and the design parts through a Room (its designs() and charter(), for the seat each case names).
@@ -103,19 +103,26 @@ describe('report talk_cases: a report\'s talks (Line.named)', () => {
 
 // ---------------------------------------------------------------- the design state (serial 135)
 // What a seat is served, as keel serves each rung (the fixture's worlds note): the owner the whole world, a hidden row
-// with hidden: true; a contributor the world less the hidden, its own hidden creation with hidden: true; a guest its
-// whole ids, and known_of as stubs (the lens profile's stub fields).
+// with hidden: true; a contributor the world less the hidden, but a hidden row it made (the reader's `whole` lists it)
+// whole, with hidden: true; a guest its whole ids, and known_of as stubs (the lens profile's stub fields), except the
+// world's Charter: the house rules are every member rung's to read whole, a stub included (D152, keel's visibility.py
+// `house_of` grant), and a row another grant makes whole is no stub, so it carries no known_of.
 type World = { elements: El[]; hidden?: string[]; readers: Record<string, { rung: string; whole?: string[]; known_of?: string[] }> };
 const STUB = ['id', 'type', 'name', 'description', 'supertype', 'subtype', 'image_url', 'created_at', 'updated_at'];
+/** The Charter keel's house grant reaches: a Law whose supertype is Charter (trimmed, folded) and that carries the mark. */
+const isHouseCharter = (e: El) => String(e.type).toLowerCase() === 'law' && String((e as Any).supertype ?? '').trim().toLowerCase() === 'charter' && (e as Any).x_charter_of != null;
 function served(world: World, reader: string, makerOfHidden = false): El[] {
   const r = world.readers[reader];
   const hidden = new Set(world.hidden ?? []);
   if (r.rung === 'owner') return world.elements.map(e => (hidden.has(e.id) ? { ...e, hidden: true } : e));
-  if (r.rung === 'contributor') return world.elements.flatMap(e => (hidden.has(e.id) ? (makerOfHidden ? [{ ...e, hidden: true }] : []) : [e]));
+  if (r.rung === 'contributor') return world.elements.flatMap(e => (hidden.has(e.id) ? (makerOfHidden || (r.whole ?? []).includes(e.id) ? [{ ...e, hidden: true }] : []) : [e]));
   return world.elements.flatMap(e => {
     if (hidden.has(e.id)) return [];
     if ((r.whole ?? []).includes(e.id)) return [e];
-    if ((r.known_of ?? []).includes(e.id)) return [{ ...Object.fromEntries(STUB.filter(k => k in e).map(k => [k, (e as Any)[k]])), known_of: true } as unknown as El];
+    if ((r.known_of ?? []).includes(e.id)) {
+      if (isHouseCharter(e)) return [e];
+      return [{ ...Object.fromEntries(STUB.filter(k => k in e).map(k => [k, (e as Any)[k]])), known_of: true } as unknown as El];
+    }
     return [];
   });
 }

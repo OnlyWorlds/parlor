@@ -4,15 +4,16 @@
   "notes": [
     "pair: narrative + supertype Message, each trimmed and folded like the room profile's pairs; is_message is what isMessage must answer.",
     "characters and members: the world every case reads. characters is the world's Characters (id to name), the names a reader shows; members is the members list as GET members returns its rows (the owner's row has id null, matching a created_by of null).",
-    "addressed: isAddressedTo(message, character); an empty character id (\"\") is never addressed, not even by an empty characters. An empty characters addresses every member only when the message's x_served_trimmed (served by keel, a list of field names) does not name characters; with it, the message is addressed to no Character the reader is given. unseen: isAddressedTo as above beside hasUnseenRecipients(message) as unseen_recipients, true when x_served_trimmed names characters (someone the reader cannot see is a recipient; never who or how many). everyone: isToEveryone(message, keyless) as to_everyone and hasUnseenRecipients(message, keyless) as unseen_recipients, keyless true for a body served without a credential (the keyless public reader, which keel never serves the mark): isToEveryone is true only for a message with an empty characters, no mark naming characters, and a credential; hasUnseenRecipients is null (unknown) for a keyless body. A case without keyless (unseen) has a credential. A keyless body's null narrator keeps senderStatus unverifiable, never unseen: with no mark, the reader cannot tell nobody from someone hidden (keyless-null-narrator-is-unverifiable). A Note (note_pair) is not a message and is addressed to nobody. sent_by: isSentBy(message, character), whether narrator is the character; a message with no narrator is sent by nobody.",
+    "addressed: isAddressedTo(message, character); an empty character id (\"\") is never addressed, not even by an empty characters. An empty characters addresses every member only when the message's x_served_trimmed (served by keel, a list of field names) does not name characters; with it, the message is addressed to no Character the reader is given. unseen: isAddressedTo as above beside hasUnseenRecipients(message) as unseen_recipients, true when x_served_trimmed names characters (someone the reader cannot see is a recipient; never who or how many). everyone: isToEveryone(message, { keyless }) as to_everyone and hasUnseenRecipients(message, { keyless }) as unseen_recipients, keyless true for a body served without a credential (the keyless public reader, which keel never serves the mark): isToEveryone is true only for a message with an empty characters, no mark naming characters, and a credential; hasUnseenRecipients is null (unknown) for a keyless message. A body that is not a message is false from hasUnseenRecipients whatever keyless: the reader asks whether it is a message before it asks for the key (keyless-non-message-is-not-unseen). A case without keyless (unseen) has a credential. A keyless body's null narrator keeps senderStatus unverifiable, never unseen: with no mark, the reader cannot tell nobody from someone hidden (keyless-null-narrator-is-unverifiable). A Note (note_pair) is not a message and is addressed to nobody. sent_by: isSentBy(message, character), whether narrator is the character; a message with no narrator is sent by nobody.",
+    "recipients: recipientsOf(message) as recipients: the ids of characters, each Character once, in the order of its first place (a list served with one Character twice is read once, in its first place); a Note, or any Narrative that is not a message, has none.",
     "sender: senderStatus(message, members) is status; a case with members null is a world whose members list the reader cannot read. status unseen is a null narrator beside an x_served_trimmed naming narrator (a sender the reader cannot see, shown as from someone you cannot see), distinct from unverifiable for a null narrator without the mark; claimed is the narrator (null: none, shown as from nobody, or unseen); written_by, on a mismatch, is the author's Character.",
-    "mark: readMarkOf(relations, character, members): of the Read relations given, the id of the reader's mark: actor the reader, written by the reader's own hand (the sender rule on actor: verified) or carrying no created_by at all (a folder, an export: no hand to check), and, where it carries changed_by, last changed by its creator (changed_by equal to created_by; a changed_by with no created_by beside it is ignored); the newest updated_at when there are several, whatever their order in the list; null when the reader has none, and always null for an empty character id. keyless true is a body served without a credential (the keyless public reader, served no created_by or changed_by): no mark counts there, so readMarkOf(relations, character, members, keyless) is null; a case without keyless has a credential, or is a folder.",
+    "mark: readMarkOf(relations, character, members): of the Read relations given, the id of the reader's mark: actor the reader, written by the reader's own hand (the sender rule on actor: verified) or carrying no created_by at all (a folder, an export: no hand to check), and, where it carries changed_by, last changed by its creator (changed_by equal to created_by; a changed_by with no created_by beside it is ignored); the newest updated_at when there are several, whatever their order in the list; null when the reader has none, and always null for an empty character id. keyless true is a body served without a credential (the keyless public reader, served no created_by or changed_by): no mark counts there, so readMarkOf(relations, characterId, members, { keyless }) is null; a case without keyless has a credential, or is a folder.",
     "order: created_at, read as an instant (an offset and a fraction of a second count; a time with no offset is UTC) in the one form the page gives, matched whole, every part in its range, a year any four of the digits 0 to 9 from 0000 on the Gregorian calendar run on in both directions (the leap rule on the year's number as written, so 0000 is a leap year), and a fraction counted to its sixth digit, and two at the same instant keep the order of the list given (the server's list order); a created_at that cannot be read as a date and time (absent, null, 09:61, a word) comes after every readable one, in the order of the list given.",
     "unread: unreadFor(messages, reader, read_mark, members) for reader: messages only (a Note never), addressed to the reader, not sent by the reader, not on the mark; as ids in created_at order; read_mark null is a reader with no mark. Sent by the reader: a message with no created_by key (a folder, an export) is the reader's own when its narrator is the reader; one with created_by is the reader's own only when senderStatus against members is verified (a mismatch, an author off the list, no members list: unread for the Character it claims). A case without members reads the world's members; members null is a reader with no members list.",
     "thread: every message whose chain of parent_narrative reaches root, the root included, as ids in created_at order; a parent_narrative that is not a string (a number, null, an object) ends the chain there.",
     "edited: editedBy(message, members) as {edited, by}: edited is true when the message carries changed_by and it is not equal to its created_by (an absent created_by is never equal; null is the owner on both); by is the Character of the changed_by membership on members, null when it plays none, is off the list, or there is no list, and null whenever edited is false. The sender's answer never changes for an edit.",
     "note: noteOf(notes, character, members) is line: of the narratives given, the id of the Character's line: a Note (note_pair, trimmed and folded like pair) whose narrator is the character, neither hidden (hidden true) nor proposed (x_review_proposed an object), and in its author's hand (no created_by key: trusted, a folder; with created_by: senderStatus verified); the newest by the order above whose created_at can be read, or the last in the list when none can; null when there is none. A case without members reads the world's members.",
-    "Every case has a kind and a name; a reader dispatches on kind. A case's note is prose for the reader of the fixture, never an input."
+    "Every case has a kind and a name; a reader dispatches on kind. A case's note is prose for the reader of the fixture, never an input. A body, a read mark or an entry of a list that is not an object (null, a list, a string, a number, true or false) is no element: each kind's reader answers for it as for a body that is not a message and holds none of the fields, never fails, and passes over such an entry in a list."
   ],
   "pair": {
     "type": "narrative",
@@ -158,6 +159,52 @@
       "is_message": true
     },
     {
+      "kind": "pair",
+      "name": "pair-long-s-folds",
+      "element": {
+        "type": "narrative",
+        "supertype": "ME\u017f\u017fAGE"
+      },
+      "is_message": true,
+      "note": "Simple case folding takes the long s, U+017F, to s, so ME\u017f\u017fAGE is the word message; a reader that lower-cases leaves the long s and answers false."
+    },
+    {
+      "kind": "pair",
+      "name": "pair-sharp-s-does-not-fold",
+      "element": {
+        "type": "narrative",
+        "supertype": "Me\u00dfage"
+      },
+      "is_message": false,
+      "note": "The sharp s, U+00DF, has no simple folding, so Me\u00dfage is not the word message; a reader that folds fully takes it to ss and answers true."
+    },
+    {
+      "kind": "pair",
+      "name": "pair-body-null-is-no-message",
+      "element": null,
+      "is_message": false,
+      "note": "A body that is null is no object, so it is no element and no message; a reader answers false and does not fail."
+    },
+    {
+      "kind": "pair",
+      "name": "pair-body-a-list-is-no-message",
+      "element": [
+        {
+          "type": "narrative",
+          "supertype": "Message"
+        }
+      ],
+      "is_message": false,
+      "note": "A list is no object, even one that holds a message, so it is no element and no message; a reader answers false, never the answer for an item in it, and does not fail."
+    },
+    {
+      "kind": "pair",
+      "name": "pair-body-a-string-is-no-message",
+      "element": "Message",
+      "is_message": false,
+      "note": "A string is no object, even the word Message, so it is no element and no message; a reader answers false and does not fail."
+    },
+    {
       "kind": "addressed",
       "name": "addressed-direct",
       "message": {
@@ -179,6 +226,14 @@
     },
     {
       "kind": "addressed",
+      "name": "addressed-a-body-that-is-no-object-is-addressed-to-nobody",
+      "message": 7,
+      "character": "019a3b10-0000-7000-8000-0000000000a1",
+      "addressed": false,
+      "note": "A number is no object, so it is no message and is addressed to nobody; a reader answers false and does not fail."
+    },
+    {
+      "kind": "addressed",
       "name": "addressed-not-a-recipient",
       "message": {
         "id": "019a3b10-0000-7000-8000-0000000000c1",
@@ -196,6 +251,56 @@
       },
       "character": "019a3b10-0000-7000-8000-0000000000a4",
       "addressed": false
+    },
+    {
+      "kind": "recipients",
+      "name": "recipients-a-repeated-recipient-is-answered-once-in-its-first-place",
+      "message": {
+        "id": "019a3b10-0000-7000-8000-000000000d28",
+        "type": "narrative",
+        "supertype": "Message",
+        "name": "Message 128",
+        "story": "",
+        "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+        "characters": [
+          "019a3b10-0000-7000-8000-0000000000a2",
+          "019a3b10-0000-7000-8000-0000000000a1",
+          "019a3b10-0000-7000-8000-0000000000a2"
+        ],
+        "parent_narrative": null,
+        "created_at": "2026-11-14T09:00:00Z"
+      },
+      "recipients": [
+        "019a3b10-0000-7000-8000-0000000000a2",
+        "019a3b10-0000-7000-8000-0000000000a1"
+      ],
+      "note": "characters names the second Character, then the first, then the second again: a message names each Character once, so the second is one recipient, answered in her first place, before the first. A reader that kept the last place would answer the first Character first; one that read the repeat twice would answer three recipients."
+    },
+    {
+      "kind": "recipients",
+      "name": "recipients-a-narrative-that-is-not-a-message-has-none",
+      "message": {
+        "id": "019a3b10-0000-7000-8000-000000000d29",
+        "type": "narrative",
+        "supertype": "Story",
+        "name": "Story 129",
+        "story": "",
+        "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+        "characters": [
+          "019a3b10-0000-7000-8000-0000000000a1"
+        ],
+        "parent_narrative": null,
+        "created_at": "2026-11-14T09:01:00Z"
+      },
+      "recipients": [],
+      "note": "A Narrative with supertype Story is not a message, so it has no recipients: its characters are the people it is about. A reader answers recipients only for what the pair names a message."
+    },
+    {
+      "kind": "recipients",
+      "name": "recipients-a-body-that-is-no-object-has-none",
+      "message": "Message",
+      "recipients": [],
+      "note": "A string is no object, even the word Message, so it has no recipients; a reader answers an empty list and does not fail."
     },
     {
       "kind": "addressed",
@@ -345,6 +450,29 @@
     },
     {
       "kind": "sent_by",
+      "name": "sent-by-a-body-that-is-no-object-is-sent-by-nobody",
+      "message": [
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000c1",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 1",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1",
+            "019a3b10-0000-7000-8000-0000000000a2"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:01:00Z"
+        }
+      ],
+      "character": "019a3b10-0000-7000-8000-0000000000a3",
+      "sent_by": false,
+      "note": "A list is no object, even one that holds a message sent by this Character, so it is sent by nobody; a reader answers false, never the answer for the item in it, and does not fail."
+    },
+    {
+      "kind": "sent_by",
       "name": "not-sent-by-recipient",
       "message": {
         "id": "019a3b10-0000-7000-8000-0000000000c1",
@@ -467,6 +595,26 @@
       },
       "status": "unverifiable",
       "claimed": null
+    },
+    {
+      "kind": "sender",
+      "name": "unverifiable-a-body-that-is-no-object",
+      "message": [
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c20",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Harbour",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a2",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a4"
+          ],
+          "created_by": "019a3b10-0000-7000-8000-0000000000b2"
+        }
+      ],
+      "status": "unverifiable",
+      "claimed": null,
+      "note": "A list is no object, even one that holds a message whose sender is verified, so it names nobody: its sender is unverifiable, shown as from nobody, and no members list is read for it."
     },
     {
       "kind": "sender",
@@ -662,6 +810,131 @@
     },
     {
       "kind": "unread",
+      "name": "unread-passes-over-an-entry-that-is-no-object",
+      "messages": [
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c11",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 11",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b3",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:11:00Z"
+        },
+        null,
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c12",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 12",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b3",
+          "characters": [],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:12:00Z"
+        },
+        "Message",
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c13",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 13",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b3",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a2"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:13:00Z"
+        },
+        7,
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c14",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 14",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a2",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b2",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1",
+            "019a3b10-0000-7000-8000-0000000000a3"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:14:00Z"
+        },
+        [
+          {
+            "id": "019a3b10-0000-7000-8000-000000000c13",
+            "type": "narrative",
+            "supertype": "Message",
+            "name": "Message 13",
+            "story": "",
+            "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+            "created_by": "019a3b10-0000-7000-8000-0000000000b3",
+            "characters": [
+              "019a3b10-0000-7000-8000-0000000000a2"
+            ],
+            "parent_narrative": null,
+            "created_at": "2026-10-26T09:13:00Z"
+          }
+        ],
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c15",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 15",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a1",
+          "created_by": null,
+          "characters": [],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:15:00Z"
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c16",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 16",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a1",
+          "created_by": null,
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1",
+            "019a3b10-0000-7000-8000-0000000000a2"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:16:00Z"
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "read_mark": {
+        "id": "019a3b10-0000-7000-8000-0000000000d1",
+        "type": "relation",
+        "supertype": "Read",
+        "name": "Read: Ada",
+        "actor": "019a3b10-0000-7000-8000-0000000000a1",
+        "narratives": [
+          "019a3b10-0000-7000-8000-000000000c11"
+        ],
+        "updated_at": "2026-10-26T10:00:00Z",
+        "created_by": null
+      },
+      "unread": [
+        "019a3b10-0000-7000-8000-000000000c12",
+        "019a3b10-0000-7000-8000-000000000c14"
+      ],
+      "note": "unread-computed's messages with null, a string, a number and a list that holds a message among them: each entry that is no object is passed over and the rest is read, so the answer is unread-computed's."
+    },
+    {
+      "kind": "unread",
       "name": "unread-no-mark",
       "messages": [
         {
@@ -754,6 +1027,104 @@
         "019a3b10-0000-7000-8000-000000000c12",
         "019a3b10-0000-7000-8000-000000000c14"
       ]
+    },
+    {
+      "kind": "unread",
+      "name": "unread-a-read-mark-that-is-no-object-is-no-mark",
+      "messages": [
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c11",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 11",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b3",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:11:00Z"
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c12",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 12",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b3",
+          "characters": [],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:12:00Z"
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c13",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 13",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b3",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a2"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:13:00Z"
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c14",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 14",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a2",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b2",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1",
+            "019a3b10-0000-7000-8000-0000000000a3"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:14:00Z"
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c15",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 15",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a1",
+          "created_by": null,
+          "characters": [],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:15:00Z"
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c16",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 16",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a1",
+          "created_by": null,
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1",
+            "019a3b10-0000-7000-8000-0000000000a2"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:16:00Z"
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "read_mark": [
+        "019a3b10-0000-7000-8000-000000000c11"
+      ],
+      "unread": [
+        "019a3b10-0000-7000-8000-000000000c11",
+        "019a3b10-0000-7000-8000-000000000c12",
+        "019a3b10-0000-7000-8000-000000000c14"
+      ],
+      "note": "A read mark that is a list, even a list of message ids, is no object, so it is no mark and every message addressed to the reader is unread, as in unread-no-mark."
     },
     {
       "kind": "unread",
@@ -1289,6 +1660,55 @@
     },
     {
       "kind": "mark",
+      "name": "mark-passes-over-an-entry-that-is-no-object",
+      "relations": [
+        null,
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000d2",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-26T08:00:00Z",
+          "created_by": null
+        },
+        [
+          {
+            "id": "019a3b10-0000-7000-8000-0000000000df",
+            "type": "relation",
+            "supertype": "Read",
+            "name": "Read: Ada",
+            "actor": "019a3b10-0000-7000-8000-0000000000a1",
+            "narratives": [
+              "019a3b10-0000-7000-8000-000000000c11"
+            ],
+            "updated_at": "2026-10-27T08:00:00Z",
+            "created_by": null
+          }
+        ],
+        "Read",
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000d4",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Mara",
+          "actor": "019a3b10-0000-7000-8000-0000000000a2",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c13"
+          ],
+          "updated_at": "2026-10-26T12:00:00Z",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b2"
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "mark": "019a3b10-0000-7000-8000-0000000000d2",
+      "note": "mark-one-per-reader's relations with null, a list that holds a newer mark of the reader's and a string among them: each entry that is no object is passed over, so the mark is mark-one-per-reader's, never the one inside the list."
+    },
+    {
+      "kind": "mark",
       "name": "mark-newest-updated-at-wins",
       "relations": [
         {
@@ -1721,6 +2141,88 @@
     },
     {
       "kind": "thread",
+      "name": "thread-passes-over-an-entry-that-is-no-object",
+      "messages": [
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c34",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 34",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:34:00Z"
+        },
+        "019a3b10-0000-7000-8000-000000000c31",
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c33",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 33",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a1",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a2"
+          ],
+          "parent_narrative": "019a3b10-0000-7000-8000-000000000c32",
+          "created_at": "2026-10-26T09:33:00Z"
+        },
+        null,
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c32",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 32",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a2",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a1"
+          ],
+          "parent_narrative": "019a3b10-0000-7000-8000-000000000c31",
+          "created_at": "2026-10-26T09:32:00Z"
+        },
+        [
+          {
+            "id": "019a3b10-0000-7000-8000-000000000c33",
+            "type": "narrative",
+            "supertype": "Message",
+            "name": "Message 33",
+            "story": "",
+            "narrator": "019a3b10-0000-7000-8000-0000000000a1",
+            "characters": [
+              "019a3b10-0000-7000-8000-0000000000a2"
+            ],
+            "parent_narrative": "019a3b10-0000-7000-8000-000000000c32",
+            "created_at": "2026-10-26T09:33:00Z"
+          }
+        ],
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c31",
+          "type": "narrative",
+          "supertype": "Message",
+          "name": "Message 31",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a1",
+          "characters": [
+            "019a3b10-0000-7000-8000-0000000000a2"
+          ],
+          "parent_narrative": null,
+          "created_at": "2026-10-26T09:31:00Z"
+        }
+      ],
+      "root": "019a3b10-0000-7000-8000-000000000c31",
+      "thread": [
+        "019a3b10-0000-7000-8000-000000000c31",
+        "019a3b10-0000-7000-8000-000000000c32",
+        "019a3b10-0000-7000-8000-000000000c33"
+      ],
+      "note": "thread-chain-of-three's messages with the root's id as a string, null and a list that holds a message among them: each entry that is no object is passed over and the rest is read, so the thread is thread-chain-of-three's."
+    },
+    {
+      "kind": "thread",
       "name": "thread-from-the-middle",
       "messages": [
         {
@@ -1929,6 +2431,15 @@
     },
     {
       "kind": "unseen",
+      "name": "unseen-a-body-that-is-no-object-has-no-unseen-recipients",
+      "message": null,
+      "character": "019a3b10-0000-7000-8000-0000000000a1",
+      "addressed": false,
+      "unseen_recipients": false,
+      "note": "A body that is null is no message, so it is addressed to nobody and has no recipients the reader cannot see; a reader answers false twice and does not fail."
+    },
+    {
+      "kind": "unseen",
       "name": "empty-recipients-with-only-the-narrator-trimmed-is-to-everyone",
       "message": {
         "id": "019a3b10-0000-7000-8000-000000000c73",
@@ -2034,6 +2545,34 @@
       "unseen_recipients": true
     },
     {
+      "kind": "everyone",
+      "name": "keyless-non-message-is-not-unseen",
+      "note": "A Story is not a message, so it has no recipients, seen or unseen, whatever the key: a reader asks whether a body is a message before it asks whether it was served without a credential, and only a message read keyless answers unknown.",
+      "message": {
+        "id": "019a3b10-0000-7000-8000-000000000d30",
+        "type": "narrative",
+        "supertype": "Story",
+        "name": "Story 130",
+        "story": "",
+        "narrator": "019a3b10-0000-7000-8000-0000000000a1",
+        "characters": [],
+        "parent_narrative": null,
+        "created_at": "2026-11-15T09:00:00Z"
+      },
+      "keyless": true,
+      "to_everyone": false,
+      "unseen_recipients": false
+    },
+    {
+      "kind": "everyone",
+      "name": "everyone-a-body-that-is-no-object-is-not-to-everyone",
+      "message": [],
+      "keyless": false,
+      "to_everyone": false,
+      "unseen_recipients": false,
+      "note": "An empty list is no object, and no message with an empty characters: it is not to everyone, and it has no unseen recipients; a reader answers false twice and does not fail."
+    },
+    {
       "kind": "sender",
       "name": "keyless-null-narrator-is-unverifiable",
       "note": "A keyless body is served no mark, so its reader cannot tell a message sent by nobody from one whose sender is hidden: the status stays unverifiable, never unseen.",
@@ -2132,6 +2671,14 @@
       },
       "edited": false,
       "edited_by": null
+    },
+    {
+      "kind": "edited",
+      "name": "edited-a-body-that-is-no-object-says-nothing",
+      "message": true,
+      "edited": false,
+      "edited_by": null,
+      "note": "true is no object, so it carries no hand and no edit; a reader answers not edited, by nobody, and does not fail."
     },
     {
       "kind": "sender",
@@ -2443,6 +2990,64 @@
       ],
       "character": "019a3b10-0000-7000-8000-0000000000a2",
       "line": "019a3b10-0000-7000-8000-000000000c86"
+    },
+    {
+      "kind": "note",
+      "name": "note-passes-over-an-entry-that-is-no-object",
+      "notes": [
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c86",
+          "type": "narrative",
+          "supertype": "Note",
+          "name": "Note 86",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a2",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b2",
+          "characters": [],
+          "created_at": "2026-10-26T11:00:00Z"
+        },
+        "Note",
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c87",
+          "type": "narrative",
+          "supertype": "Note",
+          "name": "Note 87",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a2",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b2",
+          "characters": [],
+          "created_at": "2026-10-26T09:30:00Z"
+        },
+        [
+          {
+            "id": "019a3b10-0000-7000-8000-000000000c8f",
+            "type": "narrative",
+            "supertype": "Note",
+            "name": "Note 86",
+            "story": "",
+            "narrator": "019a3b10-0000-7000-8000-0000000000a2",
+            "created_by": "019a3b10-0000-7000-8000-0000000000b2",
+            "characters": [],
+            "created_at": "2026-10-26T13:00:00Z"
+          }
+        ],
+        7,
+        {
+          "id": "019a3b10-0000-7000-8000-000000000c88",
+          "type": "narrative",
+          "supertype": "Note",
+          "name": "Note 88",
+          "story": "",
+          "narrator": "019a3b10-0000-7000-8000-0000000000a3",
+          "created_by": "019a3b10-0000-7000-8000-0000000000b3",
+          "characters": [],
+          "created_at": "2026-10-26T12:00:00Z"
+        },
+        null
+      ],
+      "character": "019a3b10-0000-7000-8000-0000000000a2",
+      "line": "019a3b10-0000-7000-8000-000000000c86",
+      "note": "note-newest-by-created-at-is-the-authors-line's Notes with a string, a list that holds a newer Note of the same Character, a number and null among them: each entry that is no object is passed over, so the line is that case's, never the Note inside the list."
     },
     {
       "kind": "note",
@@ -3247,6 +3852,217 @@
         "019a3b10-0000-7000-8000-000000000cc0",
         "019a3b10-0000-7000-8000-000000000cbe"
       ]
+    },
+    {
+      "kind": "mark",
+      "name": "mark-an-updated-at-that-cannot-be-read-never-wins",
+      "relations": [
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000dc",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-27",
+          "created_by": null
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000db",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-26T08:00:00Z",
+          "created_by": null
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "mark": "019a3b10-0000-7000-8000-0000000000db"
+    },
+    {
+      "kind": "mark",
+      "name": "mark-an-updated-at-that-cannot-be-read-never-wins-listed-last",
+      "relations": [
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000e0",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-26T08:00:00Z",
+          "created_by": null
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000e2",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-27",
+          "created_by": null
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "mark": "019a3b10-0000-7000-8000-0000000000e0"
+    },
+    {
+      "kind": "mark",
+      "name": "mark-two-at-one-instant-tie-by-the-higher-id",
+      "relations": [
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000dd",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-26T11:00:00+01:00",
+          "created_by": null
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000de",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-26T10:00:00Z",
+          "created_by": null
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "mark": "019a3b10-0000-7000-8000-0000000000de"
+    },
+    {
+      "kind": "mark",
+      "name": "mark-two-at-one-instant-tie-by-the-higher-id-listed-first",
+      "relations": [
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000de",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-26T10:00:00Z",
+          "created_by": null
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000dd",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "updated_at": "2026-10-26T11:00:00+01:00",
+          "created_by": null
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "mark": "019a3b10-0000-7000-8000-0000000000de"
+    },
+    {
+      "kind": "mark",
+      "name": "mark-none-can-be-read-the-higher-id",
+      "relations": [
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000d0",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "created_by": null,
+          "updated_at": "yesterday"
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000df",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "created_by": null,
+          "updated_at": "2026-10-26"
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "mark": "019a3b10-0000-7000-8000-0000000000df"
+    },
+    {
+      "kind": "mark",
+      "name": "mark-none-can-be-read-the-higher-id-listed-first",
+      "relations": [
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000df",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "created_by": null,
+          "updated_at": "2026-10-26"
+        },
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000d0",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "created_by": null,
+          "updated_at": "yesterday"
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "mark": "019a3b10-0000-7000-8000-0000000000df"
+    },
+    {
+      "kind": "mark",
+      "name": "mark-a-lone-mark-is-the-mark-though-its-time-cannot-be-read",
+      "relations": [
+        {
+          "id": "019a3b10-0000-7000-8000-0000000000d0",
+          "type": "relation",
+          "supertype": "Read",
+          "name": "Read: Ada",
+          "actor": "019a3b10-0000-7000-8000-0000000000a1",
+          "narratives": [
+            "019a3b10-0000-7000-8000-000000000c11"
+          ],
+          "created_by": null
+        }
+      ],
+      "reader": "019a3b10-0000-7000-8000-0000000000a1",
+      "mark": "019a3b10-0000-7000-8000-0000000000d0"
     }
   ]
 }
