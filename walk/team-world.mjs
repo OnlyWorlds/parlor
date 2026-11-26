@@ -3,15 +3,16 @@
 // always was. On production keel, against PARLOR_URL.
 //   WALK_STATE=<scratch file> PARLOR_URL=<a built parlor> node walk/team-world.mjs chromium|firefox [phone]
 // Run seed.mjs crew-walk-b first (crew-walk-c hosts, crew-walk-b is the member). The walk makes, each recorded so
-// teardown.mjs takes it back by id: two Objects in design (one under the other), a Character for a played AI seat, a
-// Note by the member, a taken work item that names the member's Character, the lines the pages send, and one world
+// teardown.mjs takes it back by id: two Objects in design (one under the other), four Characters for played AI seats
+// (three Companions, one Agent), a Note by the member, a taken work item that names the member's Character, the lines the pages send, and one world
 // key for the member (to write its Note), revoked by its id.
 //
 // One door is played, and only that one: GET /members on the host's page and the phone's. keel's roster for the test
-// world holds no AI seat, and only an AI no one answers for (a beast) has a room, so the played answer adds two AI rows
-// (a beast writing as its own Character, and one the owner answers for), and on the host's page plays the member's own
-// seat as a beast too, writing as the Member Character it already writes as (so its Note's sender reads verified and
-// its room is the room the walk writes in). Every other read and every write is keel's. The member's desk page reads
+// world holds no AI seat, and only an AI whose Character is a Companion has a room, so the played answer adds four AI
+// rows (a beast writing as its own Companion, a beast whose Character is an Agent, and two the owner answers for, one
+// a Companion), and
+// on the host's page plays the member's own seat as an AI too, writing as a Companion the member made for the walk (so
+// its Note's sender reads verified and its room is the room the walk writes in). Every other read and every write is keel's. The member's desk page reads
 // keel's roster as served; the phone's adds the same two AI rows and leaves the member a person.
 //
 // The workshop world is crew-walk-b's "Dashboard ground (crew test)" (no Charter mark), read only: the page is
@@ -89,15 +90,14 @@ try {
   const member = new OwV2Client({ apiKey: bKey, apiPin: account('crew-walk-b').pin, baseUrl: API });
   const bMe = await member.me();
   const bWho = bMe.membership;
-  let bChar = null;
-  for await (const el of host.listAll('character')) {
-    if ((el.supertype ?? '').toLowerCase() === 'member' && el.x_room_of && el.created_by === bWho && (!bChar || el.created_at < bChar.created_at)) bChar = el;
-  }
-  if (!bChar) throw new Error('the member has no Member Character on the test world: run walk.mjs once first');
+  // The member writes as a Companion of the walk's own: the played roster has the member's seat play it.
+  const bChar = await make(member, 'character', { name: `Walk companion ${RUN}`, supertype: 'Companion' });
   const bName = bChar.name.trim();
   const trainer = await make(host, 'object', { name: `Walk trainer ${RUN}`, subtype: 'in design', description: 'A trainer the walk drew.\nIts second line.' });
   const screen = await make(host, 'object', { name: `Walk screen ${RUN}`, subtype: 'in design', parent_object: trainer.id, description: 'What a student sees first.' });
-  const beastChar = await make(host, 'character', { name: `Walk beast ${RUN}` });
+  const beastChar = await make(host, 'character', { name: `Walk beast ${RUN}`, supertype: 'Companion' });
+  const agentChar = await make(host, 'character', { name: `Walk agent ${RUN}`, supertype: 'Agent' });
+  const buddyChar = await make(host, 'character', { name: `Walk buddy ${RUN}`, supertype: 'Companion' });
   const noteText = `Building the walk screen ${RUN}\nThe rest of the Note.`;
   const note = await make(member, 'narrative', { name: `Note ${RUN}`, supertype: 'Note', narrator: bChar.id, story: noteText, objects: [trainer.id, screen.id] });
   const item = await make(host, 'relation', { name: `Take the walk screen ${RUN}`, supertype: 'Work item', subtype: 'taken', characters: [bChar.id], x_room_of: s.worldId });
@@ -108,6 +108,8 @@ try {
   const played = (rows, memberAsBeast) => [
     ...rows.map(r => (r.id === bWho && memberAsBeast ? { ...r, kind: 'agent', sponsor_member: null, name: 'member-seat', character: bChar.id } : r)),
     { id: `a1a1a1a1-0000-4000-8000-${RUN.padStart(12, '0').slice(-12)}`, kind: 'agent', role: 'contributor', character: beastChar.id, status: 'active', name: 'beast-seat', sponsor_member: null, lenses: [], lenses_from: 'none' },
+    { id: `a3a3a3a3-0000-4000-8000-${RUN.padStart(12, '0').slice(-12)}`, kind: 'agent', role: 'contributor', character: agentChar.id, status: 'active', name: 'agent-seat', sponsor_member: null, lenses: [], lenses_from: 'none' },
+    { id: `a4a4a4a4-0000-4000-8000-${RUN.padStart(12, '0').slice(-12)}`, kind: 'agent', role: 'contributor', character: buddyChar.id, status: 'active', name: 'buddy-seat', sponsor_member: 'owner', lenses: [], lenses_from: 'none' },
     { id: `a2a2a2a2-0000-4000-8000-${RUN.padStart(12, '0').slice(-12)}`, kind: 'agent', role: 'contributor', character: null, status: 'active', name: `Host's helper ${RUN}`, sponsor_member: 'owner', lenses: [], lenses_from: 'none' },
   ];
   const playMembers = async (ctx, memberAsBeast) => ctx.route(/\/api\/v2\/members\/?(\?|$)/, async route => {
@@ -153,13 +155,17 @@ try {
   const beastRow = crew.locator('.row', { hasText: `Walk beast ${RUN}` });
   check('crew: an AI no one answers for is a beast, named by its Character', await until(() => beastRow.isVisible(), 20000));
   const helper = crew.locator('.kid .row', { hasText: `Host's helper ${RUN}` });
-  check('crew: an AI the owner answers for sits under the owner, folded by "1 AI"', await until(() => helper.isVisible(), 10000)
-    && await crew.locator('.wrap', { has: h.locator('.fold') }).first().locator('.fold').innerText({ timeout: 4000 }).catch(() => '').then(t => /1 AI/.test(t)));
+  check('crew: the AIs the owner answers for sit under the owner, folded by "2 AIs"', await until(() => helper.isVisible(), 10000)
+    && await crew.locator('.wrap', { has: h.locator('.fold') }).first().locator('.fold').innerText({ timeout: 4000 }).catch(() => '').then(t => /2 AIs/.test(t)));
   check('crew: an AI a person answers for keeps its row, not pressable', !/no room you can see/.test(await helper.innerText({ timeout: 4000 }).catch(() => ''))
     && (await crew.locator(`.kid div.row.none`, { hasText: `Host's helper ${RUN}` }).count()) === 1 && (await crew.locator(`.kid button.row`, { hasText: `Host's helper ${RUN}` }).count()) === 0);
   check('crew: a person keeps their row, not pressable: no room of their own', await until(async () => (await crew.locator('div.row.none[data-seat="owner"]').count()) === 1, 10000)
     && (await crew.locator('button.row[data-seat="owner"]').count()) === 0);
   check('crew: a beast\'s row opens its room', (await crew.locator('button.row', { hasText: `Walk beast ${RUN}` }).count()) === 1);
+  check('crew: an AI whose Character is an Agent keeps its row among the beasts, not pressable: no room', await until(async () =>
+    (await crew.locator('div.row.none', { hasText: `Walk agent ${RUN}` }).count()) === 1, 10000)
+    && (await crew.locator('button.row', { hasText: `Walk agent ${RUN}` }).count()) === 0);
+  check('crew: a Companion the owner answers for opens its room from under the owner', (await crew.locator('.kid button.row', { hasText: `Walk buddy ${RUN}` }).count()) === 1);
   // The member's seat, played as a beast: its room is the one the walk writes in.
   const bRow = crew.locator(`button.row[data-seat="${bWho}"]`);
   // No seat is shown as working yet (nothing records a seat's session): the member holds a taken work item, and still
@@ -190,7 +196,7 @@ try {
   await h.locator('[data-part="work-elements"] .chip', { hasText: `Walk trainer ${RUN}` }).click();
   const card = h.locator('[data-part="element-card"]');
   check('card: the element opens over the room with its name, kind and state', await until(async () =>
-    await card.isVisible() && (await card.locator('h2').innerText({ timeout: 4000 }).catch(() => '')) === `Walk trainer ${RUN}` && /Object · in design/.test(await card.locator('.kind').innerText({ timeout: 4000 }).catch(() => '')), 5000), `${await card.locator('h2').innerText().catch(() => '')} | ${await card.locator('.kind').innerText().catch(() => '')}`);
+    await card.isVisible() && (await card.locator('h2').innerText({ timeout: 4000 }).catch(() => '')) === `Walk trainer ${RUN}` && /Object · in design/i.test(await card.locator('.kind').innerText({ timeout: 4000 }).catch(() => '')), 5000), `${await card.locator('h2').innerText().catch(() => '')} | ${await card.locator('.kind').innerText().catch(() => '')}`);
   check('card: its words and the part under it, by the link\'s name', /A trainer the walk drew/.test(await card.innerText({ timeout: 4000 }).catch(() => '')) && await card.locator('.graph .edge-label', { hasText: 'Under it' }).isVisible());
   await h.waitForTimeout(4000);
   check('card: the card holds through the feed', await card.isVisible());
