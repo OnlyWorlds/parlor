@@ -178,6 +178,22 @@ async function walk(engine, tag) {
     check(tag, await headingIs('Ada') && (await focusKey()) === 'card:h', 'Enter steps back to Ada, her heading focused');
     check(tag, (await fold.textContent().catch(() => '')) === 'Show all', 'a step folds the words again');
 
+    // 4b. A click on a neighbour's picture (its whole group, where a person's click lands) steps too, and the group
+    // holds still while it waits for one: its box read over ten frames.
+    const homeG = card.locator(`[data-focus="card:g:out:birthplace:${HOME}"]`);
+    const drift = await homeG.evaluate(async g => {
+      const boxes = [];
+      for (let i = 0; i < 10; i++) { await new Promise(r => requestAnimationFrame(r)); const b = g.getBoundingClientRect(); boxes.push([b.x, b.y, b.width, b.height]); }
+      return Math.max(...boxes.flatMap(b => b.map((v, k) => Math.abs(v - boxes[0][k]))));
+    }).catch(() => null);
+    check(tag, drift === 0, `a neighbour's group holds still over ten frames (moved ${drift} px)`);
+    await press(homeG);
+    await settle(150);
+    check(tag, await headingIs('Home'), 'a click on a neighbour\'s group steps the card to it');
+    await press(card.locator(`[data-focus="card:g:in:birthplace:${ADA}"]`));
+    await settle(150);
+    check(tag, await headingIs('Ada'), 'and a click on Ada\'s group steps back');
+
     // 5. Escape in the composer: the composer's, the card stays.
     await toRoom();
     await page.locator('textarea[aria-label="Write a line"]').focus();
