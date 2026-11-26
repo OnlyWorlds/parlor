@@ -8,7 +8,7 @@
  * this browser only, as Atlas keeps them.
  */
 
-import { OwV2Client, OwSignInError, OwApiError, type OwAccountWorld } from '@onlyworlds/sdk';
+import { OwV2Client, OwSignInError, OwApiError, detectKeyKind, pinExpectation, type OwAccountWorld } from '@onlyworlds/sdk';
 
 export const API_BASE = 'https://www.onlyworlds.com/api/v2';
 
@@ -248,7 +248,10 @@ class Session {
       save(this.s);
     }
     // 'parlor' on every write (keel's changed_client), so another tool can say where a line came from.
-    return new OwV2Client({ apiKey: key, apiPin: this.s.pin || undefined, baseUrl: apiBase(), client: 'parlor' });
+    // The PIN goes only with a key that can use one: a read key (a guest's, or an account with no PIN
+    // yet) never carries it, so the saved PIN is not sent beside it on every open.
+    const pin = pinExpectation(detectKeyKind(key)) === 'never' ? undefined : this.s.pin || undefined;
+    return new OwV2Client({ apiKey: key, apiPin: pin, baseUrl: apiBase(), client: 'parlor' });
   }
 
   /**
