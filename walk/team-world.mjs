@@ -206,7 +206,10 @@ try {
   await h.keyboard.press('Escape');
   await h.waitForTimeout(300);
   check('card: Escape in the composer leaves the card open', await card.isVisible());
-  await card.locator('.graph .nb', { hasText: `Walk screen ${RUN}` }).click();
+  // The neighbour's hit area, where a person's press lands. Firefox gives this group a box 87 px tall around children
+  // that span 31 (read on the live host), so a click aimed at the group's centre lands on the card beside it and
+  // Playwright waits for it forever; the hit area is the same in both engines.
+  await card.locator('.graph .nb', { hasText: `Walk screen ${RUN}` }).locator('rect.hit').click();
   check('card: a neighbour steps the card to it', await until(async () => (await card.locator('h2').innerText({ timeout: 4000 }).catch(() => '')) === `Walk screen ${RUN}`, 5000)
     && await card.locator('.graph .edge-label', { hasText: 'Parent object' }).isVisible());
   await shot(h, 'card');
