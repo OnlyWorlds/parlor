@@ -265,7 +265,7 @@ export function storyStart(story: string): { text: string; cut: boolean } {
   const ls = story.split(/\r?\n/);
   let text = ls.slice(0, 3).join('\n');
   let cut = ls.length > 3;
-  if (text.length > 280) { text = text.slice(0, 279).trimEnd() + '…'; cut = true; }
+  if ([...text].length > 280) { text = cutPoints(text, 279).trimEnd() + '…'; cut = true; }
   return { text, cut };
 }
 
@@ -402,10 +402,20 @@ function lineText(el: El): string {
   return typeof el.story === 'string' || typeof el.description === 'string' ? '' : str(el.name);
 }
 
-/** A Narrative's name is required: the line's first words, the whole line in the story. */
+/**
+ * The first `max` code points of a text. A cut by UTF-16 code units can split a surrogate pair (an emoji, most of the
+ * astral plane), and OnlyWorlds refuses a name with a lone surrogate as invalid Unicode: a refusal the person cannot
+ * mend, since they never typed the name.
+ */
+export function cutPoints(text: string, max: number): string {
+  const points = [...text];
+  return points.length <= max ? text : points.slice(0, max).join('');
+}
+
+/** A Narrative's name is required: the line's first words, the whole line in the story; at most 60 code points. */
 export function lineName(text: string): string {
   const one = text.replace(/\s+/g, ' ').trim();
-  return one.length <= 60 ? one : one.slice(0, 59).trimEnd() + '…';
+  return [...one].length <= 60 ? one : cutPoints(one, 59).trimEnd() + '…';
 }
 
 /**
@@ -544,7 +554,7 @@ export function newSpec(title: string, text: string, kind: Kind, roomOf: string)
 
 export function newHeart(target: string, targetName: string, actor: string | null, roomOf: string): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    name: `Heart for ${targetName}`.slice(0, 200),
+    name: cutPoints(`Heart for ${targetName}`, 200),
     supertype: SUPERTYPE.heart,
     constructs: [target],
     [ROOM_MARK]: roomOf,
@@ -785,7 +795,7 @@ export function newBoardEntry(
   title: string, text: string, colour: BoardColour, waitsOn: string | null, narrator: string | null, roomOf: string,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    name: title.trim().slice(0, 200),
+    name: cutPoints(title.trim(), 200),
     description: text,
     supertype: SUPERTYPE.board,
     subtype: colour,
@@ -895,7 +905,7 @@ export function deletableTakes(els: Iterable<El>, itemId: string, me: string, is
  */
 export function newTake(item: { id: string; title: string; roomOf: string }, character: string | null): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    name: `Take: ${item.title}`.slice(0, 200),
+    name: cutPoints(`Take: ${item.title}`, 200),
     supertype: SUPERTYPE.take,
     subtype: 'taken',
     [ROOM_MARK]: writtenId(item.roomOf),
@@ -1035,7 +1045,7 @@ export function newWorkItem(
   askedBy: string | null = null,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    name: title.trim().slice(0, 200),
+    name: cutPoints(title.trim(), 200),
     description: text,
     supertype: SUPERTYPE.workItem,
     subtype: 'open',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  OWNER, type El, readLines, lineName, newLine, readHearts, heartCounts, myHearts, readSpecs,
+  OWNER, type El, readLines, lineName, cutPoints, newLine, readHearts, heartCounts, myHearts, readSpecs,
   readVotes, tally, readSittings, newSitting, phasePatch, linesOfSitting, linesOfUnseenSitting, readCharter, PHASES, phaseOf,
   newSpec, newHeart, newVote, newMember, readMemberCharacters, ROOM_MARK, ofRoom,
   kindOf, starPatch, STAR_FIELD, readBoard, newBoardEntry, starOf, OLD_STAR, OLD_STAR_BEFORE,
@@ -48,6 +48,20 @@ describe('lines', () => {
     expect(body.narrator).toBe('c1');
     expect(body.parent_narrative).toBe('p1');
     expect(lineName('  two\n words ')).toBe('two words');
+  });
+
+  it('cuts a name by code points, never through a surrogate pair (OnlyWorlds refuses a lone surrogate)', () => {
+    const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    const name = lineName('a'.repeat(58) + '🌊🌊🌊');
+    expect(name).toBe('a'.repeat(58) + '🌊…');
+    expect(lone.test(name)).toBe(false);
+    expect(lineName('🌊'.repeat(60))).toBe('🌊'.repeat(60));
+    expect(lineName('🌊'.repeat(61))).toBe('🌊'.repeat(59) + '…');
+    expect(lone.test(cutPoints('x' + '🌊'.repeat(150), 200))).toBe(false);
+    expect([...cutPoints('🌊'.repeat(250), 200)]).toHaveLength(200);
+    const start = storyStart('🌊'.repeat(300));
+    expect(lone.test(start.text)).toBe(false);
+    expect(start.cut).toBe(true);
   });
 
   it('a person without a Character sends no narrator', () => {
