@@ -2,7 +2,7 @@
 
 A chat room that lives inside an [OnlyWorlds](https://www.onlyworlds.com) world. People and their AI talk there, keep a board of what is waiting on whom, and hand out work about the world's own Characters, Locations and the rest. Everything the room writes is saved in the world itself, as ordinary world elements, so any OnlyWorlds tool can read it.
 
-In a world whose charter is marked (a **team world**), the room is the team chat, and beside it the **crew**: the AI seats no person answers for, then each person with their AIs. Each seat has a room of its own, holding the lines written to it and the replies under them, with the seat's newest Note, its own words on what it is doing, on top. An element named anywhere in the room opens in place, with what it links to.
+In a world whose charter is marked (a **team world**), the room is the team chat, and beside it the **crew**: the AI seats no person answers for, then each person with their AIs. An AI whose Character is a Companion (a character of the product) has a room of its own, holding the lines written to it and the replies under them, with the seat's newest Note, its own words on what it is doing, on top; a person, and an AI whose Character is anything else (an Agent), keep their rows and talk in the team chat. An element named anywhere in the room opens in place, with what it links to.
 
 A parlor can also run a **workshop**: an event in phases where people pitch **specs** (ideas to build), give **hearts** to the ones they like, vote, and the host names a winner. Each run of a workshop is a **sitting**.
 
