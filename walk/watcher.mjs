@@ -56,12 +56,19 @@ await accountCall(c, 'PATCH', `/account/worlds/${s.worldId}/members/${was.member
 const browser = await engine.launch();
 try {
   const ctx = await browser.newContext();
-  await ctx.addInitScript(([token, login]) => {
-    if (!localStorage.getItem('parlor.session.v1')) localStorage.setItem('parlor.session.v1', JSON.stringify({ token, login, pin: '', keys: {} }));
-  }, [signed.token, GUEST]);
+  // The guest's account has a PIN and this browser keeps it, as a member lowered to guest would: the room opens
+  // on a read key, which must go out without the PIN beside it.
+  await ctx.addInitScript(([token, login, pin]) => {
+    if (!localStorage.getItem('parlor.session.v1')) localStorage.setItem('parlor.session.v1', JSON.stringify({ token, login, pin, keys: {} }));
+  }, [signed.token, GUEST, g.pin ?? '']);
   const p = await ctx.newPage();
   const errors = [];
   p.on('pageerror', e => errors.push(String(e)));
+  const pinBesideRead = [];
+  p.on('request', r => {
+    const h = r.headers();
+    if ((h['api-key'] ?? '').startsWith('ow_r_') && h['api-pin']) pinBesideRead.push(`${r.method()} ${new URL(r.url()).pathname}`);
+  });
   await p.goto(`${BASE}#/w/${s.worldId}`);
   const until = async (fn, ms = 20000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await fn().catch(() => false)) return true; await p.waitForTimeout(250); } return false; };
   const sees = await until(() => p.getByText(now).isVisible());
@@ -78,6 +85,8 @@ try {
   const ownRow = await until(() => p.locator('[data-seat] .st', { hasText: 'watcher, you' }).first().isVisible(), 8000);
   const refused = await p.locator('[data-part="crew-refused"]').isVisible().catch(() => false);
   check(ownRow && !refused, 'the Crew tab shows the crew as served, the watcher\'s own row saying "watcher, you"');
+  check(!!g.pin, 'the guest account has a PIN to keep (else the next check cannot move)');
+  check(!pinBesideRead.length, `no request on a read key carries the PIN (${pinBesideRead.join(', ')})`);
   check(!errors.length, `no page error (${errors.join(' | ')})`);
   const sess = await p.evaluate(() => JSON.parse(localStorage.getItem('parlor.session.v1') ?? 'null')).catch(() => null);
   for (const k of [...Object.values(sess?.keys ?? {}), ...Object.values(sess?.readKeys ?? {})]) {
