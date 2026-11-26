@@ -26,6 +26,8 @@ export interface CrewSeat {
   you: boolean;
   /** An AI that plays its own person's Character: that person's key. It has no room of its own. */
   plays: MemberKey | null;
+  /** Whether the seat's Character (served to this reader) is a Companion: an AI's room is a Companion's alone. */
+  companion: boolean;
 }
 
 export interface Crew {
@@ -52,8 +54,11 @@ export function crewOf(o: {
   charName: (character: string | null) => string | null;
   memberCharacters: ReadonlyMap<string, { id: string; name: string }>;
   served: (character: string) => boolean;
+  /** Whether a served Character is a Companion (its supertype, folded); never asked of one the reader is not served. */
+  companion: (character: string) => boolean;
 }): Crew {
   const room = (c: string | null): string | null => (c && o.served(c) ? c : null);
+  const isCompanion = (c: string | null): boolean => !!c && o.companion(c);
   const team = buildTeam({ members: o.members, me: o.me, myUsername: o.myUsername, mySeats: o.mySeats, nameOf: c => o.charName(c) ?? '', charName: o.charName });
   const roleOf = (key: MemberKey): RoomRole => {
     const row = o.members.find(m => keyOf(m.id) === key);
@@ -70,16 +75,18 @@ export function crewOf(o: {
         if (own.name.trim()) name = own.name.trim();
       }
     }
-    const seat: CrewSeat = { key: p.key, name, ai: false, character: room(character), role: roleOf(p.key), you: p.you, plays: null };
-    const ais: CrewSeat[] = p.ais.map(a => ({
-      key: a.key, name: a.ownName, ai: true,
-      // An AI that plays its person's Character has no room of its own: a press opens the person's.
-      character: a.as === 'person' ? null : room(a.character),
-      role: null, you: false, plays: a.as === 'person' ? p.key : null,
-    }));
+    const seat: CrewSeat = { key: p.key, name, ai: false, character: room(character), role: roleOf(p.key), you: p.you, plays: null, companion: false };
+    const ais: CrewSeat[] = p.ais.map(a => {
+      // An AI that plays its person's Character has no room of its own.
+      const own = a.as === 'person' ? null : room(a.character);
+      return { key: a.key, name: a.ownName, ai: true, character: own, role: null, you: false, plays: a.as === 'person' ? p.key : null, companion: isCompanion(own) };
+    });
     return { seat, ais };
   });
-  const beasts: CrewSeat[] = team.unattached.map(a => ({ key: a.key, name: a.ownName, ai: true, character: room(a.character), role: null, you: false, plays: null }));
+  const beasts: CrewSeat[] = team.unattached.map(a => {
+    const own = room(a.character);
+    return { key: a.key, name: a.ownName, ai: true, character: own, role: null, you: false, plays: null, companion: isCompanion(own) };
+  });
   return { beasts, people };
 }
 
@@ -92,12 +99,13 @@ export function seatsByKey(crew: Crew): Map<MemberKey, CrewSeat> {
 }
 
 /**
- * The seat whose room `key` opens: a beast (an AI no person answers for) with a Character this reader is served. A
- * person and a person's AI keep their rows in the crew, with no room of their own for now (ruled 2026-11-18).
+ * The seat whose room `key` opens: an AI seat whose own Character, served to this reader, is a Companion (a character
+ * of the product), whether or not a person answers for it. An AI whose Character is anything else (an Agent) talks
+ * with its person and has no room; a person has none, nor an AI that plays its person's Character (ruled 2026-11-21).
  */
 export function roomSeat(crew: Crew, key: MemberKey): CrewSeat | null {
-  const b = crew.beasts.find(x => x.key === key);
-  return b?.character ? b : null;
+  const s = seatsByKey(crew).get(key);
+  return s && s.ai && !s.plays && s.character && s.companion ? s : null;
 }
 
 // ---------------------------------------------------------------- threads and a seat's room

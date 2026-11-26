@@ -9,6 +9,8 @@ import { buildTeam, newestNote, age } from './team';
 
 const WORLD = 'w0000000-0000-0000-0000-000000000001';
 
+// The Characters that are Companions (a character of the product); every other one is not (an Agent, a person).
+const companion = (c: string) => c === 'c-vonkje' || c === 'c-buddy';
 const member = (over: Partial<OwMember>): OwMember => ({ id: null, kind: 'person', role: 'contributor', character: null, status: 'active', lenses: [], lenses_from: 'none', ...over } as OwMember);
 
 describe('the crew', () => {
@@ -27,7 +29,7 @@ describe('the crew', () => {
   const charName = (c: string | null) => (c ? names[c] ?? null : null);
   const memberCharacters = new Map([['m-noch', { id: 'c-own', name: 'Noor' }]]);
   const served = (c: string) => c in names || c === 'c-own';
-  const crew = crewOf({ members, me: 'm-jas', mySeats: [], charName, memberCharacters, served });
+  const crew = crewOf({ companion, members, me: 'm-jas', mySeats: [], charName, memberCharacters, served });
 
   it('puts an AI no one answers for among the beasts and an AI with a sponsor under its person', () => {
     expect(crew.beasts.map(b => b.name)).toEqual(['Vonkje']);
@@ -36,16 +38,30 @@ describe('the crew', () => {
     expect(titus.seat.role).toBe('host');
   });
 
-  it('opens a room only for a beast with a Character: never a person, never a person\'s AI', () => {
+  it('opens a room only for an AI whose Character is a Companion: never a person, an Agent, or an AI that plays its person', () => {
     expect(roomSeat(crew, 'a-von')?.name).toBe('Vonkje');
-    // A person with a Character, an AI with its own Character under its person, an AI that plays its person.
+    // A person with a Character, an Agent under its person, an AI that plays its person.
     expect(roomSeat(crew, 'owner')).toBeNull();
     expect(roomSeat(crew, 'm-jas')).toBeNull();
     expect(roomSeat(crew, 'a-kael')).toBeNull();
     expect(roomSeat(crew, 'a-twin')).toBeNull();
     expect(roomSeat(crew, 'team')).toBeNull();
+    // Who answers for a Companion decides nothing: one under its person opens its room as one no one answers for does.
+    const withBuddy = crewOf({ companion, members: [...members, member({ id: 'a-bud', kind: 'agent', role: 'contributor', character: 'c-buddy', name: 'buddy-seat', sponsor_member: 'owner' })],
+      me: 'm-jas', mySeats: [], charName: c => (c === 'c-buddy' ? 'Buddy' : charName(c)), memberCharacters, served: c => c === 'c-buddy' || served(c) });
+    expect(withBuddy.people.find(p => p.seat.key === 'owner')!.ais.map(a => a.name)).toEqual(['Buddy', 'Kael']);
+    expect(roomSeat(withBuddy, 'a-bud')?.name).toBe('Buddy');
+    // An AI no one answers for whose Character is an Agent has no room: it talks with its person.
+    const agentBeast = crewOf({ companion, members: [...members, member({ id: 'a-ag', kind: 'agent', role: 'contributor', character: 'c-kael2', name: 'agent-seat', sponsor_member: null })],
+      me: 'm-jas', mySeats: [], charName: c => (c === 'c-kael2' ? 'Codex' : charName(c)), memberCharacters, served: c => c === 'c-kael2' || served(c) });
+    expect(agentBeast.beasts.map(b => b.name)).toEqual(['Codex', 'Vonkje']);
+    expect(roomSeat(agentBeast, 'a-ag')).toBeNull();
+    // An AI that plays its person's Character has no room even when that Character is a Companion.
+    const playsCompanion = crewOf({ companion: () => true, members, me: 'm-jas', mySeats: [], charName, memberCharacters, served });
+    expect(roomSeat(playsCompanion, 'a-twin')).toBeNull();
+    expect(roomSeat(playsCompanion, 'm-jas')).toBeNull();
     // A beast whose Character the reader is not served has no room either.
-    const unseen = crewOf({ members, me: 'm-jas', mySeats: [], charName, memberCharacters, served: c => c !== 'c-vonkje' && served(c) });
+    const unseen = crewOf({ companion, members, me: 'm-jas', mySeats: [], charName, memberCharacters, served: c => c !== 'c-vonkje' && served(c) });
     expect(roomSeat(unseen, 'a-von')).toBeNull();
   });
 
@@ -76,20 +92,20 @@ describe('the crew', () => {
   });
 
   it('never names a seat by a Character the reader is not served', () => {
-    const hidden = crewOf({ members, me: 'm-jas', mySeats: [], charName: () => null, memberCharacters: new Map(), served: () => false });
+    const hidden = crewOf({ companion, members, me: 'm-jas', mySeats: [], charName: () => null, memberCharacters: new Map(), served: () => false });
     expect(hidden.beasts[0].name).toBe('vonkje-seat');
     expect(hidden.people.find(p => p.seat.key === 'owner')!.seat.name).toBe('The owner');
   });
 
   it('gives no room to a seat whose roster Character the reader is not served, never one keyed on the raw id', () => {
-    const hidden = crewOf({ members, me: 'm-jas', mySeats: [], charName: () => null, memberCharacters: new Map(), served: () => false });
+    const hidden = crewOf({ companion, members, me: 'm-jas', mySeats: [], charName: () => null, memberCharacters: new Map(), served: () => false });
     for (const s of seatsByKey(hidden).values()) expect(s.character).toBeNull();
     // Served except the beast's: only the beast loses its room.
-    const some = crewOf({ members, me: 'm-jas', mySeats: [], charName, memberCharacters, served: c => served(c) && c !== 'c-vonkje' });
+    const some = crewOf({ companion, members, me: 'm-jas', mySeats: [], charName, memberCharacters, served: c => served(c) && c !== 'c-vonkje' });
     expect(some.beasts[0].character).toBeNull();
     expect(some.people.find(p => p.seat.key === 'owner')!.seat.character).toBe('c-titus');
     // A roster Character the feed does not hold (not in `names`) gives no room either.
-    const absent = crewOf({ members: [...members, member({ id: 'm-hid', character: 'c-not-served' })], me: 'm-jas', mySeats: [], charName, memberCharacters, served });
+    const absent = crewOf({ companion, members: [...members, member({ id: 'm-hid', character: 'c-not-served' })], me: 'm-jas', mySeats: [], charName, memberCharacters, served });
     expect(absent.people.find(p => p.seat.key === 'm-hid')!.seat.character).toBeNull();
   });
 

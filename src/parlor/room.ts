@@ -407,6 +407,7 @@ export class Room {
       charName: c => this.characterShown(c),
       memberCharacters: this.members(),
       served: c => this.characterServed(c),
+      companion: c => simpleCaseFold(String(this.els.get(c)?.supertype ?? '').trim()) === 'companion',
     });
   }
 

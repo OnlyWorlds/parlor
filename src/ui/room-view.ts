@@ -809,7 +809,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   // -------------------------------------------------- moving between rooms
   /** Open a room: the team chat, or a seat's by its key. A seat's room takes plain lines, so a report or an answer is let go. */
   function openSpace(next: string): void {
-    // Seat rooms are a team world's alone (a workshop world keeps its one room), and only a beast's (roomSeat).
+    // Seat rooms are a team world's alone (a workshop world keeps its one room), and only a Companion's (roomSeat).
     if (next !== 'team' && (!room.teamWorld || !roomSeat(crewNow, next))) return;
     if (next !== 'team') {
       if (reporting) { reporting = false; finishBox.checked = false; drawReportMode(); }
@@ -1352,7 +1352,7 @@ export function roomView(root: HTMLElement, room: Room, onLeave: () => void, sig
   }
   function crewRow(s: CrewSeat, personName: string | null): HTMLElement {
     const wl = lineOf.get(s.key) ?? null;
-    // Only a beast's row opens a room (its own); a person and a person's AI keep their rows, not pressable.
+    // Only a Companion's row opens a room (its own); a person and any other AI keep their rows, not pressable.
     // A workshop world has no seat rooms: its rows only say who is here.
     const target = room.teamWorld && roomSeat(crewNow, s.key) ? s.key : null;
     const beast = crewNow.beasts.some(b => b.key === s.key);
